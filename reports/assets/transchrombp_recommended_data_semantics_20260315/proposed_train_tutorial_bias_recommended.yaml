@@ -1,0 +1,66 @@
+training_mode: bias_pretrain
+seed: 1234
+max_epochs: 10
+
+trainer:
+  backend: nccl
+  precision: bf16
+  grad_accum_steps: 1
+  clip_grad_norm: 1.0
+  log_every_steps: 20
+  validate_every_epochs: 1
+  checkpoint_every_epochs: 1
+  find_unused_parameters: false
+  compile: false
+  strict_max_len_check: true
+
+optimizer:
+  name: adamw
+  learning_rate: 5.0e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.95]
+
+loss:
+  profile_weight: 1.0
+  count_weight: 0.1
+  count_weight_strategy: chrombpnet_auto
+  count_weight_sample_size: 32768
+  count_weight_quantile_low: 1.0e-4
+  count_weight_quantile_high: 0.9999
+  count_weight_divisor: 10.0
+  count_weight_floor: 1.0
+  debiased_profile_weight: 0.0
+  debiased_count_weight: 0.0
+
+schedule:
+  name: cosine
+  warmup_steps: 0
+  warmup_ratio: 0.06
+  min_lr_ratio: 0.1
+
+data:
+  source: chrombpnet_bigwig
+  config_path: configs/data/data_base.yaml
+  max_seq_len: 2114
+  input_len: 2114
+  output_len: 1000
+  supervised_bp: 1000
+  profile_bin_size: 1
+  batch_size_per_gpu: 8
+  num_workers: 4
+  pin_memory: true
+  prefetch_factor: 2
+  persistent_workers: true
+  region_source: nonpeak
+  nonpeak_ratio: 1.0
+  max_jitter: 0
+  peak_max_jitter: 0
+  nonpeak_max_jitter: 0
+  train_revcomp: true
+  val_revcomp: false
+  revcomp_prob: 0.5
+  track_total_count_target: 0.0
+
+logging:
+  output_dir: /data1/zhoujiazhen/bylw_atac/TransChromBP/outputs
+  run_name: transchrombp_bias_tutorial_recommended_semantics

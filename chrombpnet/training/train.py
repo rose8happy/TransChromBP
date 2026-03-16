@@ -1,5 +1,6 @@
 from __future__ import division, print_function, absolute_import
 import importlib.machinery
+import tensorflow as tf
 import tensorflow.keras.callbacks as tfcallbacks 
 import chrombpnet.training.utils.argmanager as argmanager
 import chrombpnet.training.utils.losses as losses
@@ -80,8 +81,22 @@ def main(args):
     print(parameters)
     np.random.seed(args.seed)
 
-    # get model architecture to load
-    model, architecture_module=get_model(args, parameters)
+    # enable multi-GPU if requested
+    strategy = None
+    if os.environ.get("CHROMBPNET_MULTI_GPU", "0") == "1":
+        gpus = tf.config.list_physical_devices('GPU')
+        if len(gpus) > 1:
+            strategy = tf.distribute.MirroredStrategy()
+            print("Using MirroredStrategy with %d replicas" % strategy.num_replicas_in_sync)
+        else:
+            print("CHROMBPNET_MULTI_GPU=1 but <2 GPUs visible; falling back to default strategy")
+
+    # get model architecture to load (within strategy scope if enabled)
+    if strategy is None:
+        model, architecture_module=get_model(args, parameters)
+    else:
+        with strategy.scope():
+            model, architecture_module=get_model(args, parameters)
 
     # initialize generators to load data
     train_generator = initializers.initialize_generators(args, "train", parameters, return_coords=False)
@@ -101,4 +116,3 @@ if __name__=="__main__":
     # read arguments
     args=argmanager.fetch_train_args()
     main(args)
-

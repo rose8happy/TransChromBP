@@ -28,6 +28,13 @@ inputlen=${5?param missing - inputlen}
 genomewide_gc=${6?param missing - genomewide_gc}
 output_dir=${7?param missing - output_dir} 
 fold=${8?param missing - fold}
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+make_gc_matched_negatives_script="${script_dir}/../../chrombpnet/helpers/make_gc_matched_negatives/make_gc_matched_negatives.sh"
+
+if [[ ! -x "${make_gc_matched_negatives_script}" ]]; then
+    echo "missing helper script: ${make_gc_matched_negatives_script}" >&2
+    exit 1
+fi
 
 if [[ ! -e $output_dir ]]; then
     mkdir $output_dir
@@ -66,8 +73,7 @@ exclude_bed=$output_dir/exclude.bed
 
 # create regions of size inputlen that do not fall in exclude bed and that gc-match with the given overlap peaks
 # create as many regions as there are in overlap peaks bed file
-make_gc_matched_negatives.sh  $overlap_peak $exclude_bed $inputlen $output_dir $reference_fasta $genomewide_gc $fold $chrom_sizes $logfile
+"${make_gc_matched_negatives_script}" "$overlap_peak" "$exclude_bed" "$inputlen" "$output_dir" "$reference_fasta" "$genomewide_gc" "$fold" "$chrom_sizes" "$logfile"
 # make a dummy summit file - rest of the pipeline uses this format
 echo $( timestamp ): "awk -v OFS=\"\t\" '{print \$1, \$2, \$3, \".\",  \".\", \".\", \".\", \".\", \".\", \"1057\"}\' $output_dir/negatives.bed > $output_dir/negatives_with_summit.bed" | tee -a $logfile
 awk -v OFS="\t" '{print $1, $2, $3, ".",  ".", ".", ".", ".", ".", "1057"}' $output_dir/negatives.bed > $output_dir/negatives_with_summit.bed
-

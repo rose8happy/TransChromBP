@@ -1,0 +1,264 @@
+% Compile with:
+%   pdflatex reports/transchrombp_paper_outline.tex
+
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+\title{TransChromBP: Bridging AlphaGenome-Style Long-Context Modeling and ChromBPNet-Style Bias Factorization for Base-Resolution ATAC-seq Prediction}
+\author{Author List TBD}
+\date{Restructured Draft Outline --- March 15, 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This paper should no longer be framed as ``a ChromBPNet variant with a
+Transformer'' or as a report centered on data-processing tweaks. The real
+question is whether three ingredients interact productively in base-resolution
+ATAC-seq modeling: long-context sequence encoding, teacher-student
+distillation, and ChromBPNet-style bias factorization. Our revised thesis is
+that the key gap between AlphaGenome and ChromBPNet is not merely context
+length, but the missing joint study of long-range representation learning,
+knowledge transfer, and assay-specific bias decomposition within a single ATAC
+prediction task. The paper will therefore present a flagship model that combines
+a convolutional local encoder, a compressed-token Transformer, an explicit bias
+branch, and distillation from a stronger teacher to a lighter student, all
+under a fixed ATAC-specific data semantics. The goal is twofold: to establish a
+strong task-specific model and to explain how Transformer, distillation, and
+bias factorization contribute individually and jointly.
+\end{abstract}
+
+\tableofcontents
+
+\section{Positioning}
+
+\subsection{The Gap We Actually Care About}
+The motivating gap is not simply that ChromBPNet is shorter-context and
+AlphaGenome is longer-context. The real gap is that ATAC profile prediction
+lacks a clean experimental framework to study:
+\begin{itemize}[leftmargin=2em]
+  \item whether long-range context helps beyond larger model capacity,
+  \item whether distillation can preserve those gains in a lighter model, and
+  \item whether explicit bias factorization remains necessary once the first two
+  ingredients are added.
+\end{itemize}
+
+\subsection{Core Claim}
+The paper should argue the following:
+\begin{quote}
+For base-resolution ATAC-seq profile prediction, the right design point is not
+simply more context and not a bias-agnostic foundation-model formulation, but a
+controlled combination of Transformer-based long-context modeling,
+teacher-student distillation, and ChromBPNet-style bias factorization.
+\end{quote}
+
+\subsection{What The Paper Must Achieve}
+This paper needs both of the following:
+\begin{enumerate}[leftmargin=2em]
+  \item a sufficiently strong flagship model that can plausibly define the best
+  task-specific result on the benchmark we use;
+  \item a mechanism study around that flagship model, rather than a list of
+  disconnected ablations.
+\end{enumerate}
+
+\subsection{What We Are Not Claiming}
+To keep the framing defensible:
+\begin{itemize}[leftmargin=2em]
+  \item we are not presenting a universal multimodal foundation model,
+  \item we are not claiming to reproduce the full AlphaGenome scope,
+  \item we are not reducing gains to context length alone,
+  \item we are not turning this paper back into a data-semantics-only story.
+\end{itemize}
+
+\section{Research Questions}
+
+The experiments should be organized around four explicit research questions:
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{RQ1:} Does the Transformer help because it captures useful
+  long-range context, rather than merely increasing capacity?
+  \item \textbf{RQ2:} Can distillation transfer teacher knowledge to a lighter
+  student without losing fine-grained profile quality?
+  \item \textbf{RQ3:} Once Transformer and distillation are present, is
+  ChromBPNet-style bias factorization still necessary, and if so, should the
+  bias fusion be fixed or learnable?
+  \item \textbf{RQ4:} Are these three ingredients additive, redundant, or
+  strongly interacting?
+\end{enumerate}
+
+\section{Fixed Task Semantics}
+
+\subsection{Why Data Semantics Should Be Fixed, Not Reopened}
+Current internal evidence already supports three conclusions:
+\begin{itemize}[leftmargin=2em]
+  \item the existing \texttt{bias\_pretrain -> main\_learnable} line is stronger
+  than the current baseline on held-out test data;
+  \item the bundled \texttt{hybrid\_data} variant behaves more like a useful
+  negative control than a new production line;
+  \item therefore, data semantics should now be treated as a fixed experimental
+  condition rather than the main scientific variable.
+\end{itemize}
+
+\subsection{Task Semantics To Keep Fixed}
+The paper should present the following as the default ATAC task definition:
+\begin{itemize}[leftmargin=2em]
+  \item shifted unstranded insertion bigWig as the canonical target signal,
+  \item peak-centered supervised windows,
+  \item GC-matched nonpeak negatives,
+  \item nonpeak-only bias pretraining with no jitter,
+  \item peak-centric main training with limited background exposure,
+  \item train-time reverse-complement augmentation only,
+  \item automatic count-loss calibration rather than a fixed constant.
+\end{itemize}
+
+This lets the paper focus on the intended method question: architecture,
+distillation, and bias interaction.
+
+\section{Method}
+
+\subsection{Flagship Model}
+The flagship model can be summarized as:
+\begin{quote}
+\textbf{Teacher-Student TransChromBP}: a convolutional local encoder, a
+compressed-token Transformer, a ChromBPNet-style bias branch, profile/count
+heads, and knowledge distillation from a stronger teacher to a lighter student.
+\end{quote}
+
+\subsection{Why A Teacher-Student Design Matters}
+Without distillation, the story risks collapsing into ``a larger model is
+better.'' With teacher-student training, we can ask whether the useful part of
+the teacher is transferable and whether the transferred knowledge changes the
+role of the bias branch.
+
+\subsection{Modules}
+The method section should describe:
+\begin{itemize}[leftmargin=2em]
+  \item a convolutional stem for motif-scale and short-range syntax,
+  \item a Transformer for longer-range context,
+  \item a bias branch for assay-specific cleavage preferences,
+  \item a fusion layer that combines debiased and bias-derived predictions,
+  \item profile and count heads,
+  \item teacher and student variants that share the same ATAC task semantics.
+\end{itemize}
+
+\subsection{Distillation Targets}
+Distillation should include at least:
+\begin{itemize}[leftmargin=2em]
+  \item output distillation on profile logits / distributions and log-count,
+  \item optional representation distillation on pooled or token-level features.
+\end{itemize}
+
+\subsection{Bias-Aware Fusion}
+This subsection must clearly distinguish:
+\begin{itemize}[leftmargin=2em]
+  \item the debiased regulatory branch,
+  \item the bias branch,
+  \item the full prediction after fusion,
+  \item fixed versus learnable bias injection strength.
+\end{itemize}
+
+\section{Experimental Program}
+
+\subsection{Benchmark}
+The main benchmark should start from the official ChromBPNet tutorial data,
+because it already gives:
+\begin{itemize}[leftmargin=2em]
+  \item a task-matched baseline,
+  \item a reproduced ChromBPNet reference,
+  \item a verified TransChromBP real-data backend,
+  \item a held-out evaluation protocol we already trust.
+\end{itemize}
+\todo{Decide whether to add a second dataset in the main text or appendix.}
+
+\subsection{Main Comparison Set}
+The primary results table should be centered on the flagship model and its most
+informative controls:
+\begin{enumerate}[leftmargin=2em]
+  \item ChromBPNet or the strongest conv-only ATAC baseline,
+  \item Student TransChromBP without distillation,
+  \item Student TransChromBP with distillation,
+  \item Transformer + bias, no distillation,
+  \item Transformer + distillation, no bias,
+  \item full flagship: Transformer + distillation + learnable bias,
+  \item full flagship with fixed bias.
+\end{enumerate}
+
+\subsection{Mechanism Axes}
+The experiments should explicitly isolate three axes:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Backbone axis}: conv-only vs conv+Transformer,
+  \item \textbf{Training axis}: direct training vs distillation,
+  \item \textbf{Bias axis}: no bias vs fixed bias vs learnable bias.
+\end{itemize}
+
+\subsection{Teacher Design}
+The teacher does not need to be a full AlphaGenome-style system. A better
+starting point is a stronger same-task expert:
+\begin{itemize}[leftmargin=2em]
+  \item longer input length,
+  \item larger hidden size or more Transformer blocks,
+  \item the same ATAC-specific targets and bias-aware formulation as the student.
+\end{itemize}
+
+\subsection{Metrics and Interpretability}
+The paper should report:
+\begin{itemize}[leftmargin=2em]
+  \item overall, peak, and nonpeak metrics,
+  \item profile and count metrics,
+  \item full versus debiased outputs,
+  \item locus-level visualizations,
+  \item if possible, SHAP / motif / MoDISco analyses,
+  \item if mature enough, ATAC-specific scorers such as center-mask or interval
+  scorers.
+\end{itemize}
+
+\section{How Current Evidence Supports The Paper}
+
+Current internal results already give useful constraints:
+\begin{itemize}[leftmargin=2em]
+  \item the existing bias-pretrained main line is a credible starting point,
+  \item data semantics should be fixed instead of continually reopened,
+  \item bias-only sanity checks support the idea that background bias is
+  learnable but should not replace the regulatory task.
+\end{itemize}
+
+These findings should be used to justify the new paper direction, not to define
+the final contribution.
+
+\section{Expected Contributions}
+
+The contribution list should end up close to the following:
+\begin{enumerate}[leftmargin=2em]
+  \item We propose an ATAC-specific flagship model that combines long-context
+  Transformer modeling, teacher-student distillation, and explicit bias
+  factorization.
+  \item We establish a stronger benchmark model under fixed ATAC task semantics.
+  \item We systematically characterize how Transformer, distillation, and bias
+  factorization interact in base-resolution ATAC prediction.
+  \item We show, through stratified and interpretability analyses, whether gains
+  arise from improved regulatory modeling, improved bias handling, or their
+  interaction.
+\end{enumerate}
+
+\section{Writing Discipline}
+
+The main writing risk is losing focus again. Three rules should remain fixed:
+\begin{itemize}[leftmargin=2em]
+  \item this is an ATAC paper, not a generic genomics foundation-model paper;
+  \item this is a strong-model-plus-mechanism paper, not a loose ablation dump;
+  \item this is not a renewed debate about data processing as the central thesis.
+\end{itemize}
+
+Every experiment should therefore be judged by one criterion:
+\begin{quote}
+Does it strengthen either the flagship model or the explanation of how
+Transformer, distillation, and bias factorization interact?
+\end{quote}
+
+\end{document}

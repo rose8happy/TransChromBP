@@ -1,0 +1,5 @@
+run_id,label,scope,dataset_size,count_r,profile_jsd,loss_total
+orig_bias_peak,Orig bias_pretrain,peak,31171,-0.008925154776677945,0.40024037147755,6.689216828301125
+orig_bias_nonpeak,Orig bias_pretrain,nonpeak,31171,0.4633104716331372,0.568527515195897,6.033070824143287
+hybrid_bias_peak,Hybrid bias_pretrain,peak,31171,0.18228251040813281,0.4016119331324136,18.143109894973673
+hybrid_bias_nonpeak,Hybrid bias_pretrain,nonpeak,31171,0.5412406274362279,0.5692025296836313,7.106718473081688

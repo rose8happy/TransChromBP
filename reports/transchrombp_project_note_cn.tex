@@ -1,0 +1,174 @@
+\documentclass[11pt,a4paper]{ctexart}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]{hyperref}
+\usepackage{xcolor}
+\usepackage{setspace}
+
+\title{TransChromBP 研究思路\\
+\large 从“数据处理争论”转向“Transformer、蒸馏与 bias 机制的作用关系”}
+\author{作者待定}
+\date{2026 年 3 月 15 日}
+
+\begin{document}
+
+\maketitle
+\onehalfspacing
+
+\section*{问题现在终于更清楚了}
+
+到目前为止，TransChromBP 这条线已经走过了一个很常见但也很必要的阶段：先把任务做通，
+然后不断发现，真正重要的问题并不总是最早被问出来的那个问题。
+
+一开始最容易让人抓住的点，是数据处理。到底应该多像 ChromBPNet，还是多像
+AlphaGenome；nonpeak 比例该多少；是不是该做深度归一化；peak 和 nonpeak 的 jitter
+要不要分开；这些问题都很实际，而且在工程上也确实会影响结果。可是在做完这一轮
+训练、对照和审计之后，一个更大的判断已经变得明确：这些事情当然重要，但它们已经
+不值得继续占据论文的中心位置了。
+
+原因并不复杂。我们已经看到，原始的 \texttt{bias\_pretrain -> main\_learnable}
+主线在 held-out test 上优于 baseline；也已经看到，把多项来自 ChromBPNet 和
+AlphaGenome 的启发整包打进 \texttt{hybrid\_data} 之后，并没有自然得到更稳的结果。
+这说明一件很关键的事：当前项目并没有被“错误的数据处理”卡死。数据语义当然要继续
+讲清楚，但它更适合作为约束条件，而不是继续作为论文的主要矛盾。
+
+\section*{真正值得写成论文的问题}
+
+如果论文只停留在“我们又调整了一套更合理的数据处理流程”，它不会成为一篇特别强的工作。
+因为这种故事很容易被读者理解成一系列经验规则，而不是一个更普遍的方法问题。
+
+真正值得写的，是 AlphaGenome 和 ChromBPNet 之间那个没有被认真展开的中间地带。
+ChromBPNet 抓住了 ATAC 任务最重要的一件事：实验偏差和调控信号不能混在一起。它的
+bias-aware formulation 之所以重要，不只是因为它让指标更好看，而是因为它让整个任务的
+语义更清楚。模型到底是在学习 motif 和调控逻辑，还是只是在拟合酶切偏好，这两件事
+必须被分开。
+
+AlphaGenome 则代表了另一种力量。它让人们重新认真对待长程上下文、统一 scorer、
+更规范的实验分解、以及 teacher-student 式的知识迁移。它并不是一篇“ATAC 论文”，
+但它把一个事实摆得很清楚：很多过去被当作训练工程问题的东西，其实应该上升到
+方法学问题。
+
+所以，TransChromBP 最值得研究的地方，不是“我们把数据处理调得更像谁了”，而是：
+\begin{quote}
+在 ATAC 的碱基分辨率 profile prediction 里，Transformer、distillation 和
+ChromBPNet-style bias factorization，到底分别起什么作用，它们之间又是什么关系。
+\end{quote}
+
+\section*{为什么这比继续争论数据处理更重要}
+
+因为这是一个真正能让论文站住的问题。
+
+如果只研究数据处理，最常见的困境是：一旦某套流程分数更高，人们就会自然地把它当成
+“更正确”的流程。但这并不总成立。某些处理方式可能只是更贴近特定 benchmark 的评价口径，
+并不一定更接近任务本身。反过来说，某种处理方式即便短期内没把分数抬高，也不代表它
+一定是错的。把论文主线绑定在这种判断上，风险很高。
+
+而把问题提升为“长程建模、蒸馏和偏差分解的关系”，就不一样了。这个问题的价值不依赖
+某一个具体超参数，也不依赖某一条分数曲线是否多了 0.5 个点。它问的是更基础的事情：
+如果 ATAC 任务真的同时需要局部 motif 语法、较长范围的序列背景、以及显式的实验偏差建模，
+那么这些能力应该如何被同一个模型吸收进去。
+
+\section*{这篇论文应该有一个真正强的主模型}
+
+但如果只讲机制，也还是不够。机制分析如果没有一个足够强的主模型作依托，很容易显得像
+“因为模型还不够强，所以只好做一些解释性工作”。这不是理想的论文姿态。
+
+因此，TransChromBP 的论文目标必须分成两层，而且两层都要成立。第一层，是提出一个真正
+强的旗舰模型；第二层，是围绕这个旗舰模型去分析各种机制。
+
+这个旗舰模型不应该只是“在现有模型后面加几层 Transformer”。它更合理的形式应当是：
+卷积 stem 负责局部模式，Transformer 负责长程上下文，bias branch 保留
+ChromBPNet 最有价值的任务语义，再加上一套 teacher-student distillation，
+把更强 teacher 的长程知识传给更轻的 student。只有到了这一步，论文才真正拥有一种
+完整的方法身份：它不是只靠一个更大的 teacher 拼成绩，也不是只靠一个可解释的 bias
+分支讲故事，而是把两种路线连接起来。
+
+\section*{为什么一定要有蒸馏}
+
+蒸馏在这里不是锦上添花，而是让整篇工作成立的关键部分。
+
+如果没有蒸馏，Transformer 的作用很容易被读成“更大的模型更强”。这当然可能是真的，
+但它不是一个特别有洞见的结论。读者很容易问：如果只是让模型变大，那和其它 genomics
+Transformer 有什么本质区别？
+
+一旦引入 teacher-student 结构，问题就开始变得更有内容。此时我们不再只是问
+“更大的模型有没有更高分”，而是问：
+
+\begin{itemize}
+  \item teacher 学到的长程知识是什么；
+  \item 这些知识是否能迁移给 student；
+  \item 迁移之后，student 的提升到底落在 regulatory branch，还是 bias branch；
+  \item 如果没有 bias factorization，蒸馏得到的知识会不会被错误地吸收到 bias 里。
+\end{itemize}
+
+这时，Transformer 和 bias mechanism 的关系就不再是两条平行支线，而变成真正的
+交互问题。
+
+\section*{Bias 机制不能被降格成一个普通 ablation}
+
+这也是整篇工作最容易被误写坏的地方。
+
+在很多模型论文里，一个模块是否保留，往往只是一个开关。但在这篇工作里，bias branch
+不是普通模块。它对应的是任务语义本身。ATAC 的观测信号里，本来就混着调控信息和实验偏差。
+如果模型结构不显式承认这一点，那么后面再去谈“long-range context 带来了什么”就很虚。
+因为你甚至无法确定，模型到底是更懂调控了，还是只是更会拟合偏差。
+
+所以，bias factorization 在这篇论文里的角色，不应被写成“我们顺便也试了一个有 bias 的版本”。
+它更应该被写成：只有在它存在时，Transformer 与 distillation 的结论才有明确的解释边界。
+
+\section*{当前已有结果在新主线里的位置}
+
+现有结果依然有价值，但它们的角色应该换一种写法。
+
+此前的 tutorial 主线结果、hybrid\_data 审计、bias-only sanity、locus 级轨道对照，
+都不应该再被当成论文的最后答案。它们更像是在帮我们完成三件事。
+
+第一，它们告诉我们，当前已有一条可信的起始主线，即
+\texttt{bias\_pretrain -> main\_learnable}。第二，它们告诉我们，不必再让数据处理问题
+占据论文中心，因为这一块已经没有那么大的不确定性了。第三，它们提醒我们，bias branch
+确实是有独立职责的，这为后面讨论 Transformer 和 distillation 提供了必要基础。
+
+换句话说，旧结果不是要被丢掉，而是要被重新安放。它们从“论文主题”变成“论文起点”。
+
+\section*{实验应该怎么围绕新主线组织}
+
+如果按照新方向推进，实验矩阵就应该非常明确，而不是重新变成大杂烩。
+
+最核心的三条轴只有：
+\begin{itemize}
+  \item backbone：有无 Transformer；
+  \item training：有无 distillation；
+  \item bias：无 bias、fixed bias、learnable bias。
+\end{itemize}
+
+围绕这三条轴去构建一个旗舰模型和若干关键对照，就足够回答这篇论文最关键的问题。
+如果再往里加实验，也应该是服务于这个问题，比如更长 teacher、不同蒸馏目标、
+debiased 与 full output 的分层分析、或者 locus 级的解释图。凡是不能帮助解释这三者关系的，
+都不应再轻易成为主实验。
+
+\section*{如果这篇工作做好，最理想的读后印象是什么}
+
+理想情况下，读者不应只记住“他们做了一个 Transformer 版 ChromBPNet”，也不应只记住
+“他们把 AlphaGenome 的某些东西借过来了”。更好的印象应该是：
+
+\begin{quote}
+原来在 ATAC 这个任务里，长程上下文、知识蒸馏和实验偏差分解，本来就应该被放进同一个问题里讨论；
+而这三者结合起来，确实能导出一个更强也更清楚的模型。
+\end{quote}
+
+如果最后能达到这个效果，那么这篇工作就不只是一次模型改造，而是一种更成熟的问题设定。
+
+\section*{后续写作时必须守住的边界}
+
+后面无论补实验还是继续扩文稿，都要守住几个边界。
+
+不要再把数据处理问题拉回中心。不要把论文写成多模态 foundation model 的缩小版。
+不要只做机制分析而没有足够强的主模型。也不要反过来只追一个最好数字，而让论文失去解释力。
+
+这篇工作最值得被留下来的，不是某一个超参数，而是下面这个判断：
+\begin{quote}
+在碱基分辨率 ATAC 建模中，一个真正强的方法，必须同时解决长程表示、知识迁移和偏差分解，
+而不是只在其中某一项上孤立地做加法。
+\end{quote}
+
+\end{document}

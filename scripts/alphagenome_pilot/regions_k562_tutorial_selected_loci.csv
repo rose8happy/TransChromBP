@@ -1,0 +1,5 @@
+label,source,chrom,center,notes
+peak_high,peak,chr1,9129623,Representative peak with high observed signal from tutorial test set
+peak_mid,peak,chr1,183580389,Representative peak with median observed signal from tutorial test set
+nonpeak_high,nonpeak,chr1,8884057,Representative nonpeak with high observed signal from tutorial test set
+nonpeak_mid,nonpeak,chr1,5811057,Representative nonpeak with median observed signal from tutorial test set

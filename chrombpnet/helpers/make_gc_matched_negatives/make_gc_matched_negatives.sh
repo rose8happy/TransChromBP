@@ -28,6 +28,16 @@ genomewide_gc=${6?param missing - genomewide_gc}
 fold=${7?param missing - fold}
 chrom_sizes=${8?param missing - chrom_sizes}
 logfile=${9}
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+gc_content_script="${script_dir}/get_gc_content.py"
+gc_matched_negatives_script="${script_dir}/get_gc_matched_negatives.py"
+
+for helper in "${gc_content_script}" "${gc_matched_negatives_script}"; do
+    if [[ ! -f "${helper}" ]]; then
+        echo "missing helper script: ${helper}" >&2
+        exit 1
+    fi
+done
 
 function timestamp {
     # Function to get the current time with the new line character
@@ -53,7 +63,7 @@ echo $( timestamp ): "chrombpnet_gc_content_foreground \\
         --output_prefix $output_dir/foreground.gc \\
         --inputlen $inputlen" | tee -a $logfile
 
-chrombpnet_gc_content_foreground \
+python "${gc_content_script}" \
        --input_bed $foreground_bed \
        --genome $genome \
        --chrom_sizes $chrom_sizes \
@@ -71,11 +81,10 @@ echo $( timestamp ): "chrombpnet_gc_matched_negatives \\
         --output_prefix $output_dir/negatives \\
         --chr_fold_path $fold \\
         --neg_to_pos_ratio_train 2" | tee -a $logfile
-chrombpnet_gc_matched_negatives \
+python "${gc_matched_negatives_script}" \
     --candidate_negatives $output_dir/candidate.negatives.bed \
     --foreground_gc_bed $output_dir/foreground.gc.bed \
     --output_prefix $output_dir/negatives \
     --chr_fold_path $fold \
     --neg_to_pos_ratio_train 2 | tee -a $logfile
-
 

@@ -14,3 +14,75 @@ experimental_scripts
 tracks
 needs_cleanup
 old
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+
+# ChromBPNet Data & Models (Large files)
+*.h5
+*.bed
+*.bed.gz
+*.bigWig
+*.bw
+*.bam
+*.bai
+*.fa
+*.fai
+*.2bit
+*.narrowPeak
+*.broadPeak
+
+# Output directories
+outputs/
+logs/
+data/
+chrombpnet_data/
+trained_models/
+model_output/
+wandb/
+
+# Temporary files
+tmp/
+temp/
+
+# Specific large files to ignore
+2024.12.25.630221v2.full.pdf
+2024.12.25.630221v2.full.pdf:Zone.Identifier
+s41586-025-10014-0.pdf
+s41586-025-10014-0.pdf:Zone.Identifier
+bias_training_log.csv
+bias_training_curve.svg
+bias_training_curve_detailed.svg
+.codex_remote_edit/

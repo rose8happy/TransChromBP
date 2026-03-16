@@ -1,0 +1,5 @@
+label,source,quantile,index,chrom,center,observed_total_count
+peak_high,peak,0.9,30237,chr1,9129623,5346.0
+peak_mid,peak,0.5,10332,chr1,183580389,953.0
+nonpeak_high,nonpeak,0.9,45886,chr1,8884057,345.0
+nonpeak_mid,nonpeak,0.5,53284,chr1,5811057,150.0

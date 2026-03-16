@@ -1,4 +1,4 @@
-import numpy as np ;
+import numpy as np
 from tensorflow.keras.backend import int_shape
 from tensorflow.keras.layers import Input, Cropping1D, add, Conv1D, GlobalAvgPool1D, Dense, Add, Concatenate, Lambda, Flatten
 from tensorflow.keras.optimizers import Adam

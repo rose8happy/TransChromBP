@@ -1,0 +1,277 @@
+\documentclass[11pt,a4paper]{ctexart}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]{hyperref}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+\title{TransChromBP 论文轮廓\\
+\large 连接 AlphaGenome 与 ChromBPNet 的 ATAC 专用长程建模研究}
+\author{作者待定}
+\date{主线重构稿，2026 年 3 月 15 日}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+本文不再把 TransChromBP 仅仅定义为“带 Transformer 的 ChromBPNet 变体”，也不把它
+写成一次以数据处理技巧为中心的工程调参工作。新的论文主线是：在碱基分辨率
+ATAC-seq profile prediction 中，AlphaGenome 式的长程建模与蒸馏范式，和
+ChromBPNet 式的 bias factorization，究竟是互补、冗余，还是彼此牵制。基于这一问题，
+本文计划提出一个旗舰模型：在固定的 ATAC 专用数据语义下，将卷积局部编码、
+compressed-token Transformer、ChromBPNet 风格的 bias branch，以及 teacher-student
+distillation 组合到同一框架中。论文的目标有两层。第一，给出一个在当前 benchmark 上
+足够强、可作为 SOTA 候选的主模型。第二，围绕该主模型系统拆解三个机制轴：
+Transformer 是否真正提供长程信息，distillation 是否把 teacher 的长程知识有效迁移给
+student，以及 bias factorization 在存在前两者时是否仍然必要。当前已有实验结果
+（原始 \texttt{bias\_pretrain -> main\_learnable} 主线优于 baseline，混合数据语义更像负对照）
+将作为论文的起点和约束条件，而不再作为论文的核心问题本身。
+\end{abstract}
+
+\tableofcontents
+
+\section{论文定位}
+
+\subsection{核心 gap}
+本文要填补的 gap 不是简单的“ChromBPNet 上下文较短，AlphaGenome 上下文较长”，而是：
+\begin{quote}
+当前 ATAC 碱基分辨率建模缺少一个清晰的中间层研究框架，能够同时回答长程表征、
+知识蒸馏和实验偏差分解三者在同一任务中的作用关系。
+\end{quote}
+
+ChromBPNet 给出了很强的 ATAC-specific task definition，但它的经典主线并不围绕
+长程上下文和蒸馏展开。AlphaGenome 展示了更完整的长程建模和蒸馏范式，但它并不是为
+ATAC bias-aware profile prediction 定义的。TransChromBP 的目标就是把这两边真正可对接的
+部分接起来。
+
+\subsection{论文主张}
+论文主张固定为一句话：
+\begin{quote}
+对于碱基分辨率的 ATAC-seq profile prediction，最有效的设计点不是单纯更长的上下文，
+也不是去掉 assay-specific inductive bias 的统一 foundation-style 方案，而是
+Transformer、distillation 与 ChromBPNet-style bias factorization 的受控结合。
+\end{quote}
+
+\subsection{论文必须同时做到两件事}
+这篇论文不能只做机制分析，也不能只做“一个更强模型”。必须同时完成：
+\begin{enumerate}[leftmargin=2em]
+  \item 提出一个足够强的旗舰模型，作为 benchmark 上的主结果候选；
+  \item 围绕这一旗舰模型，拆解 Transformer、distillation 与 bias factorization
+  各自贡献了什么。
+\end{enumerate}
+
+\subsection{不应宣称的内容}
+为保证论文口径稳健，正文中应避免以下过度宣称：
+\begin{itemize}[leftmargin=2em]
+  \item 不把本文写成一个多模态 foundation model；
+  \item 不宣称全面覆盖 AlphaGenome 的任务范围；
+  \item 不把当前论文主线仍然表述成“数据处理是否正确”的争论；
+  \item 不把单一 benchmark 上的提升泛化为“任何功能基因组任务都更强”。
+\end{itemize}
+
+\section{核心科学问题}
+
+正文中的研究问题建议明确写成四条：
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{RQ1:} 对 ATAC profile prediction 而言，Transformer 的收益是否真的来自长程上下文，
+  而不是单纯更大容量。
+  \item \textbf{RQ2:} Distillation 能否把长上下文 teacher 的知识稳定迁移到更轻的 student，
+  且不破坏 profile 级别的精细预测。
+  \item \textbf{RQ3:} 在引入 Transformer 与 distillation 之后，ChromBPNet-style bias
+  factorization 仍然是否必要；如果必要，它更适合 fixed 还是 learnable 的融合方式。
+  \item \textbf{RQ4:} 三者之间是加性关系、替代关系，还是存在显著交互项。
+\end{enumerate}
+
+这四个问题应成为整篇论文实验设计和结论组织的主轴。
+
+\section{任务定义与固定前提}
+
+\subsection{固定的数据语义，不再当主变量}
+数据处理在这篇论文里仍然重要，但不再作为主战场反复摇摆。根据当前已经完成的审计，
+后续实验应固定在一套明确的 ATAC 专用语义上：
+\begin{itemize}[leftmargin=2em]
+  \item 使用 shifted unstranded insertion bigWig 作为 canonical signal；
+  \item peaks 使用 summit-centered windows；
+  \item nonpeaks 使用 GC-matched negatives；
+  \item bias 预训练采用 nonpeak-only、no jitter；
+  \item main 训练采用 peak-centric supervision 和较低 nonpeak exposure；
+  \item 训练期使用 reverse-complement augmentation，验证和测试保持确定性；
+  \item count loss weight 采用自动标定而非固定常数。
+\end{itemize}
+
+这部分应在方法节中被定义为 \emph{fixed task semantics}，而不是新的实验轴。
+
+\subsection{为什么当前证据足以固定数据语义}
+这一点需要在文中简要交代，但不宜喧宾夺主。我们已经知道：
+\begin{itemize}[leftmargin=2em]
+  \item 原始 \texttt{bias\_pretrain -> main\_learnable} 主线在 held-out test 上优于 baseline；
+  \item 把多项 ChromBPNet / AlphaGenome 启发的改动整包绑成 \texttt{hybrid\_data} 并没有带来更稳的结果；
+  \item 因此，数据语义应被视为固定约束条件，而不是论文主角。
+\end{itemize}
+
+\section{方法总览}
+
+\subsection{旗舰模型}
+旗舰模型建议定义为：
+\begin{quote}
+\textbf{Teacher-Student TransChromBP}：
+卷积局部特征提取 + compressed-token Transformer 长程编码 +
+ChromBPNet-style bias branch + profile/count 双头 + knowledge distillation。
+\end{quote}
+
+它至少应包含以下组成：
+\begin{itemize}[leftmargin=2em]
+  \item 卷积 stem：负责 motif 级别与近邻局部模式；
+  \item 主干 Transformer：负责较长距离的序列依赖；
+  \item bias branch：负责实验偏差相关信号；
+  \item fusion 模块：负责把 debiased prediction 与 bias correction 组合成 full prediction；
+  \item teacher/student 结构：teacher 使用更长上下文或更大容量，student 作为可部署版本。
+\end{itemize}
+
+\subsection{为什么需要 teacher / student}
+如果只引入 Transformer 而没有蒸馏，论文叙事很容易退化成“更大的模型更强”。加入
+teacher-student 结构后，才能把问题变成：
+\begin{itemize}[leftmargin=2em]
+  \item teacher 是否真的学到了更有价值的长程表示；
+  \item student 是否能够继承这些表示；
+  \item 这种继承是否改变了 bias branch 的作用。
+\end{itemize}
+
+\subsection{蒸馏对象}
+蒸馏目标建议至少覆盖两层：
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{输出蒸馏}：profile logits / profile distribution 与 log-count；
+  \item \textbf{可选表征蒸馏}：主干中间 token 或 pooled representation。
+\end{enumerate}
+
+正文中需要明确：蒸馏不是为了让 student 模仿 full signal 的一切细节，而是为了迁移
+teacher 对长程调控上下文的有用信息。具体损失形式可在实验确定后再定稿。
+
+\subsection{Bias-aware fusion}
+这一部分是本文区别于一般 genomics Transformer 的关键。方法节要把下列对象写清楚：
+\begin{itemize}[leftmargin=2em]
+  \item debiased profile / count；
+  \item bias profile / count；
+  \item full profile / count；
+  \item bias 注入强度是 fixed 还是 learnable。
+\end{itemize}
+
+这一层如果写得清楚，后面的机制分析才有意义，因为我们可以分辨提升到底落在
+regulatory branch 还是 bias branch。
+
+\section{实验设计}
+
+\subsection{Benchmark 组织}
+主 benchmark 建议先固定在 tutorial 官方数据这一套任务完全匹配的数据上，再根据资源决定
+是否补一个第二数据集。重点不是做“大而全”的 benchmark，而是确保：
+\begin{itemize}[leftmargin=2em]
+  \item baseline 明确；
+  \item held-out split 明确；
+  \item 评测指标和数据语义一致；
+  \item 所有模型共享同一套 preprocessing / splits / metrics。
+\end{itemize}
+
+\subsection{主结果表应包含哪些模型}
+主结果表建议围绕旗舰模型展开，而不是铺一个巨大组合矩阵。最小必要集合为：
+\begin{enumerate}[leftmargin=2em]
+  \item ChromBPNet / 当前 conv-only 强基线；
+  \item Student TransChromBP（无蒸馏）；
+  \item Student TransChromBP（有蒸馏）；
+  \item Transformer + bias，无 distillation；
+  \item Transformer + distillation，无 bias；
+  \item Full flagship：Transformer + distillation + learnable bias；
+  \item Full flagship 的 fixed-bias 版本。
+\end{enumerate}
+
+\subsection{机制实验矩阵}
+围绕旗舰模型，只保留高价值实验轴：
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Backbone axis}: conv-only vs conv+Transformer；
+  \item \textbf{Training axis}: direct training vs distillation；
+  \item \textbf{Bias axis}: no bias vs fixed bias vs learnable bias。
+\end{itemize}
+
+这三条轴可以回答最核心的科学问题，而且不会把实验资源耗在大量低价值组合上。
+
+\subsection{Teacher 设计}
+Teacher 不需要一开始就做成 AlphaGenome 级别的超大系统。更可行的设计是：
+\begin{itemize}[leftmargin=2em]
+  \item 更长输入长度；
+  \item 更大 hidden size 或更多 Transformer blocks；
+  \item 与 student 共享相同的 ATAC-specific task semantics 和 bias formulation。
+\end{itemize}
+
+也就是说，teacher 的角色是“更强的同任务专家”，而不是“泛化到多模态的大一统模型”。
+
+\subsection{解释与分层分析}
+这篇论文不能只交一张主结果表。至少还需要以下分析：
+\begin{itemize}[leftmargin=2em]
+  \item peak / nonpeak / difficult loci 分层表现；
+  \item debiased output 与 full output 的分开评估；
+  \item bias scale 与 fusion 行为的训练期轨迹；
+  \item locus-level 轨道对照；
+  \item 若资源允许，补 SHAP / motif / MoDISco；
+  \item 若实验成熟，再加 ATAC-specific scorer，例如 center-mask 或 interval scorer。
+\end{itemize}
+
+\section{当前已有证据如何为论文服务}
+
+\subsection{已建立的事实}
+现有结果已经确定了三条对论文有用的事实：
+\begin{enumerate}[leftmargin=2em]
+  \item 当前 \texttt{bias\_pretrain -> main\_learnable} 主线优于 baseline；
+  \item \texttt{hybrid\_data} 更像一次数据语义负对照，而不是新主线；
+  \item bias-only sanity 显示 background bias 是可学对象，但不应在 peak 上承担主任务。
+\end{enumerate}
+
+\subsection{这些事实意味着什么}
+这些结果的作用不是让论文继续围绕“数据处理对不对”打转，而是提供三个约束：
+\begin{itemize}[leftmargin=2em]
+  \item 以当前主线为可信起点；
+  \item 把数据语义固定住，不再反复更改论文问题；
+  \item 允许把研究重点上移到 Transformer、distillation 与 bias 机制的交互。
+\end{itemize}
+
+\section{预期贡献写法}
+
+引言中的 contribution list 建议最终落成下面这种结构：
+\begin{enumerate}[leftmargin=2em]
+  \item 提出一个 ATAC 专用旗舰模型，把长程 Transformer、teacher-student distillation
+  与 ChromBPNet-style bias factorization 纳入同一框架；
+  \item 在统一 benchmark 和固定数据语义下，建立一个更强的 base-resolution ATAC baseline，
+  争取达到任务上的新 best result；
+  \item 系统回答三类机制问题：长程上下文是否有用、蒸馏是否有效、bias factorization
+  是否仍不可替代；
+  \item 通过分层和解释实验，说明模型提升落在 regulatory branch、bias branch，还是两者的交互上。
+\end{enumerate}
+
+\section{写作边界与风险控制}
+
+\subsection{边界}
+需要始终守住三个边界：
+\begin{itemize}[leftmargin=2em]
+  \item 这是 ATAC-specific paper，不是通用 genomics foundation model paper；
+  \item 这是关于机制交互的 paper，不是单纯堆模型 paper；
+  \item 这是一个由强主模型支撑的机制分析 paper，不是只有消融没有主结果的 paper。
+\end{itemize}
+
+\subsection{最大风险}
+当前最主要的风险不是模型太弱，而是论文主线又被支线拉散。具体来说：
+\begin{itemize}[leftmargin=2em]
+  \item 如果继续把数据处理当主变量，论文会失焦；
+  \item 如果只做一个更大模型而不拆机制，论文会显得空；
+  \item 如果只做机制分析而没有足够强的主模型，论文又会显得不够有冲击力。
+\end{itemize}
+
+因此，后续所有实验和写作都应回到同一个判断标准：
+\begin{quote}
+这项工作是否同时强化了旗舰模型和机制解释，而不是只增加了局部复杂度。
+\end{quote}
+
+\end{document}
