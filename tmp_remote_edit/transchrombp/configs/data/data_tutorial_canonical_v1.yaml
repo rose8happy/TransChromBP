@@ -1,0 +1,16 @@
+genome_fasta: /data1/zhoujiazhen/bylw_atac/hg38.fa
+chrom_sizes: /data1/zhoujiazhen/bylw_atac/chrombpnet_tutorial/data/hg38.chrom.sizes
+folds_json: /data1/zhoujiazhen/bylw_atac/chrombpnet_tutorial/data/folds.json
+
+input:
+  peaks_bed: /data1/zhoujiazhen/bylw_atac/TransChromBP/outputs/preprocessing/tutorial_canonical_v1/step4_filtering/filtered.peaks.bed
+  nonpeaks_bed: /data1/zhoujiazhen/bylw_atac/TransChromBP/outputs/preprocessing/tutorial_canonical_v1/step4_filtering/filtered.nonpeaks.bed
+  bigwig: /data1/zhoujiazhen/bylw_atac/TransChromBP/outputs/preprocessing/tutorial_canonical_v1/step2_bigwig/merged_unstranded.bw
+
+window:
+  input_len: 2114
+  output_len: 1000
+  max_jitter: 500
+
+sampling:
+  nonpeak_ratio: 0.1
