@@ -1,0 +1,36 @@
+model_name: transchrombp_ablation_no_bias
+
+sequence_encoder:
+  type: transformer
+  enabled: true
+  d_model: 256
+  n_heads: 8
+  n_layers: 6
+  ff_mult: 4
+  dropout: 0.1
+  use_rope: true
+  rope_theta: 10000.0
+  max_len: 2114
+  use_sdpa: true
+
+conv_stem:
+  stem_kernel_size: 21
+  conv_kernel_size: 7
+  n_conv_layers: 2
+
+bias_branch:
+  type: chrombpnet_bias
+  enabled: false
+  hidden_channels: 128
+  kernel_size: 21
+  n_dil_layers: 4
+  freeze_bias_core: false
+
+fusion:
+  profile_scale_init: 0.0
+  count_scale_init: 0.0
+  learnable_scales: false
+
+heads:
+  profile_output_len: 1000
+  count_head: linear

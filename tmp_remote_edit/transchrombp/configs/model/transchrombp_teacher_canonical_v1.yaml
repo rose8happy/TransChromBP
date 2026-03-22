@@ -1,0 +1,45 @@
+model_name: transchrombp_teacher_canonical_v1
+
+sequence_encoder:
+  type: transformer
+  enabled: true
+  d_model: 256
+  n_heads: 8
+  n_layers: 6
+  ff_mult: 4
+  dropout: 0.1
+  use_rope: true
+  rope_theta: 10000.0
+  max_len: 2114
+  use_sdpa: true
+
+conv_stem:
+  stem_kernel_size: 21
+  conv_kernel_size: 7
+  n_conv_layers: 2
+
+local_tower:
+  kernel_size: 3
+  n_dil_layers: 8
+  dilation_cycle_length: 8
+
+bias_branch:
+  type: chrombpnet_bias
+  enabled: true
+  hidden_channels: 128
+  kernel_size: 21
+  n_dil_layers: 4
+  pretrained_path: ""
+  freeze_bias_core: false
+
+fusion:
+  profile_fusion: add
+  count_fusion: logsumexp
+  profile_scale_init: 1.0
+  count_scale_init: 1.0
+  learnable_scales: true
+  positive_scales: true
+
+heads:
+  profile_output_len: 1000
+  count_head: linear
