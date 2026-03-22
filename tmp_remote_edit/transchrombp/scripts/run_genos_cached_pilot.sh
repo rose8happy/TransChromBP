@@ -10,7 +10,6 @@ if [ -z "${BASH_VERSION:-}" ]; then
 fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PACKAGE_PARENT="$(cd "${ROOT_DIR}/.." && pwd)"
 GPU_ID="${1:-${GPU_ID:-0}}"
 VENV_DIR="${VENV_DIR:-/data1/zhoujiazhen/bylw_atac/.venvs/genos-1.2b}"
 OUTPUT_BASE="${OUTPUT_BASE:-${ROOT_DIR}/outputs}"
@@ -22,7 +21,15 @@ PYTHON_BIN="${PYTHON_BIN:-python}"
 
 export CUDA_VISIBLE_DEVICES="${GPU_ID}"
 export PATH="${VENV_DIR}/bin:${PATH:-}"
-export PYTHONPATH="${PACKAGE_PARENT}:${ROOT_DIR}/src:${PYTHONPATH:-}"
+if [ -d "${ROOT_DIR}/src/transchrombp" ]; then
+    PACKAGE_IMPORT_ROOT="${ROOT_DIR}/src"
+elif [ -d "${ROOT_DIR}/../transchrombp" ]; then
+    PACKAGE_IMPORT_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
+else
+    echo "[error] Could not locate transchrombp package import root from ${ROOT_DIR}" >&2
+    exit 1
+fi
+export PYTHONPATH="${PACKAGE_IMPORT_ROOT}:${PYTHONPATH:-}"
 
 require_file() {
     local path="$1"

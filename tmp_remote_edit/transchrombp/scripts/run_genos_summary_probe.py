@@ -39,9 +39,16 @@ from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 
 
-_PKG_PARENT = Path(__file__).resolve().parents[2]
-if str(_PKG_PARENT) not in sys.path:
-    sys.path.insert(0, str(_PKG_PARENT))
+_HERE = Path(__file__).resolve()
+_IMPORT_ROOTS = [
+    _HERE.parents[1] / "src",  # deployed repo layout: <repo>/scripts/*.py + <repo>/src/transchrombp
+    _HERE.parents[2],          # local snapshot layout: tmp_remote_edit/transchrombp/scripts/*.py
+]
+for _root in _IMPORT_ROOTS:
+    if (_root / "transchrombp").exists():
+        if str(_root) not in sys.path:
+            sys.path.insert(0, str(_root))
+        break
 
 
 def load_yaml(path: str) -> dict:
