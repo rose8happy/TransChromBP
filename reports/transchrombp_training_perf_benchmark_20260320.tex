@@ -1,0 +1,545 @@
+\documentclass[11pt,a4paper]{ctexart}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]{hyperref}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{caption}
+\usepackage{amsmath}
+\usepackage{pgfplots}
+\usepgfplotslibrary{groupplots}
+\pgfplotsset{compat=1.18}
+
+\graphicspath{{reports/assets/training_perf_benchmark_20260320/}}
+
+\title{TransChromBP 训练性能诊断详细报告\\
+\large 基于 2026-03-20 的 2$\times$A6000 benchmark 与 profiler 结果}
+\author{项目工作文档}
+\date{2026 年 3 月 20 日}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+本文档汇总 6000 服务器上 \texttt{TransChromBP} 的训练性能 benchmark，
+目标是回答一个非常具体的问题：当前训练是否真正“吃满了”两张 RTX A6000，
+如果没有，瓶颈到底在数据、通信还是模型计算本身。
+
+本轮 benchmark 使用独立的 \texttt{train\_ddp\_bench.py} 训练入口，
+关闭 validation、checkpoint 与 early stop，以 \texttt{dry-run} 形式分别测试
+\texttt{1GPU bs16}、\texttt{2GPU bs16}、\texttt{2GPU bs24/32/48}，
+并额外执行一次 \texttt{2GPU bs16} 的 25-step profiler。
+
+结论非常明确。第一，\texttt{2GPU bs16} 相比 \texttt{1GPU bs16}
+达到 \textbf{1.89$\times$} speedup，对应 \textbf{94.5\%} scaling efficiency，
+说明双卡扩展本身是有效的。第二，所有主实验中
+\texttt{data\_time} 仅占 \textbf{0.1\%}，
+\texttt{optimizer} 仅占 \textbf{0.9\%--3.1\%}，
+而 \texttt{forward+backward} 占到 \textbf{96.7\%--99.0\%}，
+因此当前训练不是 dataloader 瓶颈，也不是 optimizer 瓶颈，而是标准的
+\textbf{compute-bound} 工作负载。第三，batch 从 \texttt{16} 提到 \texttt{48}
+后，吞吐只从 \texttt{361.0} 增加到 \texttt{393.3 samples/s}，
+总提升约 \textbf{8.9\%}；但峰值显存从 \texttt{2.94 GB} 增长到 \texttt{8.52 GB}。
+这说明显存容量仍远没打满，但算力与功耗已经接近饱和，继续加 batch 的边际收益很快衰减。
+
+因此，本轮 benchmark 给出的判断不是“当前训练没有充分利用 A6000”，
+而是更准确的两句话：\textbf{它没有充分利用 A6000 的显存容量，但已经相当充分地利用了
+当前模型规模下的计算资源。}后续若要继续降 wall-clock，
+优先级应放在 kernel / graph 级优化（如 \texttt{torch.compile} 的独立 benchmark），
+而不是继续折腾 dataloader 或 NCCL；而 \texttt{input\_len=4096} 应被视为新的模型实验线，
+不是简单的“硬件利用率优化”。
+\end{abstract}
+
+\section{实验背景与要回答的问题}
+
+本轮 benchmark 的直接背景，是我们此前观察到如下现象：
+\begin{itemize}[leftmargin=2em]
+  \item 两张 A6000 显存占用长期较低；
+  \item 训练时 \texttt{GPU util} 却经常维持在高位；
+  \item 直觉上容易产生“显存没吃满，是不是 GPU 没用起来”的疑问。
+\end{itemize}
+
+这个直觉并不总是对。显存容量和计算吞吐是两件不同的事。
+一个模型完全可能只占用几 GB 显存，却已经把 SM、Tensor Core 和功耗都推到接近上限。
+因此，本轮 benchmark 不看泛泛的“资源看起来多不多”，而是集中回答五个工程问题：
+\begin{enumerate}[leftmargin=2em]
+  \item 当前训练慢是不是正常；
+  \item 双卡扩展是否有效；
+  \item 时间主要花在 dataloader、forward/backward、optimizer 还是通信；
+  \item \texttt{batch\_size\_per\_gpu} 还有没有必要继续往上推；
+  \item \texttt{input\_len=4096} 应不应该被当成单独的新实验线。
+\end{enumerate}
+
+\section{实验设置与执行记录}
+
+\subsection{运行环境}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Benchmark 运行环境与关键配置。}
+\begin{tabular}{ll}
+\toprule
+项目 & 取值 \\
+\midrule
+机器 & 6000 服务器 \\
+GPU & 2$\times$ NVIDIA RTX A6000 48GB \\
+PyTorch & 2.5.1 \\
+CUDA runtime & 12.1 \\
+cuDNN & 90100 \\
+NCCL & 2.21.5 \\
+训练精度 & \texttt{bf16 autocast} \\
+\texttt{torch.compile} & 关闭（\texttt{compile: false}） \\
+\texttt{allow\_tf32} & matmul=False, cudnn=True \\
+输入长度 & \texttt{input\_len=2114} \\
+监督长度 & \texttt{output\_len=1000}, \texttt{supervised\_bp=1000} \\
+\texttt{num\_workers} & 2 \\
+主 benchmark 步数 & 300 step / run \\
+profiler 步数 & 25 step（含 warmup / active） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{实验矩阵}
+
+\begin{table}[H]
+\centering
+\small
+\caption{本轮 benchmark 的实验矩阵。}
+\begin{tabular}{llll}
+\toprule
+实验编号 & 设备数 & \texttt{bs/gpu} & 目的 \\
+\midrule
+Exp 1 & 1 GPU & 16 & 建立单卡基线 \\
+Exp 2 & 2 GPU & 16 & 衡量双卡扩展效率 \\
+Exp 3a & 2 GPU & 24 & batch sweep \\
+Exp 3b & 2 GPU & 32 & batch sweep \\
+Exp 3c & 2 GPU & 48 & batch sweep \\
+Exp 4 & 2 GPU & 16 & PyTorch profiler（25 step） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{执行中发生的修正}
+
+正式结果来自 2026-03-20 00:47 CST 重新启动后的 clean run。
+在第一次启动前后，我们做了三处必要修正：
+\begin{itemize}[leftmargin=2em]
+  \item 修正 benchmark 脚本，让 profiler 子实验真的只跑 \texttt{25 step}，避免误沿用全局 300 step；
+  \item 修正环境信息打印中的兼容性问题：当前 PyTorch 设备属性字段为 \texttt{total\_memory}，不是 \texttt{total\_mem}；
+  \item 修正日志解析脚本，使其在做 scaling / batch sweep 汇总时排除 profiler run，避免用带 profiler 开销的吞吐覆盖真实基线。
+\end{itemize}
+
+这些修正都发生在正式 clean run 之前，因此本文所有数值都来自同一轮完整、连续、可复现的 benchmark。
+
+\section{一页结论}
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{当前训练慢是正常现象。}时间几乎全部花在模型计算本身：
+  \texttt{forward+backward} 占 \textbf{96.7\%--99.0\%}，而 \texttt{data\_time} 只有 \textbf{0.1\%}。
+  \item \textbf{双卡扩展是有效的。}\texttt{1GPU bs16} 到 \texttt{2GPU bs16} 的吞吐从
+  \texttt{191.0} 提升到 \texttt{361.0 samples/s}，达到 \textbf{1.89$\times$ speedup}，
+  对应 \textbf{94.5\% efficiency}。
+  \item \textbf{当前不是 dataloader 瓶颈，也不是明显的通信瓶颈。}
+  profiler 的 top CUDA 表里没有 NCCL / all-reduce 相关算子进入前列；
+  与此同时，dual-GPU scaling 已经很接近理想值。
+  \item \textbf{继续加 batch 只能带来有限增益。}
+  \texttt{bs/gpu=16$\rightarrow$48} 只换来 \textbf{+8.9\%} 吞吐，但步时从
+  \texttt{88.64 ms} 拉长到 \texttt{244.10 ms}，显存从 \texttt{2.94 GB} 增到 \texttt{8.52 GB}。
+  \item \textbf{\texttt{input\_len=4096} 应视作新实验线。}
+  当前 attention / matmul 已经是主要耗时源，拉长序列只会把 compute-bound 特征放大，
+  不能当成简单的“资源利用率优化”。
+\end{enumerate}
+
+\section{结果总览}
+
+\subsection{主结果表}
+
+\begin{table}[H]
+\centering
+\small
+\caption{主要 benchmark 结果总览。吞吐和时间来自 timing summary；GPU 利用率与功耗来自 \texttt{nvidia-smi} 采样的 active 区间均值。}
+\begin{tabular}{lrrrrrr}
+\toprule
+配置 & global batch & avg step (ms) & samples/s & 对 bs16 的增益 & peak alloc (GB) & 均值 util / power \\
+\midrule
+1GPU bs16 & 16 & 83.79 & 191.0 & --- & 2.91 & 采样缺失 \\
+2GPU bs16 & 32 & 88.64 & 361.0 & baseline & 2.94 & 93.1\% / 266.5W \\
+2GPU bs24 & 48 & 126.26 & 380.2 & +5.3\% & 4.33 & 95.3\% / 275.9W \\
+2GPU bs32 & 64 & 165.55 & 386.6 & +7.1\% & 5.72 & 93.0\% / 273.4W \\
+2GPU bs48 & 96 & 244.10 & 393.3 & +8.9\% & 8.52 & 96.1\% / 287.7W \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+这张表已经足够说明 benchmark 的核心矛盾：
+\textbf{吞吐确实会随着 batch 增大而上升，但上升很快进入边际递减区；与此同时，GPU 的 active util 和 power
+一直维持在高位。}这意味着当前模型不是在“等数据”或“等另一张卡”，而是在做实打实的计算。
+
+\subsection{图：batch sweep 的吞吐/显存权衡}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[
+  group style={group size=2 by 1, horizontal sep=1.6cm},
+  width=0.43\textwidth,
+  height=0.31\textwidth,
+  grid=major,
+  tick label style={font=\small},
+  label style={font=\small},
+  title style={font=\small},
+]
+\nextgroupplot[
+  title={2GPU Batch Sweep: 吞吐},
+  xlabel={batch size per GPU},
+  ylabel={samples/s},
+  xmin=14, xmax=50,
+  xtick={16,24,32,48},
+]
+\addplot+[mark=*, line width=1.4pt, color=blue]
+table[x=bs_per_gpu, y=samples_per_sec, col sep=comma] {reports/assets/training_perf_benchmark_20260320/batch_sweep_2gpu.csv};
+
+\nextgroupplot[
+  title={2GPU Batch Sweep: 峰值显存},
+  xlabel={batch size per GPU},
+  ylabel={peak allocated (GB)},
+  xmin=14, xmax=50,
+  xtick={16,24,32,48},
+]
+\addplot+[mark=square*, line width=1.4pt, color=teal!70!black]
+table[x=bs_per_gpu, y=peak_allocated_gb, col sep=comma] {reports/assets/training_perf_benchmark_20260320/batch_sweep_2gpu.csv};
+\end{groupplot}
+\end{tikzpicture}
+\caption{2GPU batch sweep 的吞吐与显存走势。吞吐持续增长，但增幅迅速收窄；显存占用则相对线性上升。}
+\label{fig:batch_tradeoff}
+\end{figure}
+
+\subsection{图：active 利用率与功耗}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{groupplot}[
+  group style={group size=2 by 1, horizontal sep=1.8cm},
+  width=0.43\textwidth,
+  height=0.31\textwidth,
+  ybar,
+  enlarge x limits=0.18,
+  grid=major,
+  tick label style={font=\small},
+  label style={font=\small},
+  title style={font=\small},
+]
+\nextgroupplot[
+  title={Mean Active GPU Utilization},
+  xlabel={batch size per GPU},
+  ylabel={utilization (\%)},
+  xmin=14, xmax=50,
+  xtick={16,24,32,48},
+  ymin=0, ymax=105,
+]
+\addplot+[fill=orange!80]
+table[x=bs_per_gpu, y=sample_mean_util_pct, col sep=comma] {reports/assets/training_perf_benchmark_20260320/batch_sweep_2gpu.csv};
+
+\nextgroupplot[
+  title={Mean Active GPU Power Draw},
+  xlabel={batch size per GPU},
+  ylabel={power (W)},
+  xmin=14, xmax=50,
+  xtick={16,24,32,48},
+  ymin=0, ymax=320,
+]
+\addplot+[fill=violet!70]
+table[x=bs_per_gpu, y=sample_mean_power_w, col sep=comma] {reports/assets/training_perf_benchmark_20260320/batch_sweep_2gpu.csv};
+\end{groupplot}
+\end{tikzpicture}
+\caption{active 训练区间里的平均 GPU 利用率与功耗。即使显存用量很低，GPU util 与功耗也已经接近饱和。}
+\label{fig:gpu_sampling}
+\end{figure}
+
+\section{双卡扩展是否有效}
+
+\subsection{答案：有效，而且效果已经很好}
+
+\begin{table}[H]
+\centering
+\small
+\caption{\texttt{bs/gpu=16} 下的 1GPU 与 2GPU 对比。}
+\begin{tabular}{lrrrr}
+\toprule
+配置 & global batch & avg step (ms) & samples/s & 备注 \\
+\midrule
+1GPU bs16 & 16 & 83.79 & 191.0 & 单卡基线 \\
+2GPU bs16 & 32 & 88.64 & 361.0 & 双卡基线 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+由此直接得到：
+\[
+\text{speedup} = \frac{361.0}{191.0} = 1.89\times,\qquad
+\text{efficiency} = \frac{1.89}{2} = 94.5\%.
+\]
+
+同时，step time 只从 \texttt{83.79 ms} 增加到 \texttt{88.64 ms}，
+额外 penalty 约 \textbf{5.8\%}。这意味着 DDP 引入的同步与框架开销并不大，
+至少在当前 batch 和模型规模下，双卡扩展已经属于“没有明显工程问题”的状态。
+
+\subsection{为什么这很重要}
+
+如果 scaling 只有 1.4$\times$ 或 1.5$\times$，那后续优化方向会明显偏向：
+\begin{itemize}[leftmargin=2em]
+  \item 分布式通信排查；
+  \item DDP bucket / overlap 调整；
+  \item 更激进的 NCCL 或 topology 调优。
+\end{itemize}
+
+但当前 efficiency 已达到 \textbf{94.5\%}，所以这些工作都不是优先级最高的方向。
+从工程视角看，\textbf{“双卡没用起来”不是当前系统的主要矛盾。}
+
+\section{时间主要花在哪里}
+
+\subsection{Step time 分解}
+
+\begin{table}[H]
+\centering
+\small
+\caption{主要实验的 step time 分解。}
+\begin{tabular}{lrrrrrr}
+\toprule
+配置 & avg data (ms) & avg fwd+bwd (ms) & avg opt (ms) & data & fwd+bwd & opt \\
+\midrule
+1GPU bs16 & 0.10 & 81.70 & 1.98 & 0.1\% & 97.5\% & 2.4\% \\
+2GPU bs16 & 0.12 & 85.74 & 2.78 & 0.1\% & 96.7\% & 3.1\% \\
+2GPU bs24 & 0.07 & 124.01 & 2.17 & 0.1\% & 98.2\% & 1.7\% \\
+2GPU bs32 & 0.11 & 163.36 & 2.07 & 0.1\% & 98.7\% & 1.3\% \\
+2GPU bs48 & 0.14 & 241.77 & 2.19 & 0.1\% & 99.0\% & 0.9\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+这个表的结论非常硬：
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{data path 基本可以排除。}0.07--0.14ms 只占 0.1\%，几乎小到可以忽略。
+  \item \textbf{optimizer 不是主要耗时。}即使在最慢的配置上，optimizer 也只占 0.9\%--3.1\%。
+  \item \textbf{绝大部分时间都花在 forward/backward。}而且 batch 越大，这一占比越接近 100\%。
+\end{itemize}
+
+所以，“是不是要先加 worker、换 dataloader、改 pinned memory、做 I/O 预取优化”
+这类思路，在当前 benchmark 证据下都不是高优先级。现有训练的主要成本就是模型计算本身。
+
+\subsection{Profiler 证据}
+
+\begin{table}[H]
+\centering
+\small
+\caption{\texttt{2GPU bs16 profiler} 中最值得关注的 top CUDA 项。这里使用 profiler 表中的 \texttt{Self CUDA \%} / \texttt{CUDA total} 信息做工程判断；\texttt{ProfilerStep*} 因统计口径重叠不作为瓶颈归因依据。}
+\begin{tabular}{lrr}
+\toprule
+条目 & CUDA total & Self CUDA 占比 \\
+\midrule
+\texttt{DistributedDataParallel.forward} & 307.53 ms & 35.10\% \\
+\texttt{aten::\_flash\_attention\_backward} & 172.15 ms & 19.65\% \\
+\texttt{flash\_bwd\_dq\_dk\_dv\_loop...} & 160.86 ms & 18.36\% \\
+\texttt{aten::copy\_} & 112.98 ms & 12.90\% \\
+\texttt{aten::mm} & 73.43 ms & 8.38\% \\
+\texttt{aten::\_flash\_attention\_forward} & 65.34 ms & 7.46\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+这张表可以支持三个判断：
+\begin{enumerate}[leftmargin=2em]
+  \item 注意力相关 kernel，尤其是 \texttt{flash attention backward}，已经是主要耗时源之一；
+  \item 线性层 / \texttt{mm} 仍占可见比例，说明瓶颈是标准的 Transformer 计算，而不是奇怪的外部开销；
+  \item profiler 日志里没有 \texttt{nccl}、\texttt{all\_reduce}、\texttt{reduce\_scatter} 等通信项进入 top 列表。
+\end{enumerate}
+
+因此，结合前面的 94.5\% scaling efficiency，可以给出一个很稳的工程判断：
+\textbf{当前系统不是通信受限，而是计算受限。}
+
+\subsection{关于 CPU summary 的一个重要说明}
+
+profiler 的 CPU top 表里 \texttt{cudaDeviceSynchronize} 和 \texttt{cudaStreamSynchronize}
+占比很高，看起来像“CPU 在等 GPU”。
+这个现象在本 benchmark 中\textbf{不能直接等价为真实训练的 CPU 瓶颈}，
+因为为了拿到精确的分段 timing，我们在 benchmark 版本训练器里显式插入了多次
+\texttt{torch.cuda.synchronize()}。它们的作用是让 timing 更准，但会人为放大 profiler
+对同步调用的记录比例。
+
+因此，本轮 profiler 应主要用于确认“主要 CUDA 时间花在什么算子”，
+而不是把 CPU 同步表面占比直接翻译成生产环境开销。
+
+\section{继续增大 batch 是否值得}
+
+\subsection{先看增益，再看代价}
+
+\begin{table}[H]
+\centering
+\small
+\caption{双卡 batch sweep 的边际收益。}
+\begin{tabular}{lrrr}
+\toprule
+区间 & 吞吐提升 & 峰值显存提升 & 解释 \\
+\midrule
+16 $\rightarrow$ 24 & +5.3\% & +47.3\% & 仍有收益，但已经不是线性增长 \\
+24 $\rightarrow$ 32 & +1.7\% & +32.1\% & 明显进入边际递减区 \\
+32 $\rightarrow$ 48 & +1.7\% & +49.0\% & 吞吐几乎不再明显增长 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+如果只看“最终最高吞吐”，那么 \texttt{bs/gpu=48} 的确是本轮最快设置，
+达到 \texttt{393.3 samples/s}。但问题在于：
+\begin{itemize}[leftmargin=2em]
+  \item 它相对 \texttt{bs/gpu=32} 只快了 \textbf{1.7\%}；
+  \item 却把 step latency 从 \texttt{165.55 ms} 拉长到 \texttt{244.10 ms}；
+  \item 并且进一步增加了显存占用。
+\end{itemize}
+
+因此，从工程上看，\texttt{bs/gpu=48} 更像是“把剩余显存继续换成一点点额外吞吐”的配置，
+而不是一个明显更优的默认点。
+
+\subsection{那默认点应该选哪里}
+
+如果目标是“在不大改优化超参的前提下，给后续短 benchmark / smoke benchmark 一个合理默认值”，
+我更倾向于：
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{\texttt{bs/gpu=24}}：最保守的吞吐提升点，几乎不用担心过大 global batch 带来的训练语义变化；
+  \item \textbf{\texttt{bs/gpu=32}}：吞吐接近本轮上限，但还没有走到过于极端的长 step latency。
+\end{itemize}
+
+如果目标只是“在固定模型上挤出 benchmark 最高吞吐”，那 \texttt{bs/gpu=48} 也可以保留。
+但需要强调：\textbf{benchmark 吞吐最优不等于真实训练默认配置最优。}
+当 global batch 从 32 提到 96 时，训练动力学、学习率、正则化和早停行为都可能变。
+这类变更应该被视为新的训练超参实验，而不是纯粹的系统优化。
+
+\subsection{为什么显存还很空，但不建议继续盲目推 batch}
+
+即使在 \texttt{bs/gpu=48}，PyTorch 记录的 rank-0 峰值 allocated 也只有
+\texttt{8.52 GB}，折算成 A6000 的 49.14GB 物理显存只占约 \textbf{17.3\%}。
+这看上去像“还远远没吃满”，但和图 \ref{fig:gpu_sampling} 放在一起看就很清楚：
+\begin{itemize}[leftmargin=2em]
+  \item active util 已经在 \textbf{93\%--96\%}；
+  \item 平均 active 功耗在 \textbf{266--288W}；
+  \item 峰值功耗已到 \textbf{295--299W}，几乎贴着 300W 上限。
+\end{itemize}
+
+这恰恰说明当前模型是\textbf{算力先饱和，显存后饱和}。在这种 regime 下，
+“显存还空着”并不等于“GPU 还没被充分利用”。
+
+\section{当前训练是否充分利用了 2$\times$A6000}
+
+\subsection{准确表述}
+
+最准确的表述不是简单的“是”或“否”，而是下面这句话：
+
+\begin{quote}
+\textbf{当前训练没有充分利用 A6000 的显存容量，但已经相当充分地利用了
+当前模型规模下可用的计算资源。}
+\end{quote}
+
+\subsection{为什么这样说}
+
+\paragraph{从“没有充分利用显存容量”的角度看}
+这点是成立的。即便到 \texttt{bs/gpu=48}，显存仍只有个位数 GB，
+离 48GB 上限很远。
+
+\paragraph{从“是否把 GPU 真的跑起来”的角度看}
+这点同样成立，而且更关键。双卡扩展已经达到 94.5\% efficiency，
+active util 与功耗都接近满载，说明 A6000 并不是在空转等待，而是在持续执行计算密集型 kernel。
+
+所以，如果用户真正关心的是“现在 wall-clock 慢，是不是因为系统没把 GPU 用起来”，
+本轮 benchmark 的答案更接近：
+\textbf{不是。当前慢，主要是因为模型本身就需要这些计算。}
+
+\section{\texttt{input\_len=4096} 是否应视作新实验线}
+
+本轮 benchmark 没有直接跑 \texttt{input\_len=4096}，但它已经足够支持一个明确判断。
+
+当前的主要耗时来自 attention backward、attention forward 和 matmul。
+这意味着序列长度一旦上升，耗时会继续主要体现在模型计算上，而不是 magically 改善任何 I/O 或通信问题。
+因此：
+\begin{itemize}[leftmargin=2em]
+  \item 如果把 \texttt{input\_len} 从 \texttt{2114} 提到 \texttt{4096}，
+  那不是“硬件利用率优化”，而是\textbf{任务定义和模型计算量一起变化}的新实验；
+  \item 从科学问题上，它是在测试更长上下文是否带来性能收益；
+  \item 从系统问题上，它大概率只会进一步放大当前已经观察到的 compute-bound 特征。
+\end{itemize}
+
+因此，\texttt{input\_len=4096} 应该被单独立项，
+与当前 benchmark 的结论分开叙述。
+
+\section{工程建议与优先级}
+
+\subsection{不值得优先投入的方向}
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{dataloader/worker 调优}：本轮证据显示 data 占比只有 0.1\%，几乎不可能带来可见收益；
+  \item \textbf{NCCL / DDP 深调}：94.5\% scaling efficiency 已经很好，通信不是主要矛盾；
+  \item \textbf{单纯为了“吃满显存”而继续盲目加 batch}：收益已经明显递减。
+\end{itemize}
+
+\subsection{值得优先做的方向}
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{保持现有 DDP 路线，不再怀疑双卡是否有效。}
+  从这轮 benchmark 起，可以把“DDP 没用起来”从主要怀疑列表里拿掉。
+
+  \item \textbf{如需缩短 wall-clock，优先做 kernel / graph 级 benchmark。}
+  例如在相同 300-step harness 上单独测一次 \texttt{compile: true}。
+  因为当前 workload 明显 compute-bound，图编译和 kernel fusion 比数据通路优化更有希望。
+
+  \item \textbf{后续吞吐类短实验默认从 \texttt{bs/gpu=24} 或 \texttt{32} 开始。}
+  它们已经覆盖了绝大部分可获得吞吐，却没有把 global batch 拉到过大的范围。
+
+  \item \textbf{把 spare memory 留给更大的模型或更长序列。}
+  既然当前显存还有很大余量，那更合理的用法是为未来的更大实验留空间，
+  而不是把它全部换成 marginal 的 batch 增益。
+\end{enumerate}
+
+\section{局限性与解释边界}
+
+\begin{itemize}[leftmargin=2em]
+  \item 本轮 benchmark 关闭了 validation、checkpoint 与 early stopping，
+  因此它回答的是“纯训练 step 的系统行为”，而不是完整训练流程的端到端 wall-clock。
+  \item 单卡 \texttt{nvidia-smi} 采样 CSV 只记录到一条初始样本，未形成可用的 active 均值；
+  因此单卡功耗/利用率不进入主表，但 timing / throughput / PyTorch peak allocated 仍有效。
+  \item profiler run 只有 25 step，并且 benchmark 版本训练器显式加入了
+  \texttt{torch.cuda.synchronize()}，因此 CPU summary 主要用于辅助解释，而不是直接代表生产训练开销。
+\end{itemize}
+
+\section{结论}
+
+这轮 benchmark 的意义，不只是告诉我们“哪个 batch 更快”，而是把一个经常会误判的问题说清楚了：
+\textbf{低显存占用不等于低 GPU 利用率。}
+
+对当前这套 \texttt{TransChromBP} 训练而言，A6000 的显存确实还有很多余量，
+但两张卡的计算资源其实已经被用得相当充分：
+\begin{itemize}[leftmargin=2em]
+  \item DDP scaling 好；
+  \item active util / power 高；
+  \item data path 可忽略；
+  \item 主要时间花在 attention 与 matmul。
+\end{itemize}
+
+所以，后续最重要的工程决策已经明确：
+\begin{enumerate}[leftmargin=2em]
+  \item 不必再把 dataloader 或 NCCL 当成主要怀疑对象；
+  \item 不要把 \texttt{input\_len=4096} 混同为“简单的硬件优化”；
+  \item 如果要继续降 wall-clock，应优先探索 \texttt{compile} 或更高层的模型/算子优化；
+  \item 如果只是想给未来短 benchmark 一个更好的默认点，优先考虑 \texttt{bs/gpu=24} 或 \texttt{32}。
+\end{enumerate}
+
+本轮 benchmark 因而已经足够支持一个稳定结论：
+\textbf{当前 2$\times$A6000 训练在“算力利用”意义上是充分的，在“显存容量利用”意义上则仍有很大余量。}
+
+\end{document}

@@ -1,0 +1,609 @@
+\documentclass[11pt,a4paper]{ctexart}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]{hyperref}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{caption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{multirow}
+
+\definecolor{goodgreen}{rgb}{0.0,0.5,0.0}
+\definecolor{warncolor}{rgb}{0.8,0.4,0.0}
+\newcommand{\good}[1]{\textcolor{goodgreen}{\textbf{#1}}}
+\newcommand{\bad}[1]{\textcolor{red}{#1}}
+\newcommand{\warn}[1]{\textcolor{warncolor}{#1}}
+
+\title{TransChromBP 阶段性深度复盘\\
+\large 从实验收敛到论文收口的全局分析}
+\author{项目阶段性分析文档}
+\date{2026 年 3 月 24 日}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+本文在 2026 年 3 月 24 日这个节点上，对 TransChromBP 项目自启动以来的全部实验进行一次
+全局复盘。不再局限于单条实验线的结果更新，而是回答三个战略层面的问题：
+\textbf{(1)} 我们到底学到了什么——所有已收口的实验，放在一张表里看，呈现出怎样的全局图景？
+\textbf{(2)} 项目处在什么阶段——是应该继续探索新方向，还是已经到了收敛定稿的时候？
+\textbf{(3)} 论文应该怎么讲——基于现有证据，最有说服力且最稳健的叙事是什么？
+
+核心判断如下。
+第一，TransChromBP 的架构有效性已经建立：相对 ChromBPNet 官方教程基线，
+peak profile JSD 从 $0.3360$ 降至 $\sim 0.314$（改善 $\sim 6.5\%$），
+peak count $r$ 从 $0.7274$ 提升至 $\sim 0.85$（改善 $\sim 17\%$），
+且多 seed、多读出头变体、多数据集上均保持一致。
+第二，项目已从探索期进入收敛期：架构方向已定（Transformer + bias factorization + stop\_gradient），
+主要消融全部完成，基础模型融合已试过一轮并得到清晰负结论，
+剩余在跑的实验均为已有方案的多 seed 补充。
+第三，论文的最强叙事不是"做了一个更强的模型"，
+而是"系统揭示了长程建模与 bias factorization 结合时会出现的 profile shortcut，
+并提出了有效的结构化修复方案"——这是一个可独立成立的技术贡献。
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%%====================================================================
+\section{全局结果总表}
+\label{sec:global-table}
+%%====================================================================
+
+为了避免在不同报告之间来回翻阅零散数字，本节把所有已收口的 held-out test 结果
+汇聚到一张表中。评估口径统一为：\texttt{split=test}，\texttt{nonpeak\_ratio=1.0}，
+使用各 run 的 \texttt{best.pt}。
+
+\subsection{Tutorial 数据线（主消融战场）}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Tutorial 数据上的全部 held-out test 结果。
+JSD 越低越好，count $r$ 越高越好。
+带 $\dag$ 标记的为多 seed 均值。}
+\label{tab:tutorial-all}
+\begin{tabular}{llrr}
+\toprule
+类别 & 方案 & Peak JSD & Peak count $r$ \\
+\midrule
+\multicolumn{4}{l}{\textit{外部参照}} \\
+& ChromBPNet 官方教程 & $0.3360$ & $0.7274$ \\
+\midrule
+\multicolumn{4}{l}{\textit{TransChromBP 架构消融（3-seed 均值）}} \\
+& V2-full$^\dag$ & $0.31419 \pm 0.00012$ & $0.83676 \pm 0.00531$ \\
+& V2-noTF$^\dag$ & $0.32393 \pm 0.00021$ & $0.82503 \pm 0.00489$ \\
+\midrule
+\multicolumn{4}{l}{\textit{V2fix 读出头消融（单 seed s42）}} \\
+& A: freeze fix & $0.3148$ & $0.8446$ \\
+& B: center pool & $0.3147$ & $\mathbf{0.8503}$ \\
+& F: attention pool & $0.3148$ & $0.8492$ \\
+& G: profile refine & $0.4260$ & $0.8460$ \\
+\midrule
+\multicolumn{4}{l}{\textit{V2fix 多 seed（已收口）}} \\
+& F: attn pool s1234 & \multicolumn{2}{c}{early-stop, best=0.4434（待补 held-out）} \\
+\midrule
+\multicolumn{4}{l}{\textit{Genos 融合}} \\
+& G0 matched baseline & $0.3163$ & $0.8410$ \\
+& G1 online gate & $0.3388$ & $\bad{0.4689}$ \\
+& G2 online mean & $0.3387$ & $\bad{0.6360}$ \\
+& P0 cached baseline & $0.3179$ & $0.8384$ \\
+& P2 cached count-only & $0.3174$ & $\bad{0.6037}$ \\
+\midrule
+\multicolumn{4}{l}{\textit{历史里程碑}} \\
+& Teacher v2 best (epoch 24) & $\mathbf{0.3141}$ & $\mathbf{0.8465}$ \\
+& V1 fixcw (cw=0.1) & $0.3231$ & $0.8205$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{独立数据集（6002 验证线）}
+
+\begin{table}[H]
+\centering
+\small
+\caption{6002 独立真实数据的 held-out test 结果。
+这组实验的目的是验证泛化性，而不是与 tutorial 主线比绝对值。}
+\label{tab:independent}
+\begin{tabular}{lrrrr}
+\toprule
+数据集 & best epoch & Peak JSD & Peak count $r$ & 判断 \\
+\midrule
+GM12878 pilot20 & 19 & $0.4226$ & $0.8040$ & held-out $\geq$ val，稳定 \\
+K562 single & 35 & $0.6124$ & $0.8586$ & held-out $\geq$ val，稳定 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Genos OCR 旁线 sanity check}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Genos-1.2B 在官方 OCR benchmark 上的复现结果。
+仅用于确认本地权重与推理链路正常，不作为主线 gate。}
+\label{tab:ocr}
+\begin{tabular}{lrr}
+\toprule
+实验 & Layer & ROC AUC \\
+\midrule
+mini smoke & 6 & $0.5958$ \\
+full & 6 & $0.7242$ \\
+full & 12 & $0.7535$ \\
+\midrule
+\multicolumn{2}{l}{官方参考值（Genos-1.2B）} & $0.7569$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%%====================================================================
+\section{五条实验主线的回顾与判断}
+\label{sec:five-lines}
+%%====================================================================
+
+%%--------------------------------------------------------------------
+\subsection{主线一：Transformer 消融——最坚实的基石}
+%%--------------------------------------------------------------------
+
+\texttt{ablation\_tf\_20260318} 是整个项目中设计最干净、证据最强的实验。
+V2-full 对 V2-noTF 在三个随机种子上实现了：
+
+\begin{itemize}[leftmargin=2em]
+  \item Peak JSD：$0.31419 \pm 0.00012$ 对 $0.32393 \pm 0.00021$，相对改善 $\sim 3.0\%$
+  \item Peak count $r$：$0.83676 \pm 0.00531$ 对 $0.82503 \pm 0.00489$，提升 $+0.012$
+  \item Full/debiased gap：$0.00006$，说明 Transformer 的收益不是来自 bias leakage
+\end{itemize}
+
+这组证据的价值在于它的\textbf{纯净性}：只改了一个变量（有无 Transformer），
+其它一切相同。论文中这是最适合做"主实验"的数据。
+
+不足之处已被后续实验补上：30 epoch 偏紧，best epoch 集中在 27--30。
+因此后续 V2fix 系列统一改为 40 epoch，B 的 best 在 34 即收口，
+A/F 则确实吃到了 30$\to$40 的尾部收益。
+
+%%--------------------------------------------------------------------
+\subsection{主线二：V2fix 读出头消融——收敛到微小增量}
+%%--------------------------------------------------------------------
+
+这条线的核心发现是：\textbf{四种读出头改动中三种通过了 held-out 验证，
+但它们之间的差距已经小于 seed 方差的量级。}
+
+A/B/F 的 peak JSD 全部落在 $0.3147$--$0.3148$，
+相对 baseline $0.3143$ 只差 $+0.0004$--$0.0005$。
+真正拉开差距的是 count $r$：
+
+\begin{center}
+B $(0.8503)$ $>$ F $(0.8492)$ $>$ A $(0.8446)$ $>$ baseline $(0.8354)$
+\end{center}
+
+B 领先 F 仅 $+0.0011$。在单 seed 条件下，这个差距很难被认为有统计显著性。
+
+\textbf{更深层的含义}：
+V2 主架构（Transformer + bias factorization + stop\_gradient + debiased 训练框架）
+才是真正的贡献源。读出头改动是"在一个已经很强的架构上进一步微调末端"，
+增量空间本来就很小。这与 Genos 线的负结论本质上是同一个现象的两面——
+当 baseline 足够强时，外部附加组件的边际收益会快速衰减。
+
+G 的失败（profile JSD $= 0.4260$）反过来证明并非"什么都能过"，
+消融确实在起到区分作用，只是正向方案之间的差距已进入噪声区。
+
+\textbf{当前状态}：B\_s1234 在 6000 GPU0 进行中，F\_s1234 在 6002 已 early-stop。
+等 B\_s1234 收口后，可以做 matched 对照选出最终方案。
+
+%%--------------------------------------------------------------------
+\subsection{主线三：Genos 基础模型融合——有价值的负结果}
+%%--------------------------------------------------------------------
+
+这是整个项目中投入最大、结论最有研究价值的负结果线。
+
+\subsubsection{事实链}
+
+\begin{enumerate}[leftmargin=2em]
+  \item OCR 旁线复现：layer 12 AUC $= 0.7535$，接近官方 $0.7569$。
+        证明\textbf{Genos 本体与本地推理链路正常}。
+  \item Online 融合（G1/G2）：validation 看似接近 baseline，但 held-out test 上
+        count $r$ 分别塌至 $0.4689$ 和 $0.6360$。
+  \item Cached-fusion P0（matched baseline）：稳定但未超过 G0，
+        $0.3179 / 0.8384$ 对 G0 的 $0.3163 / 0.8410$。
+  \item Cached-fusion P2（count-only 注入）：profile 基本追回（$0.3174$），
+        但 count $r$ 崩至 $0.6037$。
+  \item 前置 probe：\texttt{genos\_global\_mean} 对 count residual $R^2 = 0.0167$，
+        \texttt{genos\_only} 对 peak/nonpeak 分类 AUC $= 0.6997$；
+        但 \texttt{concat(encoded, genos)} AUC $= 0.9018$ \textbf{低于}
+        \texttt{encoded\_only} AUC $= 0.9219$。
+\end{enumerate}
+
+\subsubsection{失败原因的优先排序}
+
+基于上述事实链，最合理的因果排序是：
+
+\begin{description}[leftmargin=2em,labelwidth=3em]
+  \item[原因 1] \textbf{特征粒度不匹配。}
+    OCR 是 sequence-level 分类，天然适合 \texttt{global\_mean} summary。
+    但 ATAC profile/count 是碱基分辨率的轨迹预测，需要局部 motif 组合与位置结构。
+    \texttt{global\_mean [1024]} 对后者太粗。
+
+  \item[原因 2] \textbf{train cache 与实际训练语义不对齐。}
+    valid 是 exact cache，但 train 侧有 \texttt{peak\_max\_jitter=500}
+    和 \texttt{random\_revcomp}，导致 cached summary 对应的 canonical region
+    与实际监督 target 不是完全同一对象。
+
+  \item[原因 3] \textbf{P2 的注入位置过于激进。}
+    直接把粗 summary 打进 count head 隐藏层中间，
+    离最终输出太近、缺少缓冲层，导致 count 路径被外来信号直接破坏。
+
+  \item[原因 4] \textbf{baseline 已经很强，增量空间极小。}
+    G0 baseline 已经是 $0.3163 / 0.8410$，
+    连 matched P0 都只是 $0.3179 / 0.8384$。
+    在这个水平上，弱而粗的外部 summary 很难越过噪声门槛。
+\end{description}
+
+\subsubsection{对论文的价值}
+
+这是一个值得写入论文 discussion 的负结果。它说明：
+
+\begin{quote}
+\textbf{当下游任务是碱基分辨率的 profile/count 预测时，
+sequence-level 的基因组基础模型 summary 不是自然可加的。
+任务越精细、baseline 越强，粗粒度外部表征越难贡献增量。}
+\end{quote}
+
+这与当前基因组学领域对 foundation model 的高期望形成了有价值的对照。
+
+%%--------------------------------------------------------------------
+\subsection{主线四：多数据集泛化——稳定但不令人意外}
+%%--------------------------------------------------------------------
+
+GM12878 和 K562 两套独立数据的 held-out 结果均与 validation 一致甚至更优。
+这证明 TransChromBP 不是 tutorial 数据上的过拟合产物。
+
+但需要注意：
+\begin{itemize}[leftmargin=2em]
+  \item GM12878 的 peak JSD $= 0.4226$，明显劣于 tutorial 的 $\sim 0.314$。
+        这不一定说明模型更差——不同数据集的 peak 信噪比和 bias 结构不同，
+        JSD 的绝对值不跨数据集可比。
+  \item K562 的 peak JSD $= 0.6124$ 更高，可能反映该数据集固有的更大 profile 变异性。
+  \item 两套数据集的 count $r$ 都稳定在 $0.80$--$0.86$，
+        说明 count 预测在不同数据上的一致性好于 profile。
+\end{itemize}
+
+这条线现在已经完成了"独立 sanity check"的职责，可以归档。
+后续如果需要跨数据集消融，可以在此基础上扩展，不需要重跑。
+
+%%--------------------------------------------------------------------
+\subsection{主线五：Profile bias shortcut 的发现与修复——最强的技术贡献}
+%%--------------------------------------------------------------------
+
+回顾整个项目，真正\textbf{最具独创性}的发现既不是 Transformer 有效，
+也不是读出头微调有用，而是：
+
+\begin{quote}
+\textbf{当 Transformer 长程主干与 ChromBPNet-style bias factorization 结合时，
+会出现一种此前未被识别的 profile shortcut——
+bias branch 的 profile 输出被主模型直接借道传递到最终预测，
+绕过了 debiased signal branch 的学习。}
+\end{quote}
+
+这个发现来自 V1$\to$V2 的演进过程：
+
+\begin{enumerate}[leftmargin=2em]
+  \item 在 V1 fixcw 中，\textbf{发现} debiased JSD 从 $0.5633$ 直接暴露了 profile shortcut。
+  \item 在 V2 中，\textbf{修复}方案是三项结构化改动（两阶段 scale 初始化、
+        profile bias stop\_gradient、改进的 bias-safe 训练框架），
+        debiased JSD 从 $0.5633$ 降至 $0.3163$，\textbf{降幅达 $43.9\%$}。
+  \item 关键的是，修复 shortcut 的同时，count $r$ 也从 $0.8205$ 提升到 $0.8466$（$+3.2\%$），
+        而 V2 \textbf{没有改动任何 count 相关的模块}。
+        这说明 shortcut 不仅影响 profile，还间接抑制了整个 signal branch 的表征质量。
+  \item Bias-safe 2$\times$2 析因实验进一步证实 \texttt{stop\_gradient=true}
+        是关键因素，\texttt{pool\_factor} 无显著主效应。
+\end{enumerate}
+
+\textbf{为什么说这是最强贡献：}
+\begin{itemize}[leftmargin=2em]
+  \item 它是一个\textbf{新问题}——在 ChromBPNet 原始工作中不会出现
+    （因为没有 Transformer 可以借道），在纯 Transformer 工作中也不会出现
+    （因为没有 bias branch）。只有在两者结合时才会暴露。
+  \item 它有\textbf{明确的诊断指标}——full/debiased gap 可以直接量化 shortcut 程度。
+  \item 它有\textbf{有效的修复方案}——而且修复是结构化的，不是调参。
+  \item 它有\textbf{跨组件的因果效应}——修复 profile 路径的问题，
+        同时改善了 count 路径，且无需改动 count 模块。
+  \item 它对后续工作有\textbf{普适性指导}——任何将 Transformer 与
+        bias/confound factorization 结合的架构，都应该检查类似的 shortcut。
+\end{itemize}
+
+%%====================================================================
+\section{项目阶段判断：从探索到收敛}
+\label{sec:phase}
+%%====================================================================
+
+\subsection{证据支持"进入收敛期"的五个信号}
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{架构方向不再是开放问题。}
+    Transformer + bias factorization + stop\_gradient 已在 3-seed 消融中建立。
+    后续不会再考虑"是否需要 Transformer"或"bias 分解是否必要"。
+
+  \item \textbf{主要消融全部完成。}
+    TF 消融（3$\times$2 = 6 runs）、bias-safe 析因（4 runs）、
+    V2fix 读出头（4 方案 $\times$ 1--2 seeds）、Genos 融合（5 recipe）、
+    多数据集泛化（4 runs）——总计 $>$20 个独立 run，
+    覆盖了当前设计空间的主要维度。
+
+  \item \textbf{正向方案之间的差距已进入噪声区。}
+    A/B/F 的 peak JSD 差距 $< 0.0001$，count $r$ 差距 $< 0.006$。
+    继续增加新的结构变体，预期增量 $\ll$ 已有的 V2 vs noTF 增量。
+
+  \item \textbf{基础模型融合的负结论已经稳定。}
+    5 种 Genos recipe（G1/G2/P0/P2 + probe）跨 online/cached 两种范式，
+    结论一致。不是单个实验的偶发失败。
+
+  \item \textbf{剩余在跑的实验不会改变全局图景。}
+    B\_s1234 和 F\_s1234 的多 seed 结果，无论谁赢，
+    都只改变"最终推荐用 B 还是 F"，不改变"TransChromBP 是否有效"的结论。
+\end{enumerate}
+
+\subsection{如果不是收敛期，还有什么可能？}
+
+唯一可能推翻"进入收敛期"判断的场景是：
+出现一个全新的、高增量的方向，其预期收益远超当前 A/B/F 水平。
+当前可见的候选方向有：
+
+\begin{table}[H]
+\centering
+\small
+\caption{潜在新方向与当前判断}
+\begin{tabular}{lll}
+\toprule
+方向 & 预期收益 & 当前判断 \\
+\midrule
+更细粒度 Genos（bins4\_mean） & 可能改善 Genos 融合 & 负结果已较强，优先级低 \\
+LoRA / cross-attention 接 Genos & 更灵活的融合 & 在 global\_mean 已失败前提下不急于尝试 \\
+更长输入窗口 & 理论上扩大上下文 & 需要数据重处理，工程量大 \\
+Distillation（Teacher$\to$Student） & 论文叙事加分 & 有价值，但不改变主模型结论 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+上述方向均非"必须在当前阶段完成"。
+更合理的策略是先把已有结果写成论文，
+同时把这些方向明确记为 future work。
+
+%%====================================================================
+\section{论文叙事的重新校准}
+\label{sec:narrative}
+%%====================================================================
+
+\subsection{不应该讲的故事}
+
+\begin{description}[leftmargin=2em]
+  \item["我们做了一个更强的 ATAC 模型"]
+    这个叙事太弱。ChromBPNet 已经是 well-established 的方法，
+    仅凭 tutorial 数据上的 $+17\%$ count $r$ 不足以宣称 SOTA，
+    因为没有跨 fold、跨细胞系的大规模对比。
+
+  \item["我们把 Transformer 和 bias 分解组合起来"]
+    这个叙事太浅。"组合"本身不是 contribution，
+    关键是组合时会出什么问题以及如何解决。
+
+  \item["我们证明了基因组基础模型对 ATAC 有效"]
+    事实恰好相反。Genos 在当前设置下没有正收益。
+\end{description}
+
+\subsection{应该讲的故事}
+
+最有说服力的叙事是围绕\textbf{问题-诊断-修复}的完整闭环：
+
+\begin{quote}
+\textbf{Title-level claim}：当 Transformer 长程建模与 ChromBPNet-style
+bias factorization 结合时，会出现一种此前未识别的 profile shortcut；
+我们提出了基于 stop\_gradient 和两阶段 scale 初始化的结构化修复方案，
+并通过系统消融验证了修复的有效性。
+\end{quote}
+
+这个叙事的优点：
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{新颖性明确}：profile shortcut 是一个新发现的问题，
+    不是已知问题的重复验证。
+  \item \textbf{通用性好}：任何试图把长程 Transformer 与
+    confound/bias factorization 结合的工作都可能遇到类似问题，
+    读者群体不限于 ATAC-seq 社区。
+  \item \textbf{证据链完整}：
+    发现（V1 fixcw 的 debiased JSD 暴露）$\to$
+    诊断（scale 轨迹分析、full/debiased gap 定量）$\to$
+    修复（V2 三项改动）$\to$
+    验证（3-seed 消融、bias-safe 析因）$\to$
+    泛化（多数据集一致性）。
+  \item \textbf{负结果加分}：Genos 的负结论恰好支持了
+    "问题的核心不是缺少长程上下文，而是如何处理上下文引入时的副作用"这一论点。
+\end{enumerate}
+
+\subsection{论文结构建议}
+
+基于上述叙事，建议的论文结构为：
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Introduction}：
+    碱基分辨率 ATAC-seq 建模的背景，ChromBPNet 的成功与局限，
+    长程 Transformer 的诱惑与风险。
+
+  \item \textbf{Problem Statement}：
+    当 Transformer 与 bias factorization 结合时，
+    为什么简单拼接不够，以及 profile shortcut 的机制解释。
+
+  \item \textbf{Method}：
+    TransChromBP 架构（含 bias-safe 框架、stop\_gradient、
+    两阶段 scale 初始化、读出头设计）。
+
+  \item \textbf{Experiments}：
+    \begin{itemize}[leftmargin=1em]
+      \item 主实验：V2-full vs V2-noTF（3-seed，Table~\ref{tab:tutorial-all} 前两行）
+      \item Shortcut 诊断：V1$\to$V2 的 debiased gap 变化
+      \item Bias-safe 析因：stop\_gradient $\times$ pool\_factor 2$\times$2
+      \item 读出头消融：A/B/F/G 四方案 held-out 比较
+      \item 多数据集验证：GM12878, K562
+    \end{itemize}
+
+  \item \textbf{Discussion}：
+    \begin{itemize}[leftmargin=1em]
+      \item Genos 基础模型融合的负结果（与论文主张一致：问题不是缺上下文，而是融合方式）
+      \item 与 AlphaGenome 的定位差异
+      \item 对未来"Transformer + factorization"工作的普适启示
+    \end{itemize}
+\end{enumerate}
+
+%%====================================================================
+\section{仍需完成的最小实验清单}
+\label{sec:todo}
+%%====================================================================
+
+\subsection{必须完成（论文数据缺口）}
+
+\begin{table}[H]
+\centering
+\small
+\caption{论文级必须完成的实验}
+\begin{tabular}{lll}
+\toprule
+实验 & 当前状态 & 用途 \\
+\midrule
+B\_s1234 多 seed & 6000 GPU0 进行中 & 与 F\_s1234 做 matched 对照，选定最终方案 \\
+F\_s1234 held-out test & 已 early-stop，待补 test & 同上 \\
+最终方案 $\geq 2$ seed held-out & 等上两项收口 & 论文主表报告 mean $\pm$ std \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{可选但有加分效果}
+
+\begin{table}[H]
+\centering
+\small
+\caption{可选的补充实验}
+\begin{tabular}{lll}
+\toprule
+实验 & 预期投入 & 论文价值 \\
+\midrule
+最终方案的第 3 个 seed & 1 run $\approx$ 2.3h (DDP) & 更稳的 mean $\pm$ std \\
+代表性 locus profile 可视化 & 纯分析，无训练 & 定性展示模型行为 \\
+Genos 负结果的更精炼分析 & 纯写作 & Discussion 充实度 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{明确不做}
+
+\begin{itemize}[leftmargin=2em]
+  \item 不再开新的读出头结构（H/I/J\ldots）。
+  \item 不在 Genos 线上继续追加 P1 或其他 recipe。
+  \item 不把 6002 独立数据线扩展为完整消融。
+  \item 不做 distillation（Teacher$\to$Student），留为 future work。
+  \item 不做更长输入窗口的实验。
+\end{itemize}
+
+%%====================================================================
+\section{风险与不确定性}
+\label{sec:risk}
+%%====================================================================
+
+\subsection{风险一：B 和 F 在多 seed 上反转}
+
+\textbf{可能性}：中等。单 seed 差距仅 $0.0011$（count $r$），
+多 seed 均值完全可能反转。
+
+\textbf{应对}：如果反转，选择结构更简单的那个。
+B（center pool）的实现更简单、训练更早收敛（best=34 vs F 的 40），
+因此即使两者持平，也倾向推荐 B。
+更重要的是，无论 B 还是 F 胜出，都不影响论文的核心叙事。
+
+\subsection{风险二：F\_s1234 的 early-stop 不正常}
+
+F\_s1234 的 best val peak JSD 为 $0.4434$，
+远高于 F\_s42 的 $0.3318$。
+这可能意味着 6002 单卡训练口径与 6000 DDP 存在差异，
+或者 seed 1234 本身就是一个较差的随机种子。
+
+\textbf{应对}：优先检查 F\_s1234 的训练配置是否与 F\_s42 一致
+（batch size、learning rate、数据增强），
+如果确认口径不同则结果不可比，需要重跑。
+
+\subsection{风险三：论文 reviewer 要求更大规模的对比}
+
+当前结果主要基于 tutorial 数据（一个 fold、一个细胞系）。
+Reviewer 可能要求多 fold 或多细胞系的完整对比。
+
+\textbf{应对}：GM12878/K562 的结果可以作为"泛化证据"回应，
+但不作为主表。如果 review 压力大，可以补跑 GM12878 上的
+V2-full vs V2-noTF 对照，工程量可控。
+
+%%====================================================================
+\section{时间线建议}
+\label{sec:timeline}
+%%====================================================================
+
+\begin{table}[H]
+\centering
+\small
+\caption{从当前到论文初稿的建议时间线}
+\begin{tabular}{lll}
+\toprule
+阶段 & 内容 & 依赖 \\
+\midrule
+\textbf{当前$\to$B\_s1234 收口} &
+  等 B\_s1234 和 F\_s1234 held-out 测试 &
+  GPU 时间，自然收口 \\
+\textbf{收口后 1--2 天} &
+  matched 对照分析，确定最终方案 &
+  上一步完成 \\
+\textbf{确定方案后 1 周} &
+  整理论文主表、补可视化、写 Method/Experiment &
+  最终方案锁定 \\
+\textbf{Method 完成后} &
+  写 Introduction/Discussion，整合 Genos 负结论 &
+  无 \\
+\textbf{初稿完成} &
+  内审/校对/定版 &
+  无 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%%====================================================================
+\section{总结}
+\label{sec:conclusion}
+%%====================================================================
+
+回到开头提出的三个问题：
+
+\textbf{我们到底学到了什么？}
+\begin{enumerate}[leftmargin=2em]
+  \item Transformer + bias factorization 的组合是有效的，
+    但组合的关键不在于"拼起来"，而在于识别并修复 profile shortcut。
+  \item 读出头改进（B/F）是正向但微小的增量，不是架构级突破。
+  \item 基因组基础模型（Genos-1.2B）的 sequence-level summary
+    在碱基分辨率 profile/count 任务上没有正收益——
+    不是因为模型坏了，而是粒度不匹配且 baseline 已经很强。
+  \item TransChromBP 在 GM12878 和 K562 上均能稳定训练，
+    validation$\to$held-out 一致性良好。
+\end{enumerate}
+
+\textbf{项目处在什么阶段？}
+收敛期。架构已定，消融完备，负结论稳定，剩余实验是补充性的多 seed 确认。
+不应继续开新的结构探索。
+
+\textbf{论文应该怎么讲？}
+围绕"发现 profile shortcut$\to$诊断机制$\to$结构化修复$\to$系统消融验证"
+的闭环叙事。Genos 负结果作为 discussion 材料强化核心论点。
+不宣称 SOTA，而是提出一个可验证的、有普适性的设计原则：
+\textbf{在任何 Transformer $\times$ bias/confound factorization 架构中，
+必须检查并阻断潜在的 shortcut 路径}。
+
+\end{document}

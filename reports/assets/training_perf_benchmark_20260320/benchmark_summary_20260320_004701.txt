@@ -1,0 +1,191 @@
+TransChromBP Training Performance Benchmark Summary
+Timestamp: 20260320_004701
+DRY_RUN_STEPS: 300
+
+
+--- bench_1gpu_bs16 (nproc=1, bs=16) ---
+=== TIMING SUMMARY ===
+Total steps measured: 290 (skipped first 10 warmup)
+avg_data_time:       0.10 ms  (0.1%)
+avg_fwd_bwd_time:    81.70 ms  (97.5%)
+avg_opt_time:        1.98 ms  (2.4%)
+avg_step_time:       83.79 ms
+avg_samples_per_sec: 191.0
+world_size:          1
+batch_size_per_gpu:  16
+global_batch_size:   16
+============================================================
+
+=== GPU MEMORY SUMMARY ===
+GPU 0: peak_allocated=2.91 GB, peak_reserved=3.09 GB
+GPU 1: peak_allocated=0.00 GB, peak_reserved=0.00 GB
+
+=== GPU status after run ===
+index, memory.used [MiB], memory.total [MiB], utilization.gpu [%], power.draw [W]
+0, 13 MiB, 49140 MiB, 0 %, 166.45 W
+1, 13 MiB, 49140 MiB, 0 %, 22.81 W
+=== GPU MEMORY SUMMARY ===
+GPU 0: peak_allocated=2.91 GB, peak_reserved=3.09 GB
+GPU 1: peak_allocated=0.00 GB, peak_reserved=0.00 GB
+
+=== GPU status after run ===
+index, memory.used [MiB], memory.total [MiB], utilization.gpu [%], power.draw [W]
+0, 13 MiB, 49140 MiB, 0 %, 166.45 W
+1, 13 MiB, 49140 MiB, 0 %, 22.81 W
+  peak_gpu_mem_used:  13 MiB
+
+--- bench_2gpu_bs16 (nproc=2, bs=16) ---
+=== TIMING SUMMARY ===
+Total steps measured: 290 (skipped first 10 warmup)
+avg_data_time:       0.12 ms  (0.1%)
+avg_fwd_bwd_time:    85.74 ms  (96.7%)
+avg_opt_time:        2.78 ms  (3.1%)
+avg_step_time:       88.64 ms
+avg_samples_per_sec: 361.0
+world_size:          2
+batch_size_per_gpu:  16
+global_batch_size:   32
+============================================================
+
+=== GPU MEMORY SUMMARY ===
+GPU 0: peak_allocated=2.94 GB, peak_reserved=3.11 GB
+GPU 1: peak_allocated=0.00 GB, peak_reserved=0.00 GB
+
+=== GPU status after run ===
+index, memory.used [MiB], memory.total [MiB], utilization.gpu [%], power.draw [W]
+0, 13 MiB, 49140 MiB, 40 %, 108.46 W
+1, 13 MiB, 49140 MiB, 0 %, 94.57 W
+=== GPU MEMORY SUMMARY ===
+GPU 0: peak_allocated=2.94 GB, peak_reserved=3.11 GB
+GPU 1: peak_allocated=0.00 GB, peak_reserved=0.00 GB
+
+=== GPU status after run ===
+index, memory.used [MiB], memory.total [MiB], utilization.gpu [%], power.draw [W]
+0, 13 MiB, 49140 MiB, 40 %, 108.46 W
+1, 13 MiB, 49140 MiB, 0 %, 94.57 W
+  peak_gpu_mem_used:  3446 MiB
+
+--- bench_2gpu_bs24 (nproc=2, bs=24) ---
+=== TIMING SUMMARY ===
+Total steps measured: 290 (skipped first 10 warmup)
+avg_data_time:       0.07 ms  (0.1%)
+avg_fwd_bwd_time:    124.01 ms  (98.2%)
+avg_opt_time:        2.17 ms  (1.7%)
+avg_step_time:       126.26 ms
+avg_samples_per_sec: 380.2
+world_size:          2
+batch_size_per_gpu:  24
+global_batch_size:   48
+============================================================
+
+=== GPU MEMORY SUMMARY ===
+GPU 0: peak_allocated=4.33 GB, peak_reserved=4.47 GB
+GPU 1: peak_allocated=0.00 GB, peak_reserved=0.00 GB
+
+=== GPU status after run ===
+index, memory.used [MiB], memory.total [MiB], utilization.gpu [%], power.draw [W]
+0, 13 MiB, 49140 MiB, 56 %, 118.44 W
+1, 13 MiB, 49140 MiB, 27 %, 106.85 W
+=== GPU MEMORY SUMMARY ===
+GPU 0: peak_allocated=4.33 GB, peak_reserved=4.47 GB
+GPU 1: peak_allocated=0.00 GB, peak_reserved=0.00 GB
+
+=== GPU status after run ===
+index, memory.used [MiB], memory.total [MiB], utilization.gpu [%], power.draw [W]
+0, 13 MiB, 49140 MiB, 56 %, 118.44 W
+1, 13 MiB, 49140 MiB, 27 %, 106.85 W
+  peak_gpu_mem_used:  4740 MiB
+
+--- bench_2gpu_bs32 (nproc=2, bs=32) ---
+=== TIMING SUMMARY ===
+Total steps measured: 290 (skipped first 10 warmup)
+avg_data_time:       0.11 ms  (0.1%)
+avg_fwd_bwd_time:    163.36 ms  (98.7%)
+avg_opt_time:        2.07 ms  (1.3%)
+avg_step_time:       165.55 ms
+avg_samples_per_sec: 386.6
+world_size:          2
+batch_size_per_gpu:  32
+global_batch_size:   64
+============================================================
+
+=== GPU MEMORY SUMMARY ===
+GPU 0: peak_allocated=5.72 GB, peak_reserved=5.86 GB
+GPU 1: peak_allocated=0.00 GB, peak_reserved=0.00 GB
+
+=== GPU status after run ===
+index, memory.used [MiB], memory.total [MiB], utilization.gpu [%], power.draw [W]
+0, 13 MiB, 49140 MiB, 54 %, 125.69 W
+1, 13 MiB, 49140 MiB, 0 %, 112.55 W
+=== GPU MEMORY SUMMARY ===
+GPU 0: peak_allocated=5.72 GB, peak_reserved=5.86 GB
+GPU 1: peak_allocated=0.00 GB, peak_reserved=0.00 GB
+
+=== GPU status after run ===
+index, memory.used [MiB], memory.total [MiB], utilization.gpu [%], power.draw [W]
+0, 13 MiB, 49140 MiB, 54 %, 125.69 W
+1, 13 MiB, 49140 MiB, 0 %, 112.55 W
+  peak_gpu_mem_used:  6070 MiB
+
+--- bench_2gpu_bs48 (nproc=2, bs=48) ---
+=== TIMING SUMMARY ===
+Total steps measured: 290 (skipped first 10 warmup)
+avg_data_time:       0.14 ms  (0.1%)
+avg_fwd_bwd_time:    241.77 ms  (99.0%)
+avg_opt_time:        2.19 ms  (0.9%)
+avg_step_time:       244.10 ms
+avg_samples_per_sec: 393.3
+world_size:          2
+batch_size_per_gpu:  48
+global_batch_size:   96
+============================================================
+
+=== GPU MEMORY SUMMARY ===
+GPU 0: peak_allocated=8.52 GB, peak_reserved=8.60 GB
+GPU 1: peak_allocated=0.00 GB, peak_reserved=0.00 GB
+
+=== GPU status after run ===
+index, memory.used [MiB], memory.total [MiB], utilization.gpu [%], power.draw [W]
+0, 13 MiB, 49140 MiB, 63 %, 128.79 W
+1, 13 MiB, 49140 MiB, 99 %, 118.61 W
+=== GPU MEMORY SUMMARY ===
+GPU 0: peak_allocated=8.52 GB, peak_reserved=8.60 GB
+GPU 1: peak_allocated=0.00 GB, peak_reserved=0.00 GB
+
+=== GPU status after run ===
+index, memory.used [MiB], memory.total [MiB], utilization.gpu [%], power.draw [W]
+0, 13 MiB, 49140 MiB, 63 %, 128.79 W
+1, 13 MiB, 49140 MiB, 99 %, 118.61 W
+  peak_gpu_mem_used:  8684 MiB
+
+--- bench_profiler_2gpu_bs16 (nproc=2, bs=16) ---
+=== TIMING SUMMARY ===
+Total steps measured: 15 (skipped first 10 warmup)
+avg_data_time:       0.10 ms  (0.1%)
+avg_fwd_bwd_time:    90.35 ms  (96.3%)
+avg_opt_time:        3.41 ms  (3.6%)
+avg_step_time:       93.86 ms
+avg_samples_per_sec: 340.9
+world_size:          2
+batch_size_per_gpu:  16
+global_batch_size:   32
+============================================================
+
+============================================================
+=== PROFILER SUMMARY (top 20 by CUDA time) ===
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg       CPU Mem  Self CPU Mem      CUDA Mem  Self CUDA Mem    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                          ProfilerStep*         0.00%       0.000us         0.00%       0.000us       0.000us        1.014s       115.71%        1.014s     101.365ms           0 b           0 b           0 b           0 b            10  
+                        DistributedDataParallel.forward         0.00%       0.000us         0.00%       0.000us       0.000us     307.526ms        35.10%     307.526ms      30.753ms           0 b           0 b           0 b           0 b            10  
+                                          ProfilerStep*        19.88%     241.819ms        85.22%        1.037s     103.670ms       0.000us         0.00%     298.642ms      29.864ms           0 b        -980 b           0 b     -25.67 Gb            10  
+                        DistributedDataParallel.forward         2.65%      32.179ms        11.67%     141.968ms      14.197ms       0.000us         0.00%     287.082ms      28.708ms         960 b           0 b      25.85 Gb     -24.02 Gb            10  
+=== GPU MEMORY SUMMARY ===
+GPU 0: peak_allocated=2.94 GB, peak_reserved=3.11 GB
+GPU 1: peak_allocated=0.00 GB, peak_reserved=0.00 GB
+
+=== GPU status after run ===
+index, memory.used [MiB], memory.total [MiB], utilization.gpu [%], power.draw [W]
+0, 13 MiB, 49140 MiB, 42 %, 103.53 W
+1, 13 MiB, 49140 MiB, 0 %, 28.30 W
+  peak_gpu_mem_used:  3460 MiB

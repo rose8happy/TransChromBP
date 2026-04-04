@@ -1,0 +1,443 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{multirow}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{array}
+\usepackage{longtable}
+
+\hypersetup{colorlinks=true,linkcolor=blue!60!black,citecolor=blue!60!black,urlcolor=blue!60!black}
+
+\newcommand{\better}[1]{\textbf{#1}}
+\newcommand{\worse}[1]{\textcolor{red}{#1}}
+\definecolor{goodgreen}{rgb}{0.0,0.5,0.0}
+\newcommand{\good}[1]{\textcolor{goodgreen}{\textbf{#1}}}
+
+\title{TransChromBP Fixcw Teacher Experiment:\\Cross-Model Analysis Report}
+\author{TransChromBP Project}
+\date{2026-03-17}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This report provides a comprehensive cross-model analysis of the TransChromBP fixcw teacher experiment against all prior TransChromBP variants, ChromBPNet official tutorial, ChromBPNet 5-fold paper-aligned reproduction, and AlphaGenome pilot locus-level predictions. The fixcw experiment confirmed that \texttt{count\_weight=0.1} (fixed) resolves the training collapse caused by \texttt{chrombpnet\_auto} ($\text{cw}\approx29.7$). However, a deeper analysis of debiased branch metrics reveals a previously unidentified \textbf{profile-dimension bias shortcut}: the signal branch delegates profile shape learning to the bias branch while focusing on count prediction. This finding has critical implications for model interpretability and future architecture design.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ===================================================================
+\section{Experiment Summary}
+%% ===================================================================
+
+\subsection{Models Compared}
+
+\begin{enumerate}
+\item \textbf{Fixcw Teacher} (this experiment): Teacher architecture (Conv stem + 8-layer dilated local tower + 6-layer Transformer), canonical data, \texttt{count\_weight=0.1} (fixed), bias pretrain $\to$ main learnable. Best epoch: 12/18.
+\item \textbf{Orig bias$\to$main}: Base architecture (no local tower), old data, \texttt{count\_weight=0.1}, bias pretrain $\to$ main learnable. Best epoch: 10/20.
+\item \textbf{Baseline}: Base architecture, old data, \texttt{count\_weight=0.1}, no bias pretrain. Epoch 20.
+\item \textbf{Failed auto run}: Teacher architecture, canonical data, \texttt{count\_weight\_strategy=chrombpnet\_auto} ($\text{cw}\approx29.7$). Early-stopped at epoch 8 with collapsed training.
+\item \textbf{Hybrid learnable}: Base architecture, hybrid data semantics, \texttt{chrombpnet\_auto} ($\text{cw}\approx29.7$). Contaminated by count\_weight issue.
+\item \textbf{ChromBPNet official}: Tutorial single run. CNN-only. Keras/TF.
+\item \textbf{ChromBPNet 5-fold}: Paper-aligned 5-fold$\times$1-seed reproduction.
+\item \textbf{AlphaGenome}: DeepMind foundation model (1Mb context). Pilot on 4 loci via API.
+\end{enumerate}
+
+\subsection{Test Set}
+
+All TransChromBP models are evaluated on \textbf{chr1 held-out} data. The peak region set is identical across all runs (31,171 peaks), ensuring peak-level metrics are directly comparable. ChromBPNet uses its own chr1 test split.
+
+\textbf{Important metric note}: ChromBPNet reports \textbf{median} JSD, while TransChromBP reports \textbf{mean} JSD. For right-skewed distributions, $\text{median} < \text{mean}$. Direct comparison favors ChromBPNet numbers.
+
+%% ===================================================================
+\section{Cross-Model Comparison}
+%% ===================================================================
+
+\subsection{Peak Metrics (Primary Comparison)}
+
+\begin{table}[h]
+\centering
+\caption{Peak-region test metrics across all models. $\uparrow$ = higher is better, $\downarrow$ = lower is better.}
+\label{tab:peak_metrics}
+\small
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Model} & \textbf{Count $r$ $\uparrow$} & \textbf{Profile JSD $\downarrow$} & \textbf{Loss Total $\downarrow$} & \textbf{JSD Type} \\
+\midrule
+\good{Fixcw Teacher best} & \good{0.8205} & \good{0.3231} & \good{5.7323} & mean \\
+Orig bias$\to$main best & 0.8207 & 0.3310 & 5.7662 & mean \\
+Orig bias$\to$main ep20 & 0.8141 & 0.3276 & 5.7832 & mean \\
+Baseline ep20 (no bias) & 0.8048 & 0.3437 & 5.8479 & mean \\
+Hybrid learnable best$^*$ & 0.7737 & 0.3753 & 13.1948 & mean \\
+\midrule
+ChromBPNet official & 0.7274 & 0.3360 & --- & median \\
+ChromBPNet 5-fold mean & 0.7007 & 0.3428 & --- & median \\
+\bottomrule
+\multicolumn{5}{l}{\footnotesize $^*$Hybrid result contaminated by \texttt{chrombpnet\_auto} count\_weight issue.}
+\end{tabular}
+\end{table}
+
+\subsubsection{Key Findings}
+
+\begin{itemize}
+\item \textbf{TransChromBP $\gg$ ChromBPNet on count prediction}: Count Pearson $r = 0.8205$ vs.\ $0.7274$, a \textbf{+12.8\%} improvement. Even the 5-fold mean ($0.7007$) is far behind.
+\item \textbf{TransChromBP $\geq$ ChromBPNet on profile prediction}: Our mean JSD $= 0.3231$ is lower than their median JSD $= 0.3360$. Since median $<$ mean for right-skewed distributions, the actual advantage is even larger. The fixcw model also reports \textbf{median JSD $= 0.3255$} (from the JSON), directly comparable to ChromBPNet's $0.3360$.
+\item \textbf{Fixcw teacher $\approx$ Orig bias$\to$main}: Count $r$ nearly identical ($0.8205$ vs.\ $0.8207$); profile JSD improved by $2.4\%$ ($0.3231$ vs.\ $0.3310$). The teacher architecture (local tower) provides modest profile improvement.
+\item \textbf{Bias pretrain clearly helps full metrics}: Orig best vs.\ Baseline: count $r$ $+2.0\%$, JSD $-3.7\%$, loss $-1.4\%$.
+\end{itemize}
+
+\subsection{ChromBPNet Bias Model Comparison}
+
+\begin{table}[h]
+\centering
+\caption{Bias model metrics comparison.}
+\label{tab:bias_metrics}
+\small
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Bias Model} & \textbf{Peak count $r$} & \textbf{Peak JSD} & \textbf{Nonpeak count $r$} & \textbf{Nonpeak JSD} \\
+\midrule
+ChromBPNet bias (official) & $-0.0745$ & 0.3931 (med) & 0.5319 & 0.5570 (med) \\
+ChromBPNet bias (5-fold) & $-0.1658$ & 0.3972 (med) & 0.5407 & 0.5794 (med) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both ChromBPNet and TransChromBP bias models show the expected pattern: negative/near-zero count correlation on peaks (bias should not predict peak signal) and moderate correlation on nonpeaks (bias captures background structure).
+
+%% ===================================================================
+\section{Debiased Branch Analysis (Critical Finding)}
+\label{sec:debiased}
+%% ===================================================================
+
+\subsection{Full vs.\ Debiased Metrics}
+
+\begin{table}[h]
+\centering
+\caption{Full vs.\ debiased peak metrics. The gap reveals how much the model relies on the bias branch.}
+\label{tab:debiased}
+\small
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Model} & \textbf{Count $r$ (full)} & \textbf{Count $r$ (deb)} & \textbf{Profile JSD (full)} & \textbf{Profile JSD (deb)} \\
+\midrule
+Fixcw Teacher best & 0.8205 & 0.8190 & 0.3231 & \worse{0.5633} \\
+Orig bias$\to$main best & 0.8207 & 0.8207 & 0.3310 & \worse{0.5086} \\
+Orig bias$\to$main ep20 & 0.8141 & 0.8141 & 0.3276 & \worse{0.4918} \\
+Baseline ep20 (no bias) & 0.8048 & 0.8048 & 0.3437 & \good{0.3266} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Interpretation}
+
+This is the \textbf{most important finding} of this analysis:
+
+\begin{enumerate}
+\item \textbf{Count prediction}: The debiased branch achieves nearly the same count $r$ as the full model ($\Delta < 0.002$). The signal branch has learned essentially all count information independently.
+
+\item \textbf{Profile prediction}: The debiased branch is dramatically worse than the full model:
+\begin{itemize}
+\item Fixcw Teacher: $0.5633$ vs.\ $0.3231$ ($+74\%$ degradation)
+\item Orig bias$\to$main: $0.5086$ vs.\ $0.3310$ ($+54\%$ degradation)
+\end{itemize}
+The bias branch is responsible for most of the profile shape quality.
+
+\item \textbf{Baseline comparison}: Without bias pretrain, the debiased JSD is $0.3266$---actually \textbf{better than} the bias$\to$main model's debiased JSD of $0.5086$. This proves that when a strong bias branch is available, the signal branch \textbf{stops learning profile shapes} and offloads that task to the bias branch.
+\end{enumerate}
+
+\subsection{The Profile Bias Shortcut Mechanism}
+
+The fusion equations are:
+\begin{align}
+\text{profile\_full} &= \text{profile\_signal} + \alpha_p \cdot \text{profile\_bias} \\
+\text{count\_full} &= \text{logsumexp}(\text{count\_signal},\; \log(\alpha_c) + \text{count\_bias})
+\end{align}
+
+Because the profile fusion is purely additive, the gradient of profile loss flows through both branches. The bias branch (with pretrained weights) provides an easy path: simply scale up the already-reasonable bias profile. The signal branch then only needs to learn the residual, and during training the optimizer finds it easier to let the bias branch carry most of the profile shape.
+
+\textbf{Evidence from scale dynamics} (Table~\ref{tab:scales}): In the fixcw run, \texttt{profile\_scale} stays high ($0.94$), while in the old bias$\to$main run it decreases more ($\to 0.76$), but the \texttt{profile\_bias\_rms/signal\_rms} ratio remains $> 2$ in both cases, confirming bias dominance in the profile channel.
+
+%% ===================================================================
+\section{Scale Dynamics Comparison}
+\label{sec:scales}
+%% ===================================================================
+
+\begin{table}[h]
+\centering
+\caption{Learnable scale trajectories across training runs. $\alpha_c$ = count\_scale, $\alpha_p$ = profile\_scale, $\rho$ = profile\_bias\_rms / signal\_rms.}
+\label{tab:scales}
+\small
+\begin{tabular}{l l c c c c c c}
+\toprule
+\textbf{Run} & \textbf{cw} & \multicolumn{2}{c}{\textbf{$\alpha_c$}} & \multicolumn{2}{c}{\textbf{$\alpha_p$}} & \multicolumn{2}{c}{\textbf{$\rho$}} \\
+& & ep1 & final & ep1 & final & ep1 & final \\
+\midrule
+Fixcw Teacher (18 ep) & 0.1 & 1.08 & 1.26 & 0.99 & 0.92 & 6.5 & 3.4 \\
+Orig bias$\to$main (20 ep) & 0.1 & 1.08 & 0.11 & 0.99 & 0.76 & 8.7 & 2.0 \\
+Failed auto (8 ep) & 29.7 & 1.11 & \worse{4.11} & 0.99 & 0.99 & 15.6 & \worse{26.5} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Three Distinct Regimes}
+
+\begin{enumerate}
+\item \textbf{Old bias$\to$main (cw=0.1, Base)}: Both scales monotonically decrease. $\alpha_c$ collapses to $0.11$, effectively zeroing out bias contribution for counts. Signal branch dominates both channels. Healthiest debiased profile ($0.5086$, still bad but best among bias-pretrained).
+
+\item \textbf{Fixcw Teacher (cw=0.1, Teacher)}: $\alpha_c$ rises to $\sim1.9$ (epoch 4) then slowly decreases to $1.26$. Bias contribution remains substantial for both counts and profiles. This run achieves the best full metrics but the worst debiased profile ($0.5633$).
+
+\item \textbf{Failed auto (cw=29.7, Teacher)}: $\alpha_c$ explodes monotonically ($1.11 \to 4.11$). $\alpha_p$ stays frozen near $1.0$. Profile bias/signal ratio increases from $15.6 \to 26.5$. Complete training collapse.
+\end{enumerate}
+
+\textbf{The teacher architecture amplifies bias reliance}: The local tower + Transformer provides more representational capacity, but the optimizer allocates this capacity to better \emph{exploiting} the bias branch rather than learning independent signal features. This explains why the fixcw teacher has higher $\alpha_c$ than the old base model despite the same \texttt{count\_weight}.
+
+%% ===================================================================
+\section{AlphaGenome Pilot Locus Comparison}
+\label{sec:alphagenome}
+%% ===================================================================
+
+The AlphaGenome pilot queried 4 representative K562 ATAC loci via the official API (EFO:0002067, 1000bp target window, mean aggregation across folds).
+
+\begin{table}[h]
+\centering
+\caption{Locus-level total count predictions. ``Observed'' is the ground truth from the ATAC bigWig.}
+\label{tab:locus}
+\small
+\begin{tabular}{l r r r r r r}
+\toprule
+\textbf{Locus} & \textbf{Observed} & \textbf{AlphaG} & \textbf{Fixcw$^*$} & \textbf{Orig best} & \textbf{Baseline} & \textbf{Bias only} \\
+\midrule
+peak\_high & 5346 & 1168 & --- & 8079 & 5395 & 108 \\
+peak\_mid & 953 & 103 & --- & 642 & 458 & 119 \\
+nonpeak\_high & 345 & 77 & --- & 185 & 152 & 122 \\
+nonpeak\_mid & 150 & 24 & --- & 237 & 128 & 94 \\
+\bottomrule
+\multicolumn{7}{l}{\footnotesize $^*$Fixcw locus-level predictions not yet computed (requires running inference on specific loci).}
+\end{tabular}
+\end{table}
+
+\subsection{AlphaGenome Analysis}
+
+\begin{itemize}
+\item \textbf{AlphaGenome dramatically underestimates total counts}: $1168$ vs.\ observed $5346$ on peak\_high ($\times 4.6$ underestimation). This is expected because AlphaGenome predicts normalized/relative accessibility, not absolute read counts. The model's 1Mb context produces shape-accurate profiles but the absolute scale is not calibrated to this specific experiment's sequencing depth.
+
+\item \textbf{Relative ordering is preserved}: AlphaGenome correctly ranks all 4 loci by signal strength (peak\_high $>$ peak\_mid $>$ nonpeak\_high $>$ nonpeak\_mid), suggesting good qualitative understanding of accessibility landscape.
+
+\item \textbf{TransChromBP predictions are much closer to observed scale}: Even the ``worst'' TransChromBP predictions (Orig best: $8079$ for peak\_high) are within the same order of magnitude as the observed value, while AlphaGenome is $\sim 5\times$ off.
+
+\item \textbf{Baseline is the best count predictor at peak\_high}: $5395$ vs.\ observed $5346$---near-perfect. This further supports the view that count prediction does not require bias pretrain.
+\end{itemize}
+
+\textbf{Caveat}: This comparison is on only 4 loci and AlphaGenome was designed for a fundamentally different task (genome-wide relative accessibility prediction with 1Mb context). A fair comparison would require profile-shape metrics (JSD/correlation at matched resolution), which requires aligning the 1000bp AlphaGenome output window with TransChromBP's 1000bp output window.
+
+%% ===================================================================
+\section{Comprehensive Diagnosis}
+\label{sec:diagnosis}
+%% ===================================================================
+
+\subsection{What TransChromBP Does Well}
+
+\begin{enumerate}
+\item \textbf{Superior count prediction}: $r = 0.82$ consistently across architectures and data variants, far exceeding ChromBPNet's $0.73$. This appears to be an inherent advantage of the Transformer + learnable fusion architecture.
+
+\item \textbf{Competitive profile prediction}: Mean JSD $= 0.32$ (median $= 0.33$), matching or beating ChromBPNet's median JSD $= 0.34$. Profile quality comes primarily from the bias branch.
+
+\item \textbf{Robust training with cw=0.1}: The fixcw experiment confirms that fixed \texttt{count\_weight=0.1} reliably produces healthy training dynamics regardless of architecture (Base or Teacher).
+\end{enumerate}
+
+\subsection{What TransChromBP Does Poorly}
+
+\begin{enumerate}
+\item \textbf{Profile bias shortcut}: The signal (debiased) branch has poor independent profile prediction (JSD $\sim 0.56$), compared to the full model ($0.32$) and even the no-bias baseline ($0.33$). This is the most critical issue for:
+\begin{itemize}
+\item \textbf{Interpretability}: DeepSHAP/motif discovery on the debiased output will be noisy.
+\item \textbf{Variant scoring}: Debiased predictions are the appropriate output for scoring regulatory variants, since bias should be constant across alleles.
+\item \textbf{Generalization}: Heavy reliance on bias means the model may not generalize well to regions with different GC/mappability profiles.
+\end{itemize}
+
+\item \textbf{Teacher architecture doesn't help debiased quality}: Adding the local tower made debiased JSD \emph{worse} ($0.5633$ vs.\ $0.5086$), suggesting the extra capacity was used to better exploit the bias shortcut.
+
+\item \textbf{Locus-level count accuracy}: On the 4 pilot loci, Orig best overestimates peak\_high by $51\%$ ($8079$ vs.\ $5346$) while underestimating peak\_mid by $33\%$ ($642$ vs.\ $953$). Count Pearson $r$ averages over many regions but individual predictions can be quite off.
+\end{enumerate}
+
+%% ===================================================================
+\section{Model Design Recommendations}
+\label{sec:recommendations}
+%% ===================================================================
+
+Based on the comprehensive analysis, the following priorities are recommended for the next design iteration:
+
+\subsection{Priority 1: Fix the Profile Bias Shortcut}
+
+The signal branch must be forced to learn good profile shapes independently. Candidate mechanisms:
+
+\begin{enumerate}
+\item \textbf{Increase debiased profile loss weight}: Currently debiased losses use equal weight. Setting \texttt{debiased\_profile\_weight} $= 2.0$--$5.0$ while keeping profile\_weight $= 1.0$ directly penalizes poor debiased profile quality.
+
+\item \textbf{Gradient stop on bias branch for profile}: During the forward pass for profile fusion, apply \texttt{stop\_gradient} to the bias profile contribution:
+$$\text{profile\_full} = \text{profile\_signal} + \alpha_p \cdot \texttt{sg}(\text{profile\_bias})$$
+This forces the profile loss gradient to flow only through the signal branch, preventing it from ``hiding behind'' the bias.
+
+\item \textbf{Scheduled bias annealing}: Linearly decrease $\alpha_p$ from $1.0 \to 0.3$ over training. Early epochs use bias as a scaffold; later epochs force the signal branch to compensate.
+
+\item \textbf{Auxiliary prediction head}: Add an independent debiased profile prediction head that takes only signal branch features, with its own profile loss. This provides a direct supervision signal for signal quality.
+\end{enumerate}
+
+\textbf{Recommended first experiment}: Combine (1) and (2)---increase \texttt{debiased\_profile\_weight} to $3.0$ and add gradient stop on bias profile. This is minimally invasive and directly targets the identified mechanism.
+
+\subsection{Priority 2: Re-evaluate Hybrid Data with Fixed cw}
+
+The hybrid data experiment was contaminated by \texttt{chrombpnet\_auto} ($\text{cw} \approx 29.7$). Before concluding that hybrid data semantics are harmful, re-run with:
+\begin{itemize}
+\item \texttt{count\_weight = 0.1} (fixed)
+\item Same Teacher architecture and bias pretrain pipeline
+\item Compare against fixcw on canonical data
+\end{itemize}
+
+\subsection{Priority 3: Transformer Ablation}
+
+Current evidence cannot distinguish whether the count prediction advantage comes from the Transformer or from the learnable fusion mechanism. Design a CNN-only model with the same bias fusion framework and compare.
+
+\subsection{Priority 4: Expand AlphaGenome Comparison}
+
+Run profile-level JSD comparison on matched output windows for the 4 pilot loci (and potentially more). This requires loading the \texttt{.npz} profiles and computing JSD against the same observed bigWig windows.
+
+\subsection{Experiment Priority Matrix}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{l l l l}
+\toprule
+\textbf{Priority} & \textbf{Experiment} & \textbf{Goal} & \textbf{Estimated Effort} \\
+\midrule
+1 (highest) & Fix profile shortcut & deb.\ JSD $< 0.40$ & 1 training run \\
+2 & Hybrid data + fixed cw & disentangle data vs.\ cw & 1 training run \\
+3 & CNN ablation & Transformer value & 1 training run \\
+4 & AlphaGenome profile JSD & external benchmark & analysis only \\
+5 & Multi-dataset (GM12878) & generalization test & 1 pipeline run \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ===================================================================
+\section{Appendix: Detailed Metrics}
+\label{sec:appendix}
+%% ===================================================================
+
+\subsection{Fixcw Teacher Test Metrics (Full JSON)}
+
+\begin{table}[h]
+\centering
+\caption{Fixcw Teacher best.pt held-out test metrics (epoch 12, 34,288 regions).}
+\label{tab:fixcw_full}
+\small
+\begin{tabular}{l c c c}
+\toprule
+\textbf{Metric} & \textbf{Overall} & \textbf{Peak (31,171)} & \textbf{Nonpeak (3,117)} \\
+\midrule
+loss\_total & 5.7483 & 5.7323 & 5.9087 \\
+loss\_profile (full) & 5.6802 & 5.6741 & 5.7413 \\
+loss\_count (full) & 0.6810 & 0.5816 & 1.6741 \\
+loss\_debiased\_profile & 6.5538 & 6.5476 & 6.6159 \\
+loss\_debiased\_count & 4.5047 & 1.7162 & 32.3901 \\
+\midrule
+count\_pearson (full) & 0.8259 & 0.8205 & 0.2923 \\
+count\_pearson (deb) & 0.8244 & 0.8190 & 0.1722 \\
+count\_spearman (full) & 0.7154 & 0.6763 & 0.4762 \\
+logcount\_pearson (full) & 0.7546 & 0.7478 & 0.3526 \\
+logcount\_pearson (deb) & 0.6058 & 0.6171 & 0.2622 \\
+\midrule
+profile\_jsd\_full (mean) & 0.3444 & 0.3231 & 0.5575 \\
+profile\_jsd\_full (median) & 0.3392 & 0.3255 & 0.5493 \\
+profile\_jsd\_deb (mean) & 0.5750 & 0.5633 & 0.6916 \\
+profile\_jsd\_deb (median) & 0.5749 & 0.5669 & 0.7000 \\
+\midrule
+effective\_count\_scale & \multicolumn{3}{c}{1.4797} \\
+effective\_profile\_scale & \multicolumn{3}{c}{0.9374} \\
+profile\_bias\_rms/signal\_rms & 3.58 & 3.40 & 5.34 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{ChromBPNet Official Metrics}
+
+\begin{table}[h]
+\centering
+\caption{ChromBPNet tutorial evaluation (single run, K562 ATAC).}
+\label{tab:chrombpnet}
+\small
+\begin{tabular}{l c c c}
+\toprule
+\textbf{Metric} & \textbf{Peaks} & \textbf{Nonpeaks} & \textbf{Peaks+Nonpeaks} \\
+\midrule
+\multicolumn{4}{l}{\textbf{ChromBPNet (chrombpnet.h5)}} \\
+\quad counts pearsonr & 0.7274 & --- & --- \\
+\quad counts spearmanr & 0.6375 & --- & --- \\
+\quad profile median JSD & 0.3360 & --- & --- \\
+\midrule
+\multicolumn{4}{l}{\textbf{Bias model (bias.h5)}} \\
+\quad counts pearsonr & $-0.0745$ & 0.5319 & 0.2958 \\
+\quad profile median JSD & 0.3931 & 0.5570 & 0.4726 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{ChromBPNet 5-Fold Paper-Aligned Reproduction}
+
+\begin{table}[h]
+\centering
+\caption{ChromBPNet 5-fold $\times$ 1-seed reproduction (K562 ATAC, mean $\pm$ std).}
+\label{tab:chrombpnet_5fold}
+\small
+\begin{tabular}{l c}
+\toprule
+\textbf{Metric (peaks)} & \textbf{Mean $\pm$ Std} \\
+\midrule
+chrom counts pearsonr & $0.7007 \pm 0.0151$ \\
+chrom counts spearmanr & $0.6060 \pm 0.0304$ \\
+chrom profile median JSD & $0.3428 \pm 0.0072$ \\
+\midrule
+bias counts pearsonr (nonpeaks) & $0.5407 \pm 0.0919$ \\
+bias counts pearsonr (peaks) & $-0.1658 \pm 0.1471$ \\
+bias profile median JSD (nonpeaks) & $0.5794 \pm 0.0197$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Scale Dynamics (Epoch-by-Epoch)}
+
+\begin{table}[h]
+\centering
+\caption{Count scale ($\alpha_c$) trajectory across three runs.}
+\label{tab:scale_trajectory}
+\small
+\begin{tabular}{r c c c}
+\toprule
+\textbf{Epoch} & \textbf{Fixcw Teacher} & \textbf{Orig bias$\to$main} & \textbf{Failed auto} \\
+\midrule
+1 & 1.081 & 1.084 & 1.109 \\
+2 & 1.439 & 1.024 & 1.691 \\
+3 & 1.800 & 0.758 & 2.458 \\
+4 & 1.917 & 0.592 & 3.051 \\
+5 & 1.893 & 0.466 & 3.509 \\
+6 & 1.841 & 0.377 & 3.770 \\
+7 & 1.763 & 0.312 & 3.953 \\
+8 & 1.706 & 0.271 & 4.107 \\
+9 & 1.646 & 0.235 & --- \\
+10 & 1.591 & 0.212 & --- \\
+12 & 1.494 & 0.176 & --- \\
+15 & 1.365 & 0.142 & --- \\
+18 & 1.263 & 0.121 & --- \\
+20 & --- & 0.113 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}

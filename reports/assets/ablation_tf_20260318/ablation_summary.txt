@@ -1,0 +1,12 @@
+
+================================================================================
+VERDICT
+================================================================================
+
+>>> Situation A: V2-full stably outperforms V2-noTF on debiased JSD
+    Debiased JSD improvement: 0.00978 (full=0.31425, noTF=0.32403)
+    Conclusion: Transformer provides independent benefit for debiased profile learning
+    Narrative: bias-safe framework is the prerequisite; Transformer builds on top of it
+
+    Full/debiased gap: full=0.00006, noTF=0.00010
+    ✓ Transformer does not re-open the full/debiased gap

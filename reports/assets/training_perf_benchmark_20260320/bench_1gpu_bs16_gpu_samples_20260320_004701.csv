@@ -1,0 +1,2 @@
+timestamp,gpu_idx,mem_used_MiB,mem_total_MiB,gpu_util_pct,power_W
+1773938823,0, 13, 49140, 0, 19.59

@@ -1,0 +1,303 @@
+\documentclass[11pt,a4paper]{ctexart}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]{hyperref}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{caption}
+
+\graphicspath{{assets/ablation_tf_20260318/}}
+
+\title{TransChromBP Transformer Ablation 详细分析报告\\
+\large 基于 \texttt{ablation\_tf\_20260318} 的 A6000 完整实验与 held-out 评估}
+\author{项目工作文档}
+\date{2026 年 3 月 20 日}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+本文档汇总 6000 机器上 \texttt{ablation\_tf\_20260318} 的完整结果，并给出可直接用于组会、
+周报和后续论文叙事的详细分析。该实验比较了共享 bias-safe 训练框架下
+\texttt{V2-full} 与 \texttt{V2-noTF} 两个主模型变体，每个变体使用
+\texttt{seed=42/1234/2024} 三次独立训练，并对六个 \texttt{best.pt} checkpoint
+在 held-out test 上进行了统一评估。
+
+结果非常稳定。\texttt{V2-full} 在 3 个种子上对 \texttt{V2-noTF} 实现了
+peak debiased JSD、peak full JSD、overall JSD、peak count correlation、
+overall count correlation 的全胜；只有 \texttt{nonpeak count r} 不是 3/3 全胜，
+但均值仍然更高。最关键的指标是 peak debiased JSD：
+\texttt{0.31425 $\pm$ 0.00012} 对 \texttt{0.32403 $\pm$ 0.00021}，
+绝对改善约 \texttt{0.00978}，相对下降约 \texttt{3.0\%}。
+与此同时，full/debiased gap 仍极小，说明 Transformer 带来的增益并不是通过重新引入
+bias leakage 或 profile shortcut 获得的，而是来自模型能力本身。
+
+另一个重要结论是，本轮 \texttt{30 epoch} 的训练上限偏紧。六个 run 的最佳 epoch
+全部落在 \texttt{27--30}，其中 5 个 run 的最佳点在 \texttt{28--30}。
+这说明当前这批结论已经足够支持“Transformer 有独立收益”，但若目标是逼近更高上限，
+后续仍值得补一轮 \texttt{40--50 epoch} 的复试。
+\end{abstract}
+
+\section{实验背景与目的}
+
+本轮实验回答的问题很具体：在已经建立的 bias-safe 训练框架下，Transformer 主干本身是否仍然
+带来独立收益，还是说性能改进主要来自 bias 处理策略、损失设计或训练稳定性修复。
+
+因此，本轮只做一个干净的二元比较：
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{V2-full}：保留完整 Transformer 主干；
+  \item \textbf{V2-noTF}：去掉 Transformer，只保留非 Transformer 对照主干；
+\end{itemize}
+并保证两组使用同一实验批次、同一数据源、同一训练流程和同一随机种子集合，
+只比较 ``有没有 Transformer'' 这一项。
+
+\section{实验设计与评估口径}
+
+\subsection{训练设计}
+
+\begin{table}[H]
+\centering
+\small
+\caption{本轮 A6000 Transformer ablation 的基本设计。}
+\begin{tabular}{ll}
+\toprule
+项目 & 说明 \\
+\midrule
+实验标签 & \texttt{ablation\_tf\_20260318} \\
+机器 & 6000（2$\times$ NVIDIA RTX A6000） \\
+模型组别 & \texttt{V2-full} vs.\ \texttt{V2-noTF} \\
+随机种子 & \texttt{42, 1234, 2024} \\
+训练 run 数量 & 6（2 个模型 $\times$ 3 个 seed） \\
+checkpoint 选择 & 每个 run 使用训练导出的 \texttt{best.pt} \\
+评估 split & held-out \texttt{test} \\
+评估非峰比例 & \texttt{nonpeak\_ratio=0.1} \\
+评估区域数 & 34288 个 sampled held-out regions \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{结果读取方式}
+
+本报告主要依据以下三类产物：
+\begin{itemize}[leftmargin=2em]
+  \item 每个 run 的 test 指标 JSON；
+  \item 自动生成的汇总表 \texttt{summary\_table.csv}；
+  \item 自动分析脚本输出的文字结论与训练曲线图。
+\end{itemize}
+
+需要强调的是，本轮最终比较的是 held-out test 指标，而不是训练过程中的验证 loss。
+因此，本报告的判断优先级是：\textbf{test 指标 > 验证曲线 > 训练内选择口径}。
+
+\section{核心结果：Transformer 在 held-out 上稳定获益}
+
+\subsection{均值与方差层面的主结论}
+
+\begin{table}[H]
+\centering
+\small
+\caption{三种种子平均后的核心结果。JSD 越低越好，count $r$ 越高越好。}
+\begin{tabular}{lrrr}
+\toprule
+指标 & V2-full & V2-noTF & 结论 \\
+\midrule
+Peak debiased JSD (mean) & \textbf{0.31425 $\pm$ 0.00012} & 0.32403 $\pm$ 0.00021 & full 更好 \\
+Peak debiased JSD (median) & \textbf{0.31629 $\pm$ 0.00025} & 0.32694 $\pm$ 0.00033 & full 更好 \\
+Peak debiased count $r$ & \textbf{0.83533 $\pm$ 0.00540} & 0.82320 $\pm$ 0.00554 & full 更好 \\
+Peak full JSD (mean) & \textbf{0.31419 $\pm$ 0.00012} & 0.32393 $\pm$ 0.00021 & full 更好 \\
+Peak full count $r$ & \textbf{0.83676 $\pm$ 0.00531} & 0.82503 $\pm$ 0.00489 & full 更好 \\
+Overall full JSD & \textbf{0.33623 $\pm$ 0.00030} & 0.34537 $\pm$ 0.00035 & full 更好 \\
+Overall full count $r$ & \textbf{0.84157 $\pm$ 0.00507} & 0.83000 $\pm$ 0.00471 & full 更好 \\
+Nonpeak full JSD & \textbf{0.55668 $\pm$ 0.00228} & 0.55980 $\pm$ 0.00238 & full 更好 \\
+Nonpeak full count $r$ & \textbf{0.28520 $\pm$ 0.03114} & 0.27041 $\pm$ 0.00803 & full 均值更好 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+最关键的结果集中在峰区 profile 质量上。与 \texttt{V2-noTF} 相比，
+\texttt{V2-full} 的 peak debiased JSD 从 \texttt{0.32403} 降到 \texttt{0.31425}，
+绝对改善约 \texttt{0.00978}，相对下降约 \texttt{3.0\%}。同时，
+peak debiased count $r$ 从 \texttt{0.82320} 提高到 \texttt{0.83533}，
+绝对提升约 \texttt{0.01213}。这组结果说明 Transformer 不是仅仅改善 count 校准，
+而是同时改善了 profile shape 与 count 两条主任务。
+
+\subsection{按 seed 拆开的稳定性}
+
+\begin{table}[H]
+\centering
+\small
+\caption{每个 seed 上的关键差值。JSD 以 ``noTF $-$ full'' 表示，正值代表 full 更好；count $r$ 以 ``full $-$ noTF'' 表示，正值代表 full 更好。}
+\begin{tabular}{lrr}
+\toprule
+Seed & Peak debiased JSD 改善 & Peak debiased count $r$ 改善 \\
+\midrule
+42   & +0.00971 & +0.00583 \\
+1234 & +0.00970 & +0.01454 \\
+2024 & +0.00993 & +0.01599 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+这张表很重要，因为它说明收益不是由单个 seed 偶然撑起来的。三个 seed 的 JSD 改善量几乎重合，
+都在 \texttt{0.0097--0.0099} 之间；count $r$ 提升虽然幅度略有差异，但方向同样一致。
+如果把更广的指标一起看，则：
+\begin{itemize}[leftmargin=2em]
+  \item peak debiased JSD、peak debiased median JSD、peak debiased count $r$：\textbf{3/3 seed 全胜}；
+  \item peak full JSD、peak full count $r$、overall full JSD、overall full count $r$：\textbf{3/3 seed 全胜}；
+  \item nonpeak full JSD：\textbf{3/3 seed 全胜}；
+  \item nonpeak full count $r$：不是 3/3 全胜，但均值仍偏向 \texttt{V2-full}。
+\end{itemize}
+
+因此，本轮最稳妥的表述不是 ``Transformer 在某些 seed 上可能有帮助''，
+而是 ``Transformer 在主要 held-out 指标上呈现出跨 seed 的稳定正收益''。
+
+\section{为什么这个结论可信：full/debiased gap 没有被重新拉大}
+
+如果一个模型在 full 指标上变强，但只是把 profile 学习重新推回 bias branch，
+那么这种提升在机制上并不干净，也不适合作为主结论。幸运的是，这次不是这种情况。
+
+\begin{table}[H]
+\centering
+\small
+\caption{full/debiased gap 对比。gap 越小，表示 debiased 分支越接近 full 分支。}
+\begin{tabular}{lrr}
+\toprule
+指标 & V2-full & V2-noTF \\
+\midrule
+Peak JSD gap (full - debiased) & \textbf{0.00006 $\pm$ 0.00001} & 0.00010 $\pm$ 0.00000 \\
+Peak count $r$ gap (full - debiased) & \textbf{0.00143 $\pm$ 0.00040} & 0.00183 $\pm$ 0.00068 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+这个结果说明两件事：
+\begin{enumerate}[leftmargin=2em]
+  \item 两组模型都没有表现出严重的 full/debiased 解耦，说明当前 bias-safe 框架总体是有效的；
+  \item \texttt{V2-full} 的收益不是以重新打开 full/debiased gap 为代价换来的。
+\end{enumerate}
+
+也就是说，Transformer 的收益是叠加在一个已经相对干净的 bias-safe 训练框架之上的，
+这使得 ``Transformer 有独立贡献'' 这一结论在机制上更可信。
+
+\section{训练端观察：30 epoch 看起来偏紧}
+
+\subsection{最佳 epoch 的分布}
+
+\begin{table}[H]
+\centering
+\small
+\caption{六个 run 的最佳 epoch。}
+\begin{tabular}{llr}
+\toprule
+模型 & Seed & 最佳 epoch \\
+\midrule
+V2-full & 42   & 29 \\
+V2-full & 1234 & 29 \\
+V2-full & 2024 & 28 \\
+V2-noTF & 42   & 30 \\
+V2-noTF & 1234 & 29 \\
+V2-noTF & 2024 & 27 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+这组数字非常集中。六个 run 的最佳点全部落在 \texttt{27--30}，其中 5 个 run 落在
+\texttt{28--30}。这说明当前 \texttt{max\_epochs=30} 更像是一个“刚好截在尾部”的上限，
+而不是已经给足收敛空间的宽松上限。
+
+\subsection{这对结论意味着什么}
+
+这一现象不会推翻本轮主结论，因为两组模型都被同一个训练上限约束，
+所以比较仍然公平。当前已经足以支持 ``Transformer 有稳定独立收益''。
+但它确实限制了我们对“真实性能上限”的判断，因此更合理的后续动作不是立即推翻这批结果，
+而是：
+\begin{enumerate}[leftmargin=2em]
+  \item 先把这轮结果作为正式对外结论；
+  \item 再补一轮 \texttt{40 epoch} 复试；
+  \item 如果最佳点仍贴着尾部，再扩到 \texttt{50 epoch}。
+\end{enumerate}
+
+\section{曲线与尺度因子图的辅助解释}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{val_loss_curves.png}
+\caption{验证曲线汇总图。图中可见两组 run 的验证过程总体稳定，且最佳点明显集中在训练后段。}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{scale_trajectories.png}
+\caption{尺度相关轨迹图。该图可用于排查是否存在异常发散、极端缩放或训练不稳；本轮没有出现足以推翻结论的异常轨迹。}
+\end{figure}
+
+这两张图不直接替代 test 指标，但它们提供了两个辅助判断。
+第一，训练过程没有出现那种“某一个 seed 完全异常，结果被离群点主导”的情况。
+第二，最佳点贴近训练尾部的现象和曲线走势是一致的，因此“30 epoch 略紧”不是凭单一数值臆测出来的。
+
+\section{风险、边界与当前最稳妥的结论}
+
+\subsection{当前可以放心说什么}
+
+\begin{itemize}[leftmargin=2em]
+  \item 在这批 A6000 ablation 中，\texttt{V2-full} 相比 \texttt{V2-noTF} 有稳定且跨 seed 一致的正收益；
+  \item 这种收益同时体现在 peak profile 与 count 两条主指标上；
+  \item 收益不是通过重新扩大 full/debiased gap 获得的，因此具备机制可信度；
+  \item 本轮结果已经足够支撑 ``Transformer 在 bias-safe TransChromBP 中有独立贡献'' 这一结论。
+\end{itemize}
+
+\subsection{当前还不该过度外推什么}
+
+\begin{itemize}[leftmargin=2em]
+  \item 这批实验还不能回答 ``30 epoch 是否已经逼近最终上限''，因为最佳点明显贴尾；
+  \item 当前结果来自 tutorial/canonical 数据口径下的一批受控实验，是否能无缝外推到更多细胞系，
+  还需要后续外部泛化实验；
+  \item nonpeak count $r$ 的稳定性仍弱于 peak 指标，因此不应把背景区域 count 表现包装成最强主卖点。
+\end{itemize}
+
+\section{建议的后续动作}
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{把这轮结果正式固化下来。}
+  当前这批 JSON、CSV、文字总结和图已经足以支撑一页主结论汇报。
+
+  \item \textbf{补 40 epoch 复试，而不是立刻改模型。}
+  先验证训练上限是否截断了部分收益，这比在当前时点贸然引入新结构更有价值。
+
+  \item \textbf{等 6002 的 B3/B4 跑完后，再做跨实验线整合。}
+  A6000 这条线回答的是 Transformer 的独立收益；6002 上的 bias-safe 2$\times$2 析因实验更适合回答
+  pool factor 与 stop-gradient 的作用边界。两条证据链合并后，整体故事会更完整。
+\end{enumerate}
+
+\section{结论}
+
+如果把这轮 \texttt{ablation\_tf\_20260318} 用一句话概括，那么最准确的表述是：
+\begin{quote}
+在当前 bias-safe TransChromBP 框架下，Transformer 并不是可有可无的装饰件，
+而是在 held-out test 上带来稳定、跨 seed 一致、且机制上干净的独立收益。
+\end{quote}
+
+同时，这轮结果还提示另一个工程判断：当前 \texttt{30 epoch} 的上限偏紧，
+因此这批结论应当被视为一个已经成立的中间结论，而不是最终性能天花板。
+最合理的下一步不是推翻已有结论，而是在保留这批结论的基础上，用
+\texttt{40--50 epoch} 的复试把上限摸得更清楚。
+
+\appendix
+
+\section{主要产物路径}
+
+\begin{itemize}[leftmargin=2em]
+  \item 汇总表：\href{/home/zhengwei/project/python/chromBPNet/reports/assets/ablation_tf_20260318/summary_table.csv}{summary\_table.csv}
+  \item 远端原始汇总表：\href{/data1/zhoujiazhen/bylw_atac/TransChromBP/outputs/reports/ablation_tf_20260318/summary_table.csv}{remote summary\_table.csv}
+  \item 文字结论：\href{/home/zhengwei/project/python/chromBPNet/reports/assets/ablation_tf_20260318/ablation_summary.txt}{ablation\_summary.txt}
+  \item 验证曲线图：\href{/home/zhengwei/project/python/chromBPNet/reports/assets/ablation_tf_20260318/val_loss_curves.png}{val\_loss\_curves.png}
+  \item 尺度轨迹图：\href{/home/zhengwei/project/python/chromBPNet/reports/assets/ablation_tf_20260318/scale_trajectories.png}{scale\_trajectories.png}
+\end{itemize}
+
+\end{document}

@@ -1,0 +1,1892 @@
+\documentclass[11pt,a4paper]{ctexart}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{float}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  citecolor=blue!50!black,
+  urlcolor=blue!50!black
+}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible,
+  keepspaces=true
+}
+
+\title{TransChromBP Teacher v2 代码逐段讲解\\
+\large 从模型结构、数据流到几次关键修改}
+\author{基于 2026-03-17 在 6000 机器上的真实源码整理}
+\date{2026-03-17}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{这份文档讲什么}
+
+这份文档讲解的对象不是本地这个仓库里的 ChromBPNet 官方代码，而是我们自己设计的
+\textbf{TransChromBP} 当前主线模型，具体以 6000 机器上的下列代码为准：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{/data1/zhoujiazhen/bylw\_atac/TransChromBP/src/transchrombp/models/transchrombp.py}
+\item \texttt{/data1/zhoujiazhen/bylw\_atac/TransChromBP/src/transchrombp/models/bias\_branch.py}
+\item \texttt{/data1/zhoujiazhen/bylw\_atac/TransChromBP/src/transchrombp/models/transformer\_encoder.py}
+\item \texttt{/data1/zhoujiazhen/bylw\_atac/TransChromBP/src/transchrombp/data/real\_data.py}
+\item \texttt{/data1/zhoujiazhen/bylw\_atac/TransChromBP/src/transchrombp/training/train\_ddp.py}
+\item \texttt{/data1/zhoujiazhen/bylw\_atac/TransChromBP/configs/model/transchrombp\_teacher\_v2.yaml}
+\item \texttt{/data1/zhoujiazhen/bylw\_atac/TransChromBP/configs/train/train\_tutorial\_teacher\_v2\_main.yaml}
+\item \texttt{/data1/zhoujiazhen/bylw\_atac/TransChromBP/configs/train/train\_bias\_tutorial\_teacher\_v2.yaml}
+\end{itemize}
+
+文档目标不是“只告诉你这段代码能跑”，而是要回答下面四个问题：
+
+\begin{enumerate}[leftmargin=2em]
+\item 这个模型到底想解决什么问题？
+\item 每个 Python 文件、每个主要函数在干什么？
+\item 张量在模型里是怎么流动的？
+\item 我们后来几次修改，到底是因为什么，想解决什么问题？
+\end{enumerate}
+
+为了让刚入门的人也能看懂，本文会把很多默认知识说透，比如：
+\texttt{one-hot} 是什么、\texttt{logits} 是什么、为什么要做 \texttt{center crop}、
+为什么既有 \texttt{full} 输出又有 \texttt{debiased} 输出、为什么要冻结 bias branch。
+
+\section{先用一句人话概括这个模型}
+
+\textbf{TransChromBP} 想做的事情，可以用一句话概括成：
+
+\begin{quote}
+给一段 DNA 序列，预测这段区域 ATAC-seq 的切割分布（profile）和总信号强度（count），
+同时尽量把“真实生物学信号”和“实验偏置 / 酶切偏好”拆开。
+\end{quote}
+
+它把两个思路合在了一起：
+
+\begin{itemize}[leftmargin=2em]
+\item \textbf{ChromBPNet 风格的 bias decomposition}：
+  用一个 bias branch 去拟合偏置，再让主分支学“剩下的真正信号”。
+\item \textbf{Transformer 风格的长程序列建模}：
+  不只看局部 motif，也希望学到更远距离的组合关系。
+\end{itemize}
+
+所以这不是单纯的 CNN，也不是单纯的 Transformer，而是：
+
+\[
+\text{卷积局部特征} \;\rightarrow\; \text{可选 Transformer} \;\rightarrow\; \text{signal 输出}
+\]
+
+再和
+
+\[
+\text{bias branch 输出}
+\]
+
+进行融合，得到最后的预测。
+
+\section{先记住 4 个最重要的输出}
+
+根据 \texttt{docs/design\_overview.md} 和
+\texttt{src/transchrombp/models/transchrombp.py}，当前模型最核心的 4 个输出是：
+
+\begin{longtable}{p{0.22\textwidth} p{0.18\textwidth} p{0.52\textwidth}}
+\toprule
+\textbf{名字} & \textbf{形状} & \textbf{含义} \\
+\midrule
+\endhead
+\texttt{profile\_logits\_full} & $[B, L_{out}]$ & 最终 profile 预测，已经把 signal branch 和 bias branch 融合在一起。 \\
+\texttt{logcount\_full} & $[B,1]$ & 最终总计数预测，也是融合后的结果。 \\
+\texttt{profile\_logits\_debiased} & $[B, L_{out}]$ & 不带 bias 的 profile 输出，只看 signal branch 自己学到了什么。 \\
+\texttt{logcount\_debiased} & $[B,1]$ & 不带 bias 的 count 输出。 \\
+\bottomrule
+\end{longtable}
+
+这里：
+
+\begin{itemize}[leftmargin=2em]
+\item $B$ 是 batch size。
+\item $L_{out}$ 是输出长度，当前主线是 $1000$。
+\item \texttt{profile} 表示 1000bp 区域内每个位置的切割强弱分布。
+\item \texttt{count} 表示这个区域整体有多强。
+\item \texttt{full} 表示“带偏置融合后的最终答案”。
+\item \texttt{debiased} 表示“把 bias 去掉以后，signal branch 单独能给出的答案”。
+\end{itemize}
+
+这 4 个输出是整个项目里最关键的概念。后面很多分析，其实都围绕一个问题：
+
+\begin{quote}
+如果去掉 bias branch，signal branch 自己到底学到了多少真东西？
+\end{quote}
+
+\section{代码地图：每个文件负责什么}
+
+\begin{longtable}{p{0.34\textwidth} p{0.58\textwidth}}
+\toprule
+\textbf{文件} & \textbf{职责} \\
+\midrule
+\endhead
+\texttt{src/transchrombp/models/transchrombp.py} & 模型总装配。定义 Conv stem、local tower、Transformer、signal heads、bias fusion，以及最终 forward。 \\
+\texttt{src/transchrombp/models/bias\_branch.py} & 定义 ChromBPNet 风格 bias branch。当前 v2 版本里也在这里加入了 profile 分辨率瓶颈。 \\
+\texttt{src/transchrombp/models/transformer\_encoder.py} & 定义带 RoPE 的 Transformer 编码器，包括 attention、RoPE、SDPA。 \\
+\texttt{src/transchrombp/data/real\_data.py} & 定义真实数据集，负责从 FASTA / bigWig / BED 中构造训练样本。 \\
+\texttt{src/transchrombp/training/train\_ddp.py} & 训练入口。负责 DDP、loss、optimizer、scheduler、验证、保存 checkpoint。 \\
+\texttt{configs/model/transchrombp\_teacher\_v2.yaml} & 模型结构配置。告诉代码该开哪些模块、参数是多少。 \\
+\texttt{configs/train/train\_bias\_tutorial\_teacher\_v2.yaml} & bias 预训练阶段的训练配置。 \\
+\texttt{configs/train/train\_tutorial\_teacher\_v2\_main.yaml} & 主训练阶段配置，重点是 v2 的 debiased profile supervision。 \\
+\bottomrule
+\end{longtable}
+
+\section{先看整体数据流，不然容易迷路}
+
+把整个模型压缩成一张“脑内流程图”，是这样的：
+
+\begin{enumerate}[leftmargin=2em]
+\item 输入一段 DNA one-hot 序列，形状通常是 $[B, 2114, 4]$。
+\item 先经过卷积 stem，提取局部模式。
+\item 再经过可选的 local dilated tower，扩大局部感受野。
+\item 再经过 Transformer，建模较长距离依赖。
+\item 从这一条主干里读出：
+  \begin{itemize}
+  \item \texttt{profile\_signal}
+  \item \texttt{count\_signal}
+  \end{itemize}
+\item 同一条输入序列也会送进 bias branch，得到：
+  \begin{itemize}
+  \item \texttt{profile\_bias}
+  \item \texttt{count\_bias}
+  \end{itemize}
+\item 最后做融合：
+\[
+\text{profile\_full}=\text{profile\_signal}+s_p\cdot \text{profile\_bias}
+\]
+\[
+\text{count\_full}=\log\sum\exp\left(\text{count\_signal},\;\log(s_c)+\text{count\_bias}\right)
+\]
+\item 训练时同时看 full 和 debiased 两套输出。
+\end{enumerate}
+
+\textbf{为什么 count 用 \texttt{logsumexp} 而不是简单相加？}
+
+因为 count 分支工作在对数空间里。假设真实计数大概是：
+
+\[
+\text{count}_{\text{real}} \approx \text{signal count} + \text{bias count}
+\]
+
+如果模型输出的是 \texttt{logcount}，那在 log 空间里就更自然写成：
+
+\[
+\log(a+b)=\log\left(\exp(\log a)+\exp(\log b)\right)=\log\sum\exp(\log a,\log b)
+\]
+
+这就是 \texttt{count\_fusion = logsumexp} 的来源。它和官方 ChromBPNet 的思想是一致的。
+
+\section{\texttt{transchrombp.py} 逐段讲解}
+
+\subsection{第 1--20 行：文件头、导入与依赖}
+
+这一段做了三件事：
+
+\begin{itemize}[leftmargin=2em]
+\item 用 docstring 先声明这个文件是“顶层模型文件”。
+\item 导入 PyTorch 基础组件。
+\item 导入本项目另外两个核心模块：
+  \texttt{bias\_branch.py} 和 \texttt{transformer\_encoder.py}。
+\end{itemize}
+
+这说明一个事实：\texttt{TransChromBP} 并不是一个“从头写在一个类里的大泥球”，
+而是由多个可复用模块拼出来的。
+
+\subsection{第 23--32 行：\texttt{\_to\_channel\_first}}
+
+\textbf{它做什么：}
+
+把输入序列统一成 \texttt{[B, 4, L]} 这种卷积最喜欢的格式。
+
+如果输入是：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{[B, 4, L]}，直接返回。
+\item \texttt{[B, L, 4]}，就转置成 \texttt{[B, 4, L]}。
+\end{itemize}
+
+\textbf{为什么要这样写：}
+
+因为在实际代码里，不同地方可能喜欢不同布局：
+
+\begin{itemize}[leftmargin=2em]
+\item 数据集通常更自然给出 \texttt{[L, 4]} 或 batch 后的 \texttt{[B, L, 4]}；
+\item \texttt{nn.Conv1d} 习惯接收 \texttt{[B, C, L]}。
+\end{itemize}
+
+所以这个函数相当于一个“格式适配器”。
+
+\textbf{对小白的直觉：}
+
+你可以把它理解为“先检查这张表格的行列方向是不是对的，不对就转一下”。
+
+\subsection{第 35--80 行：\texttt{ConvStem}}
+
+\textbf{它做什么：}
+
+\texttt{ConvStem} 是模型最前面的卷积特征提取器。主要由多层：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{Conv1d}
+\item \texttt{GELU}
+\item \texttt{Dropout}
+\end{itemize}
+
+顺序堆叠组成。
+
+\textbf{关键点：}
+
+\begin{itemize}[leftmargin=2em]
+\item 第 48--51 行先检查 kernel size 和层数是否合法。
+\item 第 53--62 行创建第一层卷积。
+\item 第 63--76 行根据 \texttt{n\_conv\_layers} 再追加后续卷积层。
+\item 第 79--80 行的 \texttt{forward} 很简单，就是把输入扔进这一串层里。
+\end{itemize}
+
+\textbf{为什么要这样设计：}
+
+DNA 序列最初只是 4 通道 one-hot，本身没有“高层特征”。
+卷积 stem 的作用，就是先把像 TF motif 这样的局部模式提出来。
+
+这里的卷积比较像“先学字母组合，再把它们送进后面的高级模块”。
+
+\subsection{第 83--118 行：\texttt{LocalDilatedTower}}
+
+\textbf{它做什么：}
+
+这是 teacher 版本非常关键的新增结构。它在 Transformer 之前再放一串
+\textbf{残差空洞卷积块}。
+
+\textbf{关键点：}
+
+\begin{itemize}[leftmargin=2em]
+\item 第 95--98 行检查参数合法性。
+\item 第 100--102 行允许 \texttt{n\_dil\_layers=0}，此时直接变成 \texttt{Identity}。
+\item 第 104--115 行循环建立多个 \texttt{ResidualDilatedConvBlock}。
+\item 第 106 行的 dilation 使用：
+\[
+2^{(i \bmod \text{cycle length})}
+\]
+这表示 dilation 可以周期性重复，而不是无限指数膨胀。
+\end{itemize}
+
+\textbf{为什么要这样设计：}
+
+Transformer 擅长全局关系，但对非常局部、非常规整的 motif 模式，不一定总比卷积更合适。
+空洞卷积塔相当于先把“局部但范围逐渐扩大”的上下文整理好，再交给 Transformer。
+
+\textbf{这里有一个很重要的版本演化信息：}
+
+对比 \texttt{transchrombp\_base.yaml} 和
+\texttt{transchrombp\_teacher\_canonical\_v1.yaml} 可以看出，
+\textbf{teacher v1 的主要结构改动之一，就是引入了这个 local tower}。
+
+这是我根据配置差异做出的推断，但这个推断非常强，因为：
+
+\begin{itemize}[leftmargin=2em]
+\item base 配置里没有 \texttt{local\_tower} 段；
+\item teacher v1 / v2 配置里都有 \texttt{n\_dil\_layers: 8}。
+\end{itemize}
+
+\subsection{第 121--137 行：一些小工具函数}
+
+这段包括：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{\_validate\_heads\_config}
+\item \texttt{\_load\_checkpoint}
+\item \texttt{\_inverse\_softplus}
+\end{itemize}
+
+\textbf{它们分别干什么：}
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{\_validate\_heads\_config}：
+  目前只接受 \texttt{count\_head = linear}，防止配置里出现还没实现的类型。
+\item \texttt{\_load\_checkpoint}：
+  兼容不同版本 \texttt{torch.load} 参数形式。
+\item \texttt{\_inverse\_softplus}：
+  这是一个很容易被忽略、但很聪明的小函数。
+\end{itemize}
+
+\textbf{为什么需要 \texttt{\_inverse\_softplus}？}
+
+因为我们想让 \texttt{profile\_scale} 和 \texttt{count\_scale}：
+
+\begin{itemize}[leftmargin=2em]
+\item 初始化时等于一个给定正数，比如 1.0；
+\item 训练时又始终保持非负。
+\end{itemize}
+
+做法是：
+
+\begin{itemize}[leftmargin=2em]
+\item 参数本体存一个“未约束”的值；
+\item 真正使用时通过 \texttt{softplus} 变成正数。
+\end{itemize}
+
+那如果你想一开始有效值就是 1.0，就要先算出“哪个原始值经过 softplus 后等于 1.0”，
+这就是 inverse softplus 在干的事。
+
+\subsection{第 139--149 行：\texttt{TransChromBPOutput}}
+
+这里用 \texttt{@dataclass} 定义了一个结构化输出容器。
+
+\textbf{为什么这很重要：}
+
+如果不用 dataclass，模型可能只能返回一个很长的 tuple，
+后面训练和验证代码就会变得很难读。
+
+现在写成：
+
+\begin{lstlisting}[language=Python]
+outputs.profile_logits_full
+outputs.logcount_full
+outputs.profile_logits_debiased
+\end{lstlisting}
+
+含义会清楚很多，也更不容易在后期实验中搞错顺序。
+
+\subsection{第 151--277 行：\texttt{TransChromBP.\_\_init\_\_}}
+
+这一段是整个模型的“装配车间”。
+
+\subsubsection*{1. 第 154--188 行：构造函数参数}
+
+这些参数大体分成 6 类：
+
+\begin{itemize}[leftmargin=2em]
+\item 输入与主干维度：\texttt{input\_channels, d\_model, output\_len}
+\item Transformer 参数：\texttt{n\_heads, n\_layers, ff\_mult, use\_rope}
+\item 卷积参数：\texttt{stem\_kernel\_size, conv\_kernel\_size}
+\item local tower 参数：\texttt{signal\_n\_dil\_layers} 等
+\item bias branch 参数：\texttt{bias\_hidden\_channels, bias\_n\_dil\_layers}
+\item 融合参数：\texttt{learnable\_scales, count\_fusion, profile\_bias\_stop\_gradient} 等
+\end{itemize}
+
+其中 v2 最重要的新增参数有两个：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{profile\_bias\_stop\_gradient}
+\item \texttt{bias\_profile\_pool\_factor}
+\end{itemize}
+
+这两个参数就是 v2 修复 shortcut 的核心。
+
+\subsubsection*{2. 第 190--201 行：保存配置并检查 fusion 类型}
+
+这里把一些布尔和字符串配置保存为成员变量，同时检查：
+
+\begin{itemize}[leftmargin=2em]
+\item profile 融合目前只支持 \texttt{add}
+\item count 融合支持 \texttt{add} 和 \texttt{logsumexp}
+\end{itemize}
+
+这其实是在做“早失败”。
+如果配置写错，宁可在模型初始化时报错，也不要训练到一半才发现不支持。
+
+\subsubsection*{3. 第 203--217 行：构造 ConvStem 和 LocalTower}
+
+这一段把前面定义的两个模块实例化出来。
+
+也就是说，主干的前两步是：
+
+\[
+\text{one-hot sequence}
+\rightarrow
+\text{ConvStem}
+\rightarrow
+\text{LocalDilatedTower}
+\]
+
+\subsubsection*{4. 第 219--233 行：构造 Transformer 或 Identity}
+
+如果 \texttt{use\_transformer=True}，就创建
+\texttt{SequenceTransformerEncoder}；
+否则直接用 \texttt{nn.Identity()}。
+
+\textbf{为什么这样设计很好：}
+
+因为这样做 ablation 特别方便。
+
+比如我们有一个 no-transformer 消融配置，只需要把：
+
+\[
+\texttt{sequence\_encoder.enabled = false}
+\]
+
+就行了，其他代码完全不用改。
+
+\subsubsection*{5. 第 235--242 行：signal heads}
+
+这两行定义 signal branch 的两个头：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{profile\_signal\_head = nn.Linear(d\_model, 1)}
+\item \texttt{count\_signal\_head = LayerNorm + MLP}
+\end{itemize}
+
+\textbf{为什么 profile head 这么简单？}
+
+因为每个位置最终只需要输出一个 logit。
+Transformer 编码后每个位置已经有一个长度为 \texttt{d\_model} 的表示，
+再用线性层投到 1 维就够了。
+
+\textbf{为什么 count head 更复杂？}
+
+因为 count 是一个整段区域的全局量，不是逐位置量。
+所以通常会先做全局池化，再用一个小 MLP 输出一个标量。
+
+\subsubsection*{6. 第 244--260 行：bias branch}
+
+如果启用了 bias decomposition，就在这里构造
+\texttt{ChromBPNetBiasBranch}。
+
+这时会把 v2 的 \texttt{profile\_pool\_factor} 传进去：
+
+\begin{lstlisting}[language=Python]
+profile_pool_factor=bias_profile_pool_factor
+\end{lstlisting}
+
+如果设置了 \texttt{bias\_pretrained\_path}，就会立刻加载预训练 bias 权重。
+
+如果 \texttt{freeze\_bias\_core=True} 但又没给预训练权重，就直接报错。
+
+\textbf{为什么这个检查必要？}
+
+因为“冻结一个随机初始化的 bias branch”是没有意义的。
+冻结的前提是：它已经在 bias pretrain 阶段学到了东西。
+
+\subsubsection*{7. 第 263--277 行：scale 参数}
+
+这里定义：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{profile\_scale}
+\item \texttt{count\_scale}
+\end{itemize}
+
+它们控制 bias 项对最终 full 输出贡献多少。
+
+如果 \texttt{learnable\_scales=True}，它们就是可训练参数；
+否则就是固定 buffer。
+
+\textbf{为什么要有 scale？}
+
+因为 bias branch 不一定应该“原封不动”加进来。
+不同数据、不同阶段，对 bias 强度的最优权重可能不同。
+
+\section{\texttt{transchrombp.py} 中和 v2 最相关的后半段}
+
+\subsection{第 278--325 行：checkpoint 加载和 scale 解析}
+
+\subsubsection*{1. 第 278--293 行：\texttt{\_extract\_bias\_state\_dict}}
+
+这个函数的作用是：
+
+\begin{quote}
+从不同格式的 checkpoint 里，把 bias branch 对应的权重部分提取出来。
+\end{quote}
+
+为什么需要它？
+
+因为历史 checkpoint 的保存格式可能不同：
+
+\begin{itemize}[leftmargin=2em]
+\item 有的直接保存 bias state dict；
+\item 有的保存整个 model state；
+\item 有的键名前面带 \texttt{bias\_branch.} 前缀。
+\end{itemize}
+
+这个函数就是在做“兼容层”。
+
+\subsubsection*{2. 第 294--316 行：\texttt{load\_bias\_branch\_weights}}
+
+这里负责真正把预训练权重载入 bias branch。
+
+关键逻辑：
+
+\begin{itemize}[leftmargin=2em]
+\item 检查路径存在。
+\item 调用前面的 checkpoint 解析函数。
+\item 执行 \texttt{load\_state\_dict}。
+\item 如果指定 \texttt{freeze=True}，就冻结 bias branch 参数。
+\end{itemize}
+
+\subsubsection*{3. 第 317--324 行：\texttt{\_resolve\_scale}}
+
+这个函数负责把 \texttt{profile\_scale} / \texttt{count\_scale} 变成真正参与计算的数值。
+
+如果启用了 \texttt{positive\_scales}：
+
+\begin{itemize}[leftmargin=2em]
+\item 可训练参数走 \texttt{softplus}
+\item 固定参数走 \texttt{clamp\_min(0)}
+\end{itemize}
+
+\textbf{为什么要求 scale 非负？}
+
+因为我们不希望模型学出一种很奇怪的行为：\textbf{把 bias 项反着减掉}。
+
+从建模直觉上讲，bias branch 是一个“补偿项 / 背景项”，
+更合理的是控制它“加多少”，而不是让它随便变成负数。
+
+\subsection{第 326--404 行：\texttt{forward}}
+
+这一段是整个模型最重要的部分。
+
+\subsubsection*{1. 第 339--350 行：主干 signal 路径}
+
+\begin{lstlisting}[language=Python]
+x = _to_channel_first(seq_onehot)
+conv_feat = self.conv_stem(x)
+local_feat = self.local_tower(conv_feat)
+tokens = local_feat.transpose(1, 2)
+encoded = self.transformer(tokens)
+\end{lstlisting}
+
+这表示：
+
+\begin{enumerate}[leftmargin=2em]
+\item 把输入变成卷积能处理的格式。
+\item 经过卷积 stem。
+\item 经过 local tower。
+\item 转成 \texttt{[B, L, D]} 形式，送给 Transformer。
+\item 得到每个位置的上下文表示 \texttt{encoded}。
+\end{enumerate}
+
+然后：
+
+\begin{itemize}[leftmargin=2em]
+\item 第 346--347 行得到 \texttt{profile\_signal}
+\item 第 349--350 行得到 \texttt{count\_signal}
+\end{itemize}
+
+\textbf{为什么 profile 要 \texttt{center\_crop}？}
+
+因为输入长度是 2114，但监督区域只有中间 1000bp。
+我们不希望模型直接对两端 padding 或额外上下文也输出监督结果，
+所以只保留中心对应的 1000 个位置。
+
+\subsubsection*{2. 第 352--367 行：决定 bias 从哪里来}
+
+这里一共有 3 种情况：
+
+\begin{enumerate}[leftmargin=2em]
+\item 外部显式提供了 \texttt{bias\_profile} 和 \texttt{bias\_count}：
+  就用外部的。
+\item 没提供外部 bias，但模型启用了 bias decomposition：
+  就调用内部 \texttt{self.bias\_branch(seq\_onehot)}。
+\item 根本没启用 bias decomposition：
+  那就把 bias 设成全零。
+\end{enumerate}
+
+\textbf{这为什么很有用？}
+
+因为这样同一个 forward 可以支持：
+
+\begin{itemize}[leftmargin=2em]
+\item 正常主训练
+\item 使用内部 bias branch 的推理
+\item 未来如果想接外部 bias，也能兼容
+\item no-bias 消融
+\end{itemize}
+
+\subsubsection*{3. 第 368--375 行：形状检查}
+
+这里检查：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{profile\_bias} 的形状必须和 \texttt{profile\_signal} 一样
+\item \texttt{count\_bias} 的形状必须和 \texttt{count\_signal} 一样
+\end{itemize}
+
+这属于很好的工程习惯。
+因为 shape 错误是深度学习代码里最常见、也最烦人的错误之一。
+
+\subsubsection*{4. 第 377--395 行：full 融合}
+
+先解析 scale：
+
+\begin{lstlisting}[language=Python]
+profile_scale = self._resolve_scale(self.profile_scale, profile_signal)
+count_scale = self._resolve_scale(self.count_scale, count_signal)
+\end{lstlisting}
+
+然后做 profile 融合。这里是 v2 的第一处核心变化：
+
+\begin{lstlisting}[language=Python]
+if self.profile_bias_stop_gradient:
+    profile_full = profile_signal + profile_scale * profile_bias.detach()
+else:
+    profile_full = profile_signal + profile_scale * profile_bias
+\end{lstlisting}
+
+\textbf{这段为什么重要？}
+
+在 v1 里，profile loss 的梯度可以通过 \texttt{profile\_bias} 回流。
+于是优化器可能偷懒：不让 signal 学 profile 形状，
+而是更多依赖 bias branch。
+
+在 v2 里，如果 \texttt{profile\_bias\_stop\_gradient=True}，
+就相当于对 bias profile 做了：
+
+\[
+\texttt{detach()}
+\]
+
+也就是：
+
+\begin{quote}
+前向时你还能用 bias 值；但反向传播时，不允许 profile loss 再通过这条路去更新它。
+\end{quote}
+
+这就是所谓的 \textbf{profile gradient stop}。
+
+count 融合部分则根据 \texttt{count\_fusion} 选择：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{logsumexp}
+\item 或普通相加
+\end{itemize}
+
+当前主线用的是 \texttt{logsumexp}。
+
+\subsubsection*{5. 第 397--404 行：返回结构化输出}
+
+最后返回的是：
+
+\begin{itemize}[leftmargin=2em]
+\item full profile / count
+\item debiased profile / count
+\item bias profile / count
+\end{itemize}
+
+这是后面训练和分析能做得很细的基础。
+如果只返回 full，很多诊断都做不了。
+
+\subsection{第 419--490 行：从配置文件构建模型}
+
+这两段：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{build\_transchrombp\_from\_config}
+\item \texttt{build\_bias\_branch\_from\_config}
+\end{itemize}
+
+负责把 YAML 里的数字和开关，翻译成真正的 Python 模型对象。
+
+\textbf{为什么这很关键？}
+
+因为实验迭代几乎都靠改配置，而不是手改模型代码。
+
+尤其是 v2 的两个结构改动：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{profile\_bias\_stop\_gradient}
+\item \texttt{profile\_pool\_factor}
+\end{itemize}
+
+都是在这里从 YAML 注入模型的。
+
+\section{\texttt{bias\_branch.py} 逐段讲解}
+
+\subsection{第 10--25 行：\texttt{center\_crop\_1d}}
+
+这个函数作用非常朴素：
+
+\begin{quote}
+如果序列长度比目标长，就从中间裁到目标长度。
+\end{quote}
+
+为什么要“从中间裁”而不是从左边裁或右边裁？
+
+因为我们的输入窗口和监督窗口，都是围绕峰中心对齐的。
+中间通常才是最重要的区域。
+
+\subsection{第 28--42 行：本文件自己的 \texttt{\_to\_channel\_first}}
+
+这和主文件里的同名函数本质一致：
+保证输入是 \texttt{[B, 4, L]}。
+
+单独再写一份，不是因为设计不同，而是因为这个文件希望自己独立可用。
+
+\subsection{第 45--67 行：\texttt{ResidualDilatedConvBlock}}
+
+这是 bias branch 和 local tower 都会用到的基础块。
+
+结构是：
+
+\begin{enumerate}[leftmargin=2em]
+\item 一个带 dilation 的 1D 卷积
+\item GELU
+\item Dropout
+\item 一个 $1\times1$ 卷积
+\item 残差相加
+\item BatchNorm
+\item GELU
+\end{enumerate}
+
+\textbf{为什么用空洞卷积？}
+
+空洞卷积可以在不大幅增加参数量的情况下，看更宽的上下文。
+
+\textbf{为什么要残差？}
+
+残差连接更容易训练深层网络，也让模型保留原始信息。
+
+\subsection{第 70--130 行：\texttt{ChromBPNetBiasBranch.\_\_init\_\_}}
+
+\subsubsection*{1. 第 73--117 行：bias branch 基础结构}
+
+这一段定义了 bias branch 的主体：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{stem}：先做一次较大卷积
+\item \texttt{dilated\_tower}：再叠多个空洞残差块
+\item \texttt{profile\_head}：输出逐位置 profile bias
+\item \texttt{count\_pool + count\_head}：输出 count bias
+\end{itemize}
+
+这和 ChromBPNet 的精神是一致的：
+让一个偏置模型专门学习背景 / 酶切偏好之类的模式。
+
+\subsubsection*{2. 第 118--129 行：v2 新增的 resolution bottleneck}
+
+这是 v2 第二个最重要的结构变化。
+
+新增参数：
+
+\[
+\texttt{profile\_pool\_factor}
+\]
+
+如果它大于 0，就会构造：
+
+\begin{lstlisting}[language=Python]
+AdaptiveAvgPool1d(bottleneck_len)
+Upsample(size=output_len, mode="linear")
+\end{lstlisting}
+
+也就是说，bias profile 先被压低分辨率，再插值回原长度。
+
+\textbf{这一步为什么有用？}
+
+因为我们发现原来的 bias branch 太强了。
+它有能力直接表示很精细的 motif 形状，于是 signal branch 就偷懒。
+
+加了瓶颈后，bias branch 只能表达更低频、更平滑的形状。
+
+\textbf{直觉上可以这样理解：}
+
+\begin{itemize}[leftmargin=2em]
+\item v1 的 bias branch：像一个能画高清细节的画师
+\item v2 的 bias branch：先把画面压到低清，再放大回来，只保留大轮廓
+\end{itemize}
+
+这样细节就必须由 signal branch 来补。
+
+\subsection{第 131--156 行：\texttt{forward}}
+
+forward 顺序非常清楚：
+
+\begin{enumerate}[leftmargin=2em]
+\item 输入转成 channel-first
+\item 经过 stem
+\item 经过 dilated tower
+\item 用 \texttt{profile\_head} 得到 profile bias logits
+\item center crop 到目标长度
+\item 如果开了 bottleneck，再做低分辨率压缩 + 上采样
+\item 用全局平均池化和线性层得到 count bias
+\end{enumerate}
+
+\textbf{这里有一个非常关键的建模思想：}
+
+profile bias 和 count bias 共用同一个 bias 特征主干，但最后分成两个头。
+
+这意味着模型认为：
+
+\begin{quote}
+“背景偏置”虽然同时影响 profile 和 count，但两者不必用完全相同的读取方式。
+\end{quote}
+
+\subsection{第 158--166 行：冻结和解冻}
+
+这两个函数：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{freeze\_core}
+\item \texttt{unfreeze\_core}
+\end{itemize}
+
+就是简单地把所有参数的 \texttt{requires\_grad} 设为 \texttt{False/True}。
+
+看起来很简单，但在两阶段训练里非常重要：
+
+\begin{itemize}[leftmargin=2em]
+\item bias pretrain 阶段：正常训练 bias branch
+\item main 阶段：通常加载预训练 bias，并冻结它
+\end{itemize}
+
+\section{\texttt{transformer\_encoder.py} 逐段讲解}
+
+\subsection{第 19--60 行：\texttt{RotaryEmbedding}}
+
+这里实现的是 \textbf{RoPE（Rotary Positional Embedding）}。
+
+\textbf{为什么 Transformer 需要位置信息？}
+
+因为 attention 本身只看“谁和谁相似”，
+它天然不知道“这个碱基在第 100 位还是第 1000 位”。
+
+RoPE 的作用就是把位置信息通过旋转方式注入到 query / key 里。
+
+\textbf{这段代码最重要的点：}
+
+\begin{itemize}[leftmargin=2em]
+\item 第 35 行计算 \texttt{inv\_freq}
+\item 第 43--49 行预先缓存 \texttt{cos} / \texttt{sin}
+\item 第 51--60 行支持序列长度超过缓存时动态扩展
+\end{itemize}
+
+\textbf{为什么“动态扩展缓存”重要？}
+
+因为我们现在主线长度是 2114，但未来可能跑 4096。
+如果编码器只能接受固定长度，就会很不灵活。
+
+\subsection{第 63--78 行：\texttt{rotate\_half} 与 \texttt{apply\_rotary\_pos\_emb}}
+
+这是 RoPE 的核心数学操作。
+
+它本质上在做一件事：
+
+\begin{quote}
+把 query 和 key 的最后一个维度拆成两半，做二维旋转，从而注入位置信息。
+\end{quote}
+
+你不用一开始就把公式背下来，只需要知道：
+
+\begin{itemize}[leftmargin=2em]
+\item RoPE 不是给 token 直接加一个位置向量；
+\item 它是直接改变 attention 里比较相似度的方式。
+\end{itemize}
+
+\subsection{第 81--179 行：\texttt{RoPEMultiheadAttention}}
+
+\textbf{第 89--119 行：初始化}
+
+这里定义了标准 attention 的几个线性投影：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{q\_proj}
+\item \texttt{k\_proj}
+\item \texttt{v\_proj}
+\item \texttt{out\_proj}
+\end{itemize}
+
+同时记录：
+
+\begin{itemize}[leftmargin=2em]
+\item head 数
+\item 每个 head 的维度
+\item 是否使用 SDPA 加速
+\end{itemize}
+
+\textbf{第 120--125 行：\texttt{\_shape\_qkv}}
+
+把输入从 \texttt{[B, L, D]} 变形成多头 attention 需要的：
+
+\[
+[B, H, L, D_h]
+\]
+
+\textbf{第 127--179 行：forward}
+
+这段流程可以按 6 步理解：
+
+\begin{enumerate}[leftmargin=2em]
+\item 检查输入形状和 mask 是否合法
+\item 计算 $Q,K,V$
+\item 如果启用 RoPE，就把位置编码施加到 $Q,K$
+\item 如果可用，就走 \texttt{scaled\_dot\_product\_attention}
+\item 否则就手写 softmax attention
+\item 把多头输出拼回 \texttt{[B,L,D]}
+\end{enumerate}
+
+\textbf{为什么优先用 SDPA？}
+
+因为 PyTorch 官方提供的 SDPA 路径通常更快、更省显存。
+
+\subsection{第 182--227 行：\texttt{RoPETransformerLayer}}
+
+这是一个 \textbf{Pre-Norm Transformer Encoder Layer}。
+
+一个标准层分两块：
+
+\begin{enumerate}[leftmargin=2em]
+\item attention 子层
+\item feed-forward 子层
+\end{enumerate}
+
+每块前面都有 LayerNorm，后面都有残差连接。
+
+\textbf{为什么叫 Pre-Norm？}
+
+因为归一化发生在子层之前，而不是之后。
+Pre-Norm 往往更稳定，尤其在层数增加时更常见。
+
+\subsection{第 230--287 行：\texttt{SequenceTransformerEncoder}}
+
+这是最外层封装。
+
+它做两件事：
+
+\begin{itemize}[leftmargin=2em]
+\item 根据参数创建若干层 \texttt{RoPETransformerLayer}
+\item 在最后加一个 \texttt{final\_norm}
+\end{itemize}
+
+forward 很简单：循环过每一层，然后做最终归一化。
+
+\section{\texttt{real\_data.py} 逐段讲解}
+
+这一部分非常值得讲清楚，因为模型质量不只取决于网络结构，
+也取决于“样本是怎么切出来的”。
+
+\subsection{第 18--20 行：\texttt{\_BASE\_TO\_INDEX}}
+
+这里先创建一个长度 256 的查表数组，把字符：
+
+\begin{itemize}[leftmargin=2em]
+\item A / a 映射到 0
+\item C / c 映射到 1
+\item G / g 映射到 2
+\item T / t 映射到 3
+\end{itemize}
+
+这样做 one-hot 编码时会比逐字符判断更快。
+
+\subsection{第 23--30 行：\texttt{RegionRecord}}
+
+每个训练样本的“区域元信息”被抽象成：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{chrom}
+\item \texttt{center}
+\item \texttt{source}
+\end{itemize}
+
+其中 \texttt{source} 很重要，它会标记这个样本是：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{peak}
+\item 还是 \texttt{nonpeak}
+\end{itemize}
+
+后面验证时，代码就是靠它来分别统计 peak/nonpeak 指标的。
+
+\subsection{第 32--73 行：读取 folds 和 BED}
+
+\textbf{\texttt{load\_fold\_chroms}}：
+从 \texttt{folds.json} 中读出 train/valid/test 对应的染色体划分。
+
+\textbf{\texttt{load\_regions\_from\_bed}}：
+从 BED 中读区域，并把中心点算出来。
+
+尤其要注意第 67--68 行：
+
+\begin{itemize}[leftmargin=2em]
+\item 如果 BED 第 10 列有 summit，就用 \texttt{start + summit}
+\item 否则就用区间中点
+\end{itemize}
+
+这体现了一个重要原则：
+\textbf{ATAC 峰样本尽量按 summit 对齐，而不是按整个区间左端对齐。}
+
+\subsection{第 76--93 行：子采样与反向互补}
+
+\texttt{\_subsample\_records} 用来随机采样一部分区域。
+
+\texttt{\_reverse\_complement\_onehot} 和
+\texttt{\_reverse\_profile\_counts} 则用于数据增强。
+
+为什么反向互补时，profile 也要翻转？
+
+因为 DNA 链方向翻过来以后，位置顺序也反过来了。
+如果只翻序列不翻标签，监督就错位了。
+
+\subsection{第 96--220 行：\texttt{ChromBPNetBigWigDataset.\_\_init\_\_}}
+
+这是数据集最核心的初始化逻辑。
+
+\subsubsection*{1. 输入参数是什么}
+
+这个数据集需要：
+
+\begin{itemize}[leftmargin=2em]
+\item genome fasta
+\item bigWig
+\item peaks BED
+\item nonpeaks BED
+\item folds JSON
+\item 输入长度、监督长度、bin size、jitter 等
+\end{itemize}
+
+\subsubsection*{2. 为什么既有 \texttt{input\_len} 又有 \texttt{supervised\_bp}}
+
+因为：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{input\_len} 是模型看到的上下文长度，比如 2114
+\item \texttt{supervised\_bp} 是真正拿来监督的中心区域长度，比如 1000
+\end{itemize}
+
+这和前面的 center crop 完全对应。
+
+\subsubsection*{3. 第 166--198 行：读 peak / nonpeak 样本并决定采样比例}
+
+这里的逻辑值得仔细看：
+
+\begin{itemize}[leftmargin=2em]
+\item 如果训练是 \texttt{both}，就会同时读 peaks 和 nonpeaks。
+\item nonpeak 并不一定全量使用，而是按 \texttt{nonpeak\_ratio} 控制。
+\item 如果是 train split 且没有限制 \texttt{max\_records}，
+  对 nonpeak 会保留完整池子，后面每个 epoch 重新抽子集。
+\end{itemize}
+
+\textbf{为什么这么做？}
+
+因为 nonpeak 往往比 peak 多很多。
+如果每个 epoch 都固定同一小撮 nonpeak，利用率会很低；
+保留大池子再每轮重抽，能让模型看到更多背景区域。
+
+\subsubsection*{4. 第 204--214 行：记录一些采样统计}
+
+这里保存：
+
+\begin{itemize}[leftmargin=2em]
+\item peak 总数
+\item nonpeak 总数
+\item 每轮目标 nonpeak 数
+\item 是否支持 epoch 级 resampling
+\end{itemize}
+
+后面的 \texttt{PeakNonpeakResamplingSampler} 就要依赖这些信息。
+
+\subsection{第 226--248 行：\texttt{\_\_getitem\_\_}}
+
+这是“真正拿一个样本出来”的地方。
+
+流程是：
+
+\begin{enumerate}[leftmargin=2em]
+\item 根据样本来源（peak 或 nonpeak）决定 jitter 范围
+\item 计算中心点
+\item 从 FASTA 抽取长度为 \texttt{input\_len} 的序列
+\item 从 bigWig 抽取长度为 \texttt{supervised\_bp} 的 profile
+\item 按概率做反向互补增强
+\item 返回 \texttt{seq}、\texttt{profile\_counts} 和 \texttt{region\_source}
+\end{enumerate}
+
+\textbf{为什么 peak 和 nonpeak 的 jitter 不一样？}
+
+主线 canonical 配置里：
+
+\begin{itemize}[leftmargin=2em]
+\item peak 允许较大 jitter（比如 500）
+\item nonpeak 不 jitter
+\end{itemize}
+
+这是为了尽量保留峰的局部鲁棒性，同时避免 nonpeak 被无意义扰动。
+
+\subsection{第 250--328 行：FASTA / bigWig 读取}
+
+\textbf{\texttt{\_get\_fasta}} 和 \texttt{\_get\_bigwig}
+
+它们都做了一件很实用的工程优化：
+\textbf{按进程缓存文件句柄}。
+
+为什么要按进程？
+
+因为 DataLoader 可能有多个 worker 进程。
+如果跨进程直接共享打开的句柄，容易出问题。
+
+\textbf{\texttt{\_fetch\_onehot}}：
+
+\begin{itemize}[leftmargin=2em]
+\item 越界位置补全零
+\item 合法碱基转 one-hot
+\item N 或未知字符保持全零
+\end{itemize}
+
+\textbf{\texttt{\_fetch\_profile}}：
+
+\begin{itemize}[leftmargin=2em]
+\item 从 bigWig 读连续信号
+\item 越界补零
+\item 如果 \texttt{profile\_bin\_size>1}，就按 bin 聚合
+\item 如果设置了 \texttt{track\_total\_count\_target}，还会做整体缩放
+\end{itemize}
+
+\subsection{第 330 行以后：\texttt{estimate\_total\_count\_statistics}}
+
+这个函数是后面 \texttt{chrombpnet\_auto} 自动 count weight 的基础。
+
+它会：
+
+\begin{itemize}[leftmargin=2em]
+\item 随机抽一批区域
+\item 统计总 counts 分布
+\item 给出中位数、均值、分位数截断等信息
+\end{itemize}
+
+后面我们会看到，正是这部分自动标定机制，在某些设置下把
+\texttt{count\_weight} 推得太高了。
+
+\section{\texttt{train\_ddp.py} 逐段讲解}
+
+这个文件很长，所以这里不按每 10 行切，而按“一个功能块”来讲。
+
+\subsection{第 45--74 行：全局常量}
+
+这里定义了一些后面会反复用的常量：
+
+\begin{itemize}[leftmargin=2em]
+\item 哪些层属于 normalization
+\item 哪些 metric 名字算 loss
+\item 哪些 metric 名字算 bias diagnostics
+\item 验证集里按哪些区域类型拆指标（peak / nonpeak）
+\end{itemize}
+
+\subsection{第 76--88 行：读配置与设随机种子}
+
+\texttt{load\_yaml} 很直接。
+
+\texttt{set\_seed} 则用：
+
+\[
+\texttt{seed + rank}
+\]
+
+保证不同 GPU 进程既可复现，又不完全相同。
+
+\subsection{第 89--191 行：分布式环境}
+
+\texttt{DistEnv} 只是一个数据容器，记录：
+
+\begin{itemize}[leftmargin=2em]
+\item rank
+\item local rank
+\item world size
+\item 是否分布式
+\item 当前 device
+\end{itemize}
+
+\texttt{init\_distributed} 则负责真正初始化 DDP。
+
+\textbf{这段在做什么？}
+
+如果环境变量里显示是多卡训练，就：
+
+\begin{itemize}[leftmargin=2em]
+\item 设置当前 GPU
+\item 初始化进程组
+\item 返回一个统一的分布式环境对象
+\end{itemize}
+
+\subsection{第 98--167 行：\texttt{PeakNonpeakResamplingSampler}}
+
+这是一个很关键的采样器。
+
+它的核心思想不是“把数据集顺序打乱”那么简单，而是：
+
+\begin{quote}
+每个 epoch 保留全部 peak，再从 nonpeak 大池子里重新抽一批背景样本。
+\end{quote}
+
+\textbf{为什么这样做？}
+
+因为：
+
+\begin{itemize}[leftmargin=2em]
+\item peak 通常比较宝贵，最好全看；
+\item nonpeak 太多了，没必要每轮全看；
+\item 但也不想永远只看固定那几条 nonpeak。
+\end{itemize}
+
+\subsection{第 223--267 行：JSD 和 bias diagnostics}
+
+\texttt{compute\_profile\_jsd} 计算 profile 分布之间的 Jensen-Shannon 距离。
+
+\texttt{compute\_bias\_diagnostics} 则是我们后期做分析特别关键的一段。
+
+它会计算：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{effective\_profile\_scale}
+\item \texttt{effective\_count\_scale}
+\item \texttt{profile\_bias\_rms\_over\_signal\_rms}
+\item \texttt{profile\_full\_debiased\_jsd}
+\item \texttt{count\_full\_debiased\_abs}
+\end{itemize}
+
+\textbf{为什么这些指标重要？}
+
+因为我们后面发现 profile shortcut，不是只看 loss 看出来的，
+而是靠这些 full/debiased/bias 强度诊断指标看出来的。
+
+尤其是：
+
+\[
+\texttt{profile\_full\_debiased\_jsd}
+\]
+
+如果这个值很大，就说明：
+
+\begin{quote}
+full profile 和 debiased profile 差得很大，bias branch 对 profile 形状贡献过多。
+\end{quote}
+
+\subsection{第 380--475 行：长度与分辨率一致性检查}
+
+这里有两个非常工程化、但非常必要的检查函数：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{check\_sequence\_length\_compatibility}
+\item \texttt{check\_profile\_resolution\_compatibility}
+\end{itemize}
+
+\textbf{为什么要做这些检查？}
+
+因为我们后来开始做：
+
+\begin{itemize}[leftmargin=2em]
+\item 输入长度 sweep
+\item profile bin size sweep
+\end{itemize}
+
+这时候最容易出现的错误就是：
+
+\begin{itemize}[leftmargin=2em]
+\item 数据说输出长度 500
+\item 模型 head 还以为输出长度 1000
+\item 或者 \texttt{profile\_bin\_size} 和 \texttt{supervised\_bp} 对不上
+\end{itemize}
+
+这类错误如果不提前拦住，训练结果会完全失真。
+
+\subsection{第 517--598 行：\texttt{validate\_semantics\_profile}}
+
+这段是“canonical 数据语义固化”的核心。
+
+它会检查：
+
+\begin{itemize}[leftmargin=2em]
+\item 数据源是不是 ChromBPNet 风格 bigWig
+\item bigWig 路径是不是 shifted unstranded
+\item peaks / nonpeaks 有没有给
+\item bias pretrain 和 full train 各自的采样设置是否符合约定
+\end{itemize}
+
+\textbf{为什么要有这段？}
+
+因为实验一多，最可怕的不是模型写错，而是“每次数据语义偷偷变了”。
+
+这段相当于把“我们约定好的训练语义”写成了自动检查规则。
+
+\subsection{第 626--710 行：\texttt{auto\_configure\_loss\_weights}}
+
+这是理解 \textbf{fixcw} 修改的关键函数。
+
+它支持一种策略：
+
+\[
+\texttt{count\_weight\_strategy = chrombpnet\_auto}
+\]
+
+大体逻辑是：
+
+\begin{enumerate}[leftmargin=2em]
+\item 从训练集采样一些区域
+\item 估计总 counts 的统计量
+\item 用中位数除以某个因子（默认 10）来推荐 \texttt{count\_weight}
+\end{enumerate}
+
+\textbf{这个策略的本意是什么？}
+
+它想模仿 ChromBPNet 的思路，自动把 count loss 的权重调到一个“和数据规模匹配”的量级。
+
+\textbf{后来为什么出了问题？}
+
+根据 \texttt{reports/fixcw\_crossmodel\_analysis\_20260317.tex} 的结论，
+在 teacher canonical v1 的实验里，自动标定推到了：
+
+\[
+\texttt{count\_weight} \approx 29.7
+\]
+
+这个值太大，导致训练过分强调 count 分支，进一步放大了 bias shortcut 和训练失衡。
+
+\subsection{第 748--764 行：\texttt{BiasOnlyWrapper}}
+
+这个类的作用很巧妙：
+
+\begin{quote}
+在 bias pretrain 阶段，只训练 bias branch，但仍然让输出接口长得像完整模型。
+\end{quote}
+
+这样好处是：
+
+\begin{itemize}[leftmargin=2em]
+\item 后面的 loss 代码不用写两套
+\item full / debiased 字段都还能正常返回
+\item 训练器不需要知道“现在是不是 bias-only 模式”
+\end{itemize}
+
+\subsection{第 767--946 行：\texttt{build\_dataloaders}}
+
+这段负责真正构造 DataLoader。
+
+它支持两类数据源：
+
+\begin{itemize}[leftmargin=2em]
+\item synthetic：用来验证训练基础设施
+\item chrombpnet\_bigwig：真实数据
+\end{itemize}
+
+对真实数据来说，它会：
+
+\begin{enumerate}[leftmargin=2em]
+\item 从 train config 和 data config 里收集参数
+\item 实例化 train/valid 两个 \texttt{ChromBPNetBigWigDataset}
+\item 如果支持 epoch 级重采样，就用 \texttt{PeakNonpeakResamplingSampler}
+\item 否则在 DDP 情况下用普通 \texttt{DistributedSampler}
+\end{enumerate}
+
+\textbf{为什么这里值得认真看？}
+
+因为这里把“模型”和“数据语义”真正连起来了。
+比如：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{nonpeak\_ratio}
+\item \texttt{peak\_max\_jitter}
+\item \texttt{train\_revcomp}
+\item \texttt{track\_total\_count\_target}
+\end{itemize}
+
+这些实验设置，最后都是在这里落地到真实样本上的。
+
+\subsection{第 949--990 行：profile loss 和总 loss}
+
+\subsubsection*{1. \texttt{profile\_multinomial\_nll}}
+
+这段代码把 profile 监督写成：
+
+\begin{enumerate}[leftmargin=2em]
+\item 先把真实 profile counts 归一化成分布
+\item 对预测 logits 做 \texttt{log\_softmax}
+\item 计算负对数似然
+\end{enumerate}
+
+它关注的是：
+
+\begin{quote}
+切割信号在 1000 个位置上的\textbf{形状分布}对不对。
+\end{quote}
+
+\subsubsection*{2. \texttt{compute\_losses}}
+
+这是当前训练目标的核心。
+
+定义：
+
+\[
+\text{target\_logcount}=\log(1+\sum \text{profile counts})
+\]
+
+然后分别计算：
+
+\begin{itemize}[leftmargin=2em]
+\item full profile loss
+\item full count loss
+\item debiased profile loss
+\item debiased count loss
+\end{itemize}
+
+最终总损失是：
+
+\[
+\mathcal{L}
+=
+w_p \mathcal{L}_{profile}^{full}
++
+w_c \mathcal{L}_{count}^{full}
++
+w_{dp} \mathcal{L}_{profile}^{debiased}
++
+w_{dc} \mathcal{L}_{count}^{debiased}
+\]
+
+其中某些权重可以为 0。
+
+\textbf{这里就是 v2 第三处关键修改的位置。}
+
+在 v1 fixcw 里：
+
+\[
+w_{dp}=0
+\]
+
+在 v2 里：
+
+\[
+w_{dp}=2.0
+\]
+
+这意味着模型不再只要 full 输出好看就行，而是明确要求：
+
+\begin{quote}
+signal branch 自己的 debiased profile 也必须学好。
+\end{quote}
+
+\subsection{第 993--1150 行：build model / optimizer / scheduler / compile}
+
+\textbf{\texttt{build\_model}}：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{training\_mode = full} 时，构建完整 TransChromBP
+\item \texttt{training\_mode = bias\_pretrain} 时，构建 \texttt{BiasOnlyWrapper}
+\end{itemize}
+
+\textbf{\texttt{build\_optimizer}}：
+
+这里做了很专业的一件事：\textbf{AdamW 参数分组}。
+
+\begin{itemize}[leftmargin=2em]
+\item 权重矩阵通常做 weight decay
+\item bias、norm 参数、标量/向量参数不做 weight decay
+\item RoPE 缓存是 buffer，不进优化器
+\end{itemize}
+
+\textbf{为什么 scale 参数不做 decay？}
+
+因为它们是控制融合强度的标量，不是普通大权重矩阵。
+如果也强行做 weight decay，可能把它们往 0 拉得过头。
+
+\textbf{\texttt{build\_scheduler}}：
+
+使用 cosine 学习率调度，并支持 warmup。
+
+\subsection{第 1181--1243 行：\texttt{run\_validation}}
+
+验证阶段不仅算 overall 指标，还会按：
+
+\begin{itemize}[leftmargin=2em]
+\item peak
+\item nonpeak
+\end{itemize}
+
+分别算一遍。
+
+\textbf{为什么这很重要？}
+
+因为 bias branch 在 peak 和 nonpeak 上扮演的角色本来就不同。
+
+\begin{itemize}[leftmargin=2em]
+\item 在 nonpeak 上，bias 有时就该解释更多背景信号
+\item 在 peak 上，真正重要的是 signal branch 学到的生物学模式
+\end{itemize}
+
+如果只看 overall，很容易把这种差异掩盖掉。
+
+\subsection{第 1246--1619 行：\texttt{main}}
+
+这是完整训练入口，建议按时间顺序理解。
+
+\subsubsection*{1. 读配置并应用覆盖}
+
+第 1263--1277 行会：
+
+\begin{itemize}[leftmargin=2em]
+\item 读 model/train/data 三份配置
+\item 应用命令行覆盖项
+\end{itemize}
+
+\subsubsection*{2. 初始化环境并做一系列检查}
+
+第 1281--1290 行依次做：
+
+\begin{itemize}[leftmargin=2em]
+\item 初始化 DDP
+\item 设随机种子
+\item 校验语义配置
+\item 校验模型配置
+\item 校验长度和分辨率一致性
+\end{itemize}
+
+\subsubsection*{3. 构建模型、优化器、数据和 AMP}
+
+第 1294--1320 行把训练需要的所有核心对象都建好。
+
+\subsubsection*{4. 第 1365--1458 行：每个 epoch 的训练循环}
+
+训练循环的骨架是：
+
+\begin{enumerate}[leftmargin=2em]
+\item \texttt{model.train()}
+\item 如果有重采样 sampler，先 \texttt{set\_epoch}
+\item 遍历 batch
+\item 前向
+\item 算 loss 和 diagnostics
+\item 反向传播
+\item 梯度裁剪
+\item optimizer step
+\item scheduler step
+\item 打日志
+\end{enumerate}
+
+\textbf{为什么日志里会打印 \texttt{p\_scale}, \texttt{c\_scale}, \texttt{p\_jsd}？}
+
+因为我们已经不满足于“只看 loss 降没降”，
+而是要实时监控：
+
+\begin{itemize}[leftmargin=2em]
+\item bias 在 profile 上是不是过强
+\item full 和 debiased 差距是不是过大
+\item scale 是不是在异常漂移
+\end{itemize}
+
+\subsubsection*{5. 第 1473--1493 行：按 epoch 验证}
+
+如果到了验证频率，就调用 \texttt{run\_validation}，
+并打印 overall / peak / nonpeak 三套指标。
+
+\subsubsection*{6. 第 1495--1575 行：best checkpoint 和 early stopping}
+
+这里会：
+
+\begin{itemize}[leftmargin=2em]
+\item 根据配置好的 best metric 判断是否刷新最佳模型
+\item 保存当前 checkpoint
+\item 如果是 best，则复制一份成 \texttt{best.pt}
+\item 连续若干轮没有提升，就 early stop
+\end{itemize}
+
+\subsubsection*{7. 第 1544--1612 行：写 epoch metrics 和 run meta}
+
+每个 epoch 都会写一条 JSONL 记录。
+训练结束后还会写 \texttt{run\_meta.json}。
+
+\textbf{为什么这很有价值？}
+
+因为后面做跨实验比较时，不需要再去解析乱七八糟的终端日志；
+可以直接读结构化文件。
+
+\section{当前 v2 配置到底是什么意思}
+
+\subsection{\texttt{transchrombp\_teacher\_v2.yaml}}
+
+这个模型配置最重要的几点如下：
+
+\begin{itemize}[leftmargin=2em]
+\item Transformer 仍然开启，维度是 \texttt{d\_model=256}
+\item local tower 开启，\texttt{n\_dil\_layers=8}
+\item bias branch 开启，\texttt{n\_dil\_layers=4}
+\item \texttt{profile\_pool\_factor=32}
+\item \texttt{profile\_bias\_stop\_gradient=true}
+\end{itemize}
+
+用最直白的话说：
+
+\begin{quote}
+Teacher v2 仍然保留 teacher 架构的主体，但对 bias profile 的表示能力和梯度路径动了手术。
+\end{quote}
+
+\subsection{\texttt{train\_bias\_tutorial\_teacher\_v2.yaml}}
+
+这是 bias 预训练阶段配置。
+
+它的特点是：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{training\_mode: bias\_pretrain}
+\item 只用 \texttt{nonpeak}
+\item 不做 jitter
+\item \texttt{debiased\_profile\_weight=0}
+\end{itemize}
+
+\textbf{为什么 bias pretrain 只用 nonpeak？}
+
+因为这个阶段想学的是“背景 / 偏置”，不是峰上的真实生物学信号。
+
+\subsection{\texttt{train\_tutorial\_teacher\_v2\_main.yaml}}
+
+这是主训练配置。
+
+最关键的地方只有一句：
+
+\[
+\texttt{debiased\_profile\_weight = 2.0}
+\]
+
+它表示：
+
+\begin{quote}
+训练时不只要求 full profile 拟合好，还明确强力要求 debiased profile 也要拟合好。
+\end{quote}
+
+\section{我们几次修改，到底为什么改}
+
+这一节是本文最重要的总结。
+
+\subsection{第 1 次：从基础版到 teacher v1}
+
+\subsubsection*{能确认的事实}
+
+从 \texttt{transchrombp\_base.yaml} 与
+\texttt{transchrombp\_teacher\_canonical\_v1.yaml} 的差异可以直接确认：
+
+\begin{itemize}[leftmargin=2em]
+\item teacher v1 新增了 \texttt{local\_tower}
+\item 仍保留 Transformer
+\item 仍保留 bias decomposition
+\end{itemize}
+
+\subsubsection*{我的推断}
+
+根据结构差异和项目设计文档，我推断这次修改的目的主要是：
+
+\begin{enumerate}[leftmargin=2em]
+\item 先用 BPNet 风格局部空洞卷积，强化 motif 和局部组合模式；
+\item 再让 Transformer 在更好的局部特征上做长程建模；
+\item 也就是希望“局部 pattern”和“长程关系”两边都抓住。
+\end{enumerate}
+
+这是一个很合理的设计方向，因为纯 Transformer 不一定天然最擅长
+处理非常局部的 motif 形状。
+
+\subsection{第 2 次：从 canonical v1 auto 到 fixcw}
+
+\subsubsection*{改了什么}
+
+根据：
+
+\begin{itemize}[leftmargin=2em]
+\item \texttt{configs/train/train\_tutorial\_teacher\_canonical\_v1.yaml}
+\item \texttt{configs/train/train\_tutorial\_teacher\_canonical\_v1\_fixcw.yaml}
+\item \texttt{reports/fixcw\_crossmodel\_analysis\_20260317.tex}
+\end{itemize}
+
+可以确认这次关键改动是：
+
+\begin{itemize}[leftmargin=2em]
+\item 从 \texttt{count\_weight\_strategy = chrombpnet\_auto}
+\item 改成显式固定 \texttt{count\_weight = 0.1}
+\end{itemize}
+
+\subsubsection*{为什么要改}
+
+因为跨实验分析显示，自动标定在这个 teacher 配置下推出来的
+\texttt{count\_weight} 大约是：
+
+\[
+29.7
+\]
+
+这个值太大，会带来两个问题：
+
+\begin{enumerate}[leftmargin=2em]
+\item 训练过分关注 count loss，而不是 profile shape；
+\item bias 相关尺度容易异常膨胀，训练动力学变坏。
+\end{enumerate}
+
+\subsubsection*{目的是什么}
+
+\begin{quote}
+先把训练拉回一个稳定、可解释的 regime，避免 count loss 权重把整个优化方向带偏。
+\end{quote}
+
+所以 \textbf{fixcw} 的核心不是“模型结构创新”，而是
+\textbf{训练目标权重的止血修正}。
+
+\subsection{第 3 次：从 fixcw 到 teacher v2}
+
+这是当前最重要的一次修改。
+
+\subsubsection*{为什么必须改}
+
+\texttt{fixcw\_crossmodel\_analysis\_20260317.tex} 给出了关键发现：
+
+\begin{itemize}[leftmargin=2em]
+\item full profile JSD 很好
+\item debiased profile JSD 却很差
+\item baseline（无 bias）反而有更好的 debiased profile
+\end{itemize}
+
+这说明：
+
+\begin{quote}
+signal branch 不是不会学 profile，而是在有强 bias branch 可用时，选择把 profile 形状学习“外包”给 bias branch。
+\end{quote}
+
+这就是所谓的 \textbf{profile-dimension bias shortcut}。
+
+\subsubsection*{v2 改了哪三件事}
+
+\paragraph{改动 1：在 \texttt{bias\_branch.py} 里加入 \texttt{profile\_pool\_factor=32}}
+
+目的：
+
+\begin{itemize}[leftmargin=2em]
+\item 限制 bias branch 只能表达低频、平滑的 profile 轮廓
+\item 不让它继续直接拟合精细 motif 形状
+\end{itemize}
+
+\paragraph{改动 2：在 \texttt{transchrombp.py} 里加入 \texttt{profile\_bias\_stop\_gradient=true}}
+
+目的：
+
+\begin{itemize}[leftmargin=2em]
+\item 允许前向时继续使用 bias 值
+\item 但不允许 profile loss 再通过 bias profile 这条路反向传播
+\end{itemize}
+
+\paragraph{改动 3：在主训练配置里把 \texttt{debiased\_profile\_weight} 从 0 提到 2.0}
+
+目的：
+
+\begin{itemize}[leftmargin=2em]
+\item 明确惩罚 debiased profile 质量差的情况
+\item 逼 signal branch 自己学会 profile 形状
+\end{itemize}
+
+\subsubsection*{为什么三者要一起上}
+
+这三件事分别从三个层面堵 shortcut：
+
+\begin{longtable}{p{0.22\textwidth} p{0.33\textwidth} p{0.33\textwidth}}
+\toprule
+\textbf{改动} & \textbf{它管什么} & \textbf{如果单独做，可能还不够} \\
+\midrule
+\endhead
+profile bottleneck & 限制 bias branch 能表达什么 & 即使 bias 变粗糙，signal 也可能继续偷懒 \\
+stop-gradient & 限制 profile loss 通过 bias 反传 & 即使不回传，bias 前向仍可能提供太多现成形状 \\
+debiased profile loss & 直接监督 signal branch & 如果 bias 仍能表达太细，signal 还是可能依赖它 \\
+\bottomrule
+\end{longtable}
+
+所以 v2 不是“只改一个超参数”，而是一次完整的\textbf{优化路径矫正}。
+
+\section{用最简单的话复述一遍这套模型}
+
+如果你看完上面还是觉得抽象，可以把当前模型想成三个人合作：
+
+\begin{enumerate}[leftmargin=2em]
+\item \textbf{卷积 stem + local tower}：
+  先负责看局部 motif 和中等范围上下文。
+\item \textbf{Transformer}：
+  再负责把更长距离的信息整合起来。
+\item \textbf{bias branch}：
+  专门负责学习实验偏置 / 背景模式。
+\end{enumerate}
+
+最后系统会同时问两个问题：
+
+\begin{enumerate}[leftmargin=2em]
+\item 你们三个合作以后，最后预测得好不好？这就是 \texttt{full}。
+\item 如果把 bias 那个人拿开，只看主干自己，预测还行不行？这就是 \texttt{debiased}。
+\end{enumerate}
+
+v1 的问题是：
+
+\begin{quote}
+第三个人（bias branch）太能干了，结果前两个人偷懒了。
+\end{quote}
+
+v2 的所有改动，本质上就是：
+
+\begin{quote}
+让 bias branch 继续存在，但只能做它该做的“粗背景校正”，不能替 signal branch 把细节全干完。
+\end{quote}
+
+\section{建议你按什么顺序读源码}
+
+如果你接下来想自己打开代码一行一行看，我建议按这个顺序：
+
+\begin{enumerate}[leftmargin=2em]
+\item 先看 \texttt{configs/model/transchrombp\_teacher\_v2.yaml} \\
+  先知道模型有哪些模块开关。
+\item 再看 \texttt{src/transchrombp/models/transchrombp.py} \\
+  这是总装配文件。
+\item 再看 \texttt{src/transchrombp/models/bias\_branch.py} \\
+  理解 bias branch 到底能做什么。
+\item 再看 \texttt{src/transchrombp/models/transformer\_encoder.py} \\
+  不用一开始深究数学，先理解输入输出形状。
+\item 再看 \texttt{src/transchrombp/data/real\_data.py} \\
+  知道样本是怎么来的。
+\item 最后看 \texttt{src/transchrombp/training/train\_ddp.py} \\
+  理解 loss、验证和训练循环。
+\end{enumerate}
+
+\section{附录：几个最容易卡住的新手术语}
+
+\subsection*{1. one-hot 序列}
+
+DNA 的 4 种碱基 A/C/G/T 用 4 维向量表示：
+
+\[
+A=[1,0,0,0],\;
+C=[0,1,0,0],\;
+G=[0,0,1,0],\;
+T=[0,0,0,1]
+\]
+
+\subsection*{2. logits}
+
+logits 不是概率，而是“还没归一化之前的分数”。
+对 profile 来说，最后通常会对 logits 做 softmax 才变成概率分布。
+
+\subsection*{3. debiased}
+
+不是说“已经把真实世界所有 bias 完全去掉”，
+而是说“这里只看 signal branch 自己的输出，不再加 bias branch 的补偿项”。
+
+\subsection*{4. center crop}
+
+输入序列比较长，但监督只看中间窗口，所以要把中间那段裁出来。
+
+\subsection*{5. stop-gradient / detach}
+
+前向还用这个值，但反向传播时，不让梯度继续通过它传回去。
+
+\section{结语}
+
+如果把这份文档压缩成 3 句话，那就是：
+
+\begin{enumerate}[leftmargin=2em]
+\item TransChromBP 的核心思想，是把 Transformer 的长程序列建模和 ChromBPNet 的 bias decomposition 结合起来。
+\item 当前主线 teacher v2 的核心问题意识，不是“怎么再把 full 指标刷高一点”，而是“怎么确保 signal branch 真正在学，而不是让 bias branch 走捷径”。
+\item 所以 v2 的三处关键修改
+  （bias 分辨率瓶颈、profile stop-gradient、debiased profile loss）
+  本质上都是在强迫模型把 profile 的细节学习重新交还给 signal branch。
+\end{enumerate}
+
+\end{document}

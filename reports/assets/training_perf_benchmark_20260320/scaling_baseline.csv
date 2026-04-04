@@ -1,0 +1,3 @@
+run_name,nproc,bs_per_gpu,world_size,global_batch_size,avg_step_ms,samples_per_sec,pct_data,pct_fwd_bwd,pct_opt,peak_allocated_gb,sample_peak_mem_mib,sample_mean_util_pct,sample_peak_util_pct,sample_mean_power_w,sample_peak_power_w,active_sample_count
+bench_1gpu_bs16,1,16,1,16,83.79,191.0,0.1,97.5,2.4,2.91,,,,,,0
+bench_2gpu_bs16,2,16,2,32,88.64,361.0,0.1,96.7,3.1,2.94,3446.0,93.08333333333333,97.0,266.46666666666664,295.62,12

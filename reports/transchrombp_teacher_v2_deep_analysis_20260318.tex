@@ -1,0 +1,459 @@
+\documentclass[11pt,a4paper]{ctexart}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]{hyperref}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{caption}
+
+\definecolor{goodgreen}{rgb}{0.0,0.5,0.0}
+\newcommand{\good}[1]{\textcolor{goodgreen}{\textbf{#1}}}
+\newcommand{\bad}[1]{\textcolor{red}{#1}}
+
+\title{TransChromBP Teacher v2 深入机制分析\\
+\large 训练动力学、通道非对称性与设计原则提取}
+\author{项目深入分析文档}
+\date{2026 年 3 月 18 日}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+本文是对 Teacher v2 结果的\textbf{机制层面}深入分析，与已有的结果更新报告互补。
+核心关注三个问题：
+(1) 为什么修复 profile shortcut 会同时提高 count 预测？
+(2) 为什么 profile scale 坍塌到接近零而 count scale 保持在 1.3？
+(3) 三项设计改动的各自贡献与交互效应是什么？
+由此提取出的设计原则可以直接指导后续的消融实验和 v3 架构演进。
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%%====================================================================
+\section{核心发现：V2 的全面提升不是巧合}
+%%====================================================================
+
+V2 相对 V1 的改善呈现出一个需要解释的 pattern：
+
+\begin{table}[H]
+\centering
+\small
+\caption{V2 相对 V1 的变化幅度。所有方向一致指向\textbf{全面提升}。}
+\begin{tabular}{lrrr}
+\toprule
+指标 & V1 Fixcw & V2 Best (ep18) & 变化 \\
+\midrule
+Peak count $r$ (full) & 0.8205 & 0.8466 & \good{+3.2\%} \\
+Peak count $r$ (debiased) & 0.8190 & 0.8445 & \good{+3.1\%} \\
+Peak JSD full (mean) & 0.3231 & 0.3162 & \good{$-$2.1\%} \\
+Peak JSD debiased (mean) & 0.5633 & 0.3163 & \good{$-$43.9\%} \\
+Peak JSD full (median) & 0.3255 & 0.3187 & \good{$-$2.1\%} \\
+Overall count $r$ (full test) & 0.8259 & 0.8513 & \good{+3.1\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+关键悖论：V2 没有改动任何 count 相关的模块（count\_weight, count\_fusion, count\_head 全部不变），
+却获得了 3.2\% 的 count 提升。这需要一个统一的机制解释。
+
+%%====================================================================
+\section{机制分析一：Shortcut 如何抑制了 V1 的整体表征质量}
+%%====================================================================
+
+\subsection{V1 signal branch 的学习路径}
+
+在 V1 中，signal branch 面对的优化景观如下：
+
+\begin{align}
+\mathcal{L}_{\text{total}} &= \underbrace{\mathcal{L}_{\text{profile}}(\text{signal} + \alpha_p \cdot \text{bias})}_{\text{profile loss 可以靠 bias 搞定}} + 0.1 \cdot \underbrace{\mathcal{L}_{\text{count}}(\text{logsumexp}(\text{signal}, \log\alpha_c + \text{bias}))}_{\text{count loss 主要靠 signal}} \label{eq:v1loss}
+\end{align}
+
+由于 bias 的 profile 输出已经是合理的近似（pretrained on nonpeaks，在 peaks 上仍有一定迁移能力），
+优化器发现一条阻力最小的路径：
+\begin{itemize}[leftmargin=2em]
+  \item 把 profile loss 的负担交给 $\alpha_p \cdot \text{profile\_bias}$（profile\_scale 保持 $\sim$0.94）
+  \item signal branch 只需要学一个接近零的 profile 残差
+  \item signal branch 的参数容量集中在 count 预测上
+\end{itemize}
+
+\textbf{后果}：Transformer 的注意力模式和 local tower 的卷积特征都被"窄化"为服务 count 估计的特征。
+它们不需要编码局部 motif 形状（profile 任务被 bias 代劳了），因此学到的中间表征\textbf{信息含量不饱和}。
+
+\subsection{V2 强制的学习路径转变}
+
+V2 的三项改动合力改变了优化景观：
+
+\begin{align}
+\mathcal{L}_{\text{total}} &= \mathcal{L}_{\text{profile}}(\text{signal} + \alpha_p \cdot \underbrace{\texttt{sg}(\text{bias}_{\text{bottleneck}})}_{\text{低频 + 无梯度}}) + 0.1 \cdot \mathcal{L}_{\text{count}}(\cdot) + 2.0 \cdot \underbrace{\mathcal{L}_{\text{debiased\_profile}}(\text{signal})}_{\text{直接监督 signal}} \label{eq:v2loss}
+\end{align}
+
+现在：
+\begin{itemize}[leftmargin=2em]
+  \item Bias profile 经过 bottleneck 后只是平滑的背景包络，无法提供 motif 形状
+  \item \texttt{stop\_gradient} 阻止 profile loss 通过 bias 路径优化
+  \item $2.0 \times \mathcal{L}_{\text{debiased\_profile}}$ 直接要求 signal branch 独立产出好的 profile
+  \item Signal branch \textbf{必须}同时编码 motif 形状（为 profile）和信号强度（为 count）
+\end{itemize}
+
+\textbf{结果}：Transformer 和 local tower 被迫学习\textbf{更丰富的中间表征}——既包含局部
+motif 形状信息（用于 profile 预测），也包含全局信号强度信息（用于 count 预测）。
+这些更丰富的表征反过来\textbf{也改善了 count 预测}，尽管 count 模块本身没有任何变化。
+
+\subsection{类比："多任务学习提升主任务"效应}
+
+这与多任务学习的经典发现一致：当辅助任务（profile prediction）迫使模型学习更好的
+共享表征时，主任务（count prediction）也会受益。区别在于，V1 中这个"辅助任务"
+被 bias shortcut 短路了，导致多任务学习失效。V2 修复了短路，恢复了健康的多任务动力学。
+
+%%====================================================================
+\section{机制分析二：通道非对称性——为什么 $\alpha_p \to 0$ 而 $\alpha_c$ 保持 1.3}
+%%====================================================================
+
+V2 训练结束时呈现出明显的\textbf{通道非对称性}：
+
+\begin{table}[H]
+\centering
+\small
+\caption{V2 最终 scale 状态的通道对比。}
+\begin{tabular}{lcc}
+\toprule
+通道 & $\alpha$ (final) & Bias 贡献占比 \\
+\midrule
+Profile & 0.009 & $< 0.3\%$ \\
+Count & 1.30 & 显著 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+为什么两个通道行为如此不同？这揭示了 bias pretrain 在两个任务上的\textbf{迁移价值差异}。
+
+\subsection{Profile 通道：Bias pretrain 的迁移价值被 bottleneck 消除}
+
+V1 中 bias pretrain 学到的 profile 模式在 peaks 上有一定迁移能力（虽然只在 nonpeaks 上训练，
+但 GC 偏好和 Tn5 偏好是全基因组性的）。这种迁移能力正是 shortcut 的基础。
+
+V2 的 bottleneck（32bp 分辨率）消除了这种迁移能力——bias 的 profile 输出被平滑到
+只能表达 $\sim$32bp 以上的趋势，无法提供 6--20bp 的 motif 形状。因此 signal branch
+发现保留 bias profile 贡献没有价值，$\alpha_p$ 自发趋向零。
+
+\textbf{证据}：V2 bias pretrain 的 validation loss（6.80）显著高于 V1 bias pretrain（$\sim$5.91），
+确认 bottleneck 确实限制了 bias branch 的学习能力。
+
+\subsection{Count 通道：Bias pretrain 的迁移价值仍然存在}
+
+Count 预测是一个全局聚合任务（把 profile 信号汇总为一个标量）。Bias pretrain 在 nonpeak 上学到的
+count 预测能力（nonpeak count $r = 0.46$）仍然有用：
+\begin{itemize}[leftmargin=2em]
+  \item Count fusion 使用 \texttt{logsumexp}（非加性），信息整合方式更稳健
+  \item Bottleneck 只限制 profile 分辨率，不影响 count head（count head 接的是 global pooling 后的特征）
+  \item Count 预测不需要精细形状，只需要整体水平估计——正是 bias 在低分辨率下仍能提供的
+\end{itemize}
+
+因此 $\alpha_c$ 保持在 1.3，说明 signal branch 仍然认为 bias 的 count 信息有用。
+
+\subsection{设计启示}
+
+这种非对称性不是缺陷，而是\textbf{正确的行为}：
+\begin{itemize}[leftmargin=2em]
+  \item Profile 通道：bias 应该只提供背景包络，精细形状由 signal 负责 → $\alpha_p \to 0$ 是理想状态
+  \item Count 通道：bias 的全局水平估计是有价值的补充 → $\alpha_c > 1$ 是合理的
+\end{itemize}
+
+如果未来要简化模型，可以考虑\textbf{完全移除 profile fusion}（hardcode $\alpha_p = 0$），
+只保留 count fusion。这在当前证据下不会损失性能。
+
+%%====================================================================
+\section{机制分析三：三项改动的解耦分析}
+%%====================================================================
+
+V2 同时引入了三项改动。虽然没有做逐项消融，但从训练动力学可以推断各自的贡献。
+
+\subsection{解耦推理}
+
+\begin{table}[H]
+\centering
+\small
+\caption{三项改动的功能分工推断。}
+\begin{tabular}{p{3.2cm}p{4.5cm}p{5cm}}
+\toprule
+改动 & 直接效果 & 推断依据 \\
+\midrule
+Resolution bottleneck & 限制 bias 能表达什么 & Bias pretrain loss 从 $\sim$5.91 升到 6.80，确认 bias 能力被限制 \\
+\addlinespace
+Gradient stop & 限制 bias 如何参与训练 & Bias core 已 frozen，主要影响 $\alpha_p$ 的梯度；$\alpha_p$ 在 epoch 2 就降到 0.02 \\
+\addlinespace
+Debiased loss ($\lambda=2.0$) & 直接监督 signal 的 profile quality & 如果只有 bottleneck + stop gradient 但无 debiased loss，signal 可能仍缺乏足够的 profile 学习压力 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{交互效应}
+
+三项改动不是简单叠加，而是形成了一个\textbf{正反馈环}：
+
+\begin{enumerate}[leftmargin=2em]
+  \item Bottleneck 让 bias profile 变得无用 → $\alpha_p$ 有下降动机
+  \item Stop gradient 阻止 profile loss 通过 $\alpha_p$ 路径找到低 loss → $\alpha_p$ 下降更快
+  \item Debiased loss 直接监督 signal profile → signal 被迫变好
+  \item Signal profile 变好 → $\alpha_p$ 进一步没有存在价值 → 回到 (1)
+\end{enumerate}
+
+这个正反馈在 \textbf{epoch 2 就基本收敛}（$\alpha_p$ 降到 0.02），说明三项改动的
+联合效应是迅速且稳定的。
+
+\subsection{如果只做其中一项？}
+
+虽然没有实验，但可以做以下推测：
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{只做 bottleneck}：$\alpha_p$ 会下降但可能不会降到 0.01；debiased profile 可能改善
+  到 $\sim$0.38--0.42（baseline 水平），但不一定超过 baseline
+  \item \textbf{只做 debiased loss}：Bias 仍有精细 profile 能力，debiased loss 与 full profile loss
+  可能产生梯度冲突（一个要 signal 好，一个允许 bias 帮忙），训练可能不稳定
+  \item \textbf{只做 stop gradient}：Bias core 已 frozen，stop gradient 主要影响 $\alpha_p$；
+  效果有限，因为 bias 仍然能通过 $\alpha_p$ 贡献精细 profile
+\end{itemize}
+
+\textbf{结论}：三项改动都是必要的，但 bottleneck 是最关键的一项——它从根本上限制了 bias 的
+表达能力，使其他两项能够充分发挥作用。
+
+%%====================================================================
+\section{训练动力学深入分析}
+%%====================================================================
+
+\subsection{$\alpha_p$ 的两阶段衰减}
+
+\begin{table}[H]
+\centering
+\small
+\caption{V2 profile scale 的详细衰减过程。}
+\begin{tabular}{rccl}
+\toprule
+Epoch & $\alpha_p$ & 衰减速率 & 阶段 \\
+\midrule
+1 & 0.814 & --- & 初始阶段 \\
+2 & 0.217 & $\times 0.27$ & \textbf{快速坍塌}（1 epoch 内降 73\%） \\
+3 & 0.048 & $\times 0.22$ & 继续快速下降 \\
+4 & 0.031 & $\times 0.65$ & 开始减速 \\
+8 & 0.019 & & \textbf{渐近衰减} \\
+12 & 0.015 & & \\
+18 & 0.011 & & \\
+24 & 0.009 & & 接近零 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+第一阶段（epoch 1--3）：$\alpha_p$ 以每 epoch $\sim$70\% 的速度坍塌。这是三项改动联合效应
+最强的阶段——bottleneck 使 bias profile 无用，debiased loss 惩罚 signal 的 profile 质量，
+stop gradient 切断了通过 bias 路径逃避的可能。
+
+第二阶段（epoch 4--24）：$\alpha_p$ 以每 epoch $\sim$3\% 的速度缓慢趋零。此时 bias 的
+profile 贡献已经可以忽略（$< 1\%$），残余的下降来自正则化效应。
+
+\subsection{训练 Profile Loss 的健康下降}
+
+\begin{table}[H]
+\centering
+\small
+\caption{V2 验证集 peak profile loss 轨迹（full 与 debiased 近乎重合）。}
+\begin{tabular}{rcccc}
+\toprule
+Epoch & Val Peak Profile (full) & Val Peak Profile (deb) & Gap & 是否 plateau \\
+\midrule
+1 & 5.696 & 5.686 & 0.010 & \\
+4 & 5.651 & 5.651 & $< 0.001$ & \\
+8 & 5.640 & 5.640 & $< 0.001$ & \\
+12 & 5.633 & 5.633 & $< 0.001$ & \\
+18 & 5.627 & 5.627 & $< 0.001$ & \\
+24 & 5.625 & 5.625 & $< 0.001$ & 接近 plateau \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+两个重要观察：
+\begin{enumerate}[leftmargin=2em]
+  \item Full 和 debiased profile loss 在 epoch 2 之后就完全重合，确认 bias 不再参与 profile
+  \item Profile loss 持续缓慢下降直到 epoch 24，没有完全 plateau——说明更长的训练可能还能小幅改善
+\end{enumerate}
+
+\subsection{V2 vs V1 的 $\alpha_c$ 对比}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Count scale 在不同 run 中的行为对比。}
+\begin{tabular}{lcccc}
+\toprule
+Run & $\alpha_c$ ep1 & $\alpha_c$ peak & $\alpha_c$ final & 行为模式 \\
+\midrule
+V2 Teacher & 1.09 & 2.05 (ep4) & 1.16 (ep24) & 上升-下降型 \\
+V1 Fixcw Teacher & 1.08 & 1.92 (ep4) & 1.26 (ep18) & 上升-下降型 \\
+Orig bias$\to$main & 1.08 & 1.08 (ep1) & 0.11 (ep20) & 单调下降型 \\
+V1 Failed auto & 1.11 & 4.11 (ep8) & 4.11 (ep8) & 单调爆炸型 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+V2 和 V1 fixcw 的 $\alpha_c$ 行为几乎相同（都是 1.08 → 2.0 → 1.2），说明：
+\begin{itemize}[leftmargin=2em]
+  \item Profile 维度的改动\textbf{没有干扰} count 维度的训练动力学
+  \item Count 通道的健康行为（上升-下降-收敛）是 \texttt{count\_weight=0.1} 的稳定结果，
+  与 profile 相关的设计改动正交
+\end{itemize}
+
+%%====================================================================
+\section{Debiased Count 指标的细微差异}
+%%====================================================================
+
+V2 best 的 peak debiased count $r$ (0.8445) 比 full (0.8466) 低了 0.0021。
+这比 profile JSD 的差异（$< 0.001$）大一个数量级。为什么？
+
+\begin{itemize}[leftmargin=2em]
+  \item Count fusion 使用 \texttt{logsumexp}：$\text{count\_full} = \text{logsumexp}(\text{count\_signal}, \log\alpha_c + \text{count\_bias})$
+  \item $\alpha_c = 1.30$，$\log(1.30) = 0.26$，所以 bias count 贡献仍然显著
+  \item 移除 bias 后（debiased），count 预测失去了 bias 提供的背景水平信息
+  \item 这个差异（0.0021）远小于 V1 的 profile 差异（0.24），说明 count shortcut 不存在
+\end{itemize}
+
+这个行为是\textbf{设计上正确的}：count 维度允许 bias 贡献（因为背景计数水平是有意义的先验），
+但 profile 维度不允许（因为精细形状应该由 signal 负责）。
+
+%%====================================================================
+\section{Bias Pretrain 在 Bottleneck 下的行为}
+%%====================================================================
+
+\begin{table}[H]
+\centering
+\small
+\caption{V2 vs V1 bias pretrain 对比。}
+\begin{tabular}{lcc}
+\toprule
+指标 & V1 Bias Pretrain & V2 Bias Pretrain \\
+\midrule
+Best epoch & 1 & 3 \\
+Early stop epoch & 10 & 8 \\
+Val loss (best) & $\sim$5.91 & 6.80 \\
+Val profile loss & $\sim$5.82 & 6.77 \\
+Val count loss & $\sim$0.09 & 0.27 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+V2 bias pretrain loss 显著高于 V1，因为 bottleneck 限制了表达能力。但值得注意：
+\begin{itemize}[leftmargin=2em]
+  \item Profile loss 升高最多（+0.95），因为 bottleneck 直接限制了 profile 分辨率
+  \item Count loss 升高较少（+0.18），因为 count head 经过 global pooling，不受 profile bottleneck 直接影响
+  \item Early stop 提前到 epoch 8（vs V1 的 10），因为 bias 很快就学到了它能学的所有东西
+\end{itemize}
+
+这确认了 bottleneck 的工作方式：它不是阻止 bias 学习，而是限制 bias \textbf{能学到什么}——
+只能学低频背景模式，无法学精细 motif 形状。
+
+%%====================================================================
+\section{提取的设计原则}
+%%====================================================================
+
+从 V1 到 V2 的经验中，可以提取以下可推广的设计原则：
+
+\subsection{原则 1：Bias 表达能力必须与其语义角色匹配}
+
+如果 bias 的语义角色是"低频背景偏差"，那它的架构表达能力就不应超过这个角色的需要。
+V1 的错误是给了 bias 1bp 分辨率的表达能力，远超其语义需要。
+
+\textbf{推广}：任何辅助模块（bias, auxiliary head, residual adapter）的架构容量都应与其
+预期贡献的信息粒度匹配。容量过大会导致辅助模块越位。
+
+\subsection{原则 2：可学习 scale 不足以实现模块分工}
+
+V1 期望 learnable scales 自动找到最优的 signal/bias 平衡。实际上，优化器总是选择阻力最小的路径，
+导致 bias scale 保持高位（$\alpha_p \approx 0.94$）。
+
+\textbf{推广}：对于需要明确分工的多分支架构，不能依赖优化器自动发现分工——必须通过
+架构约束（bottleneck）或训练约束（gradient stop, 专项 loss）显式强制。
+
+\subsection{原则 3：修复 shortcut 会释放被压抑的模型容量}
+
+V2 的 count 提升（+3.2\%）不是来自 count 模块的改进，而是来自\textbf{解除对 signal branch
+表征质量的压制}。当 signal branch 被迫同时学好 profile 和 count，它的中间表征变得更丰富，
+两个任务都受益。
+
+\textbf{推广}：如果一个多任务模型的某个任务被 shortcut 了，修复 shortcut 往往会带来
+超出预期的全面提升——因为 shortcut 压制的不只是被短路的任务，而是整个共享表征的质量。
+
+\subsection{原则 4：频域分离是连接 signal/bias 分工的正确抽象}
+
+高频 = motif 形状 = signal 的职责。低频 = 背景趋势 = bias 的职责。
+这种频域分离可以通过物理瓶颈（pooling + upsampling）精确实现，而且对超参数选择不敏感
+（pool\_factor 在 16--64 范围内应该都能工作）。
+
+%%====================================================================
+\section{下一步实验建议}
+%%====================================================================
+
+基于以上分析，后续实验的最高价值方向是：
+
+\subsection{消融实验：量化 Transformer 的独立贡献}
+
+V2 证明 signal branch（Transformer + local tower）已经能独立做好 profile。但 Transformer 和
+local tower 各贡献了多少？设计：
+\begin{itemize}[leftmargin=2em]
+  \item 去掉 Transformer encoder，只保留 local tower + V2 bias framework
+  \item 所有其他设置不变（bottleneck, stop gradient, debiased loss, count\_weight=0.1）
+  \item 比较 debiased JSD 和 count $r$
+\end{itemize}
+
+如果 Transformer 确实有增益，debiased JSD 应该比 CNN-only 更好。
+这是当前最值钱的消融，因为它直接回答论文的核心问题。
+
+\subsection{Checkpoint 选择优化}
+
+当前 \texttt{peak.loss\_total} 作为 best metric 的问题已被明确识别。建议：
+\begin{itemize}[leftmargin=2em]
+  \item 改为 \texttt{peak.profile\_target\_jsd\_debiased\_mean} 或 median 作为 best metric
+  \item 增大 early\_stop\_patience 到 8--10（V2 后期仍在缓慢改善）
+  \item 或使用 composite metric: $-\text{count\_r} + \lambda \cdot \text{JSD}$
+\end{itemize}
+
+\subsection{Pool Factor 敏感性}
+
+当前 pool\_factor=32。建议测试 16 和 64：
+\begin{itemize}[leftmargin=2em]
+  \item pool\_factor=16：bias 分辨率 $\sim$16bp，可能让部分 motif 信息泄漏
+  \item pool\_factor=64：bias 分辨率 $\sim$64bp，可能过度限制 bias 的有用贡献
+  \item 预期 32 已经接近最优，但需要验证
+\end{itemize}
+
+%%====================================================================
+\section{总结}
+%%====================================================================
+
+V2 的成功不是偶然的。它是\textbf{三项针对性设计改动的协同结果}，每一项都对应一个明确的
+机制原因：
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+问题 & 改动 & 效果 \\
+\midrule
+Bias 能表达 motif 形状 & Resolution bottleneck & Bias 只能做低频 \\
+Profile loss 通过 bias 路径逃避 & Gradient stop & Loss 只更新 signal \\
+Signal profile 质量无直接监督 & Debiased loss & 直接惩罚 signal \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+三项改动合力产生了一个正反馈循环，使 $\alpha_p$ 在 2 个 epoch 内坍塌到接近零。
+与此同时，count 通道的行为完全不受影响（$\alpha_c$ 轨迹与 V1 几乎相同），确认了
+修改的精准性——只影响了需要影响的通道。
+
+最终，V2 不仅修复了 debiased quality（$-43.9\%$），还带来了全面提升（count $+3.2\%$,
+profile $-2.1\%$）。这是因为修复 shortcut 释放了 signal branch 被压抑的表征容量，
+使 Transformer 和 local tower 被迫学习更丰富的中间特征，从而同时改善了两个任务。
+
+\end{document}

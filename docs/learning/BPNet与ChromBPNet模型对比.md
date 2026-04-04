@@ -1,5 +1,7 @@
 # 🔬 BPNet vs ChromBPNet 模型深度对比
 
+> 注：本文件用于理解“为什么需要 bias factorization”这一基础问题。当前默认主线模型已经进一步演进为 `TransChromBP`；如果你要理解现在的结构、训练语义和默认配置，请继续看 [TransChromBP当前模型学习总览.md](TransChromBP当前模型学习总览.md) 与 [TransChromBP当前模型详解.md](TransChromBP当前模型详解.md)。
+
 > 详细对比两个模型的设计、用途和实现
 
 ---

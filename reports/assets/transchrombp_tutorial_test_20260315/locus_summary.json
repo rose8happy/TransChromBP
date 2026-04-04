@@ -1,0 +1,42 @@
+{
+  "device": "cuda:0",
+  "n_test_regions": 62342,
+  "selected": [
+    {
+      "label": "peak_high",
+      "source": "peak",
+      "quantile": 0.9,
+      "index": 30237,
+      "chrom": "chr1",
+      "center": 9129623,
+      "observed_total_count": 5346.0
+    },
+    {
+      "label": "peak_mid",
+      "source": "peak",
+      "quantile": 0.5,
+      "index": 10332,
+      "chrom": "chr1",
+      "center": 183580389,
+      "observed_total_count": 953.0
+    },
+    {
+      "label": "nonpeak_high",
+      "source": "nonpeak",
+      "quantile": 0.9,
+      "index": 45886,
+      "chrom": "chr1",
+      "center": 8884057,
+      "observed_total_count": 345.0
+    },
+    {
+      "label": "nonpeak_mid",
+      "source": "nonpeak",
+      "quantile": 0.5,
+      "index": 53284,
+      "chrom": "chr1",
+      "center": 5811057,
+      "observed_total_count": 150.0
+    }
+  ]
+}

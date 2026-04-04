@@ -1,0 +1,6 @@
+dataset_key,display_name,role,biological_group,local_status,current_local_evidence,priority,decision
+tutorial,Official tutorial K562,benchmark_anchor,blood_leukemia,ready,"/data1/zhoujiazhen/bylw_atac/chrombpnet_tutorial/data has merged.bam, overlap.bed.gz, blacklist, folds, bigwig pipeline history",p0,locked
+gm12878,GM12878,external_dataset_1,lymphoblastoid,ready,"/data1/zhoujiazhen/bylw_atac/chrombpnet_datasets/GM12878 has merged.bam + prep_v1 bigwig/nonpeaks",p0,locked
+independent_k562,Independent K562,external_dataset_candidate,blood_leukemia,ready,"/data1/zhoujiazhen/bylw_atac/chrombpnet_datasets/K562 has merged.bam + prep_v1 bigwig/nonpeaks",p2,deprioritized_because_tutorial_is_already_k562_like
+hela_s3,HeLa-S3 SRP166944,dataset_x_local_candidate,epithelial,partial,"/data1/zhoujiazhen/bylw_atac/chrombpnet_datasets/HeLa-S3 currently only has SRR8171302/1303/1304/1305 SRA payloads; no BAM, peaks or bigwig yet",p1,current_best_local_candidate_needing_alignment_and_peak_calling
+dataset_x_unresolved,Dataset-X final accession,dataset_x_final_slot,non_k562_non_gm12878,blocked,"Need one high-depth independent dataset with complete BAM + peaks + preprocessing assets",p1,freeze_after_accession_and_asset_check

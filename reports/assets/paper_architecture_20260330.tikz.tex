@@ -1,0 +1,47 @@
+\begin{tikzpicture}[
+  font=\small,
+  >=Latex,
+  node distance=7mm and 9mm,
+  data/.style={draw, rounded corners=2pt, align=center, minimum height=9mm, text width=21mm, fill=gray!12},
+  sig/.style={draw, rounded corners=2pt, align=center, minimum height=9mm, text width=26mm, fill=blue!10},
+  bias/.style={draw, rounded corners=2pt, align=center, minimum height=9mm, text width=26mm, fill=orange!14},
+  fuse/.style={draw, rounded corners=2pt, align=center, minimum height=9mm, text width=24mm, fill=green!12},
+  outbox/.style={draw, rounded corners=2pt, align=center, minimum height=9mm, text width=24mm, fill=teal!12},
+  arrow/.style={-Latex, thick},
+  sg/.style={-Latex, thick, dashed},
+  note/.style={font=\scriptsize, inner sep=1pt, fill=white}
+]
+
+\node[data] (dna) {One-hot DNA\\2114 bp};
+
+\node[sig, right=of dna] (stem) {Conv stem\\$k=21$, 2 conv layers};
+\node[sig, right=of stem] (tower) {Local tower\\8 residual dilated\\conv blocks};
+\node[sig, right=of tower] (tf) {Transformer encoder\\6 layers, 8 heads\\RoPE, $d_{\text{model}}=256$};
+\node[sig, right=of tf] (signal) {Signal heads\\profile projection\\center-pool count MLP};
+
+\node[bias, below=13mm of stem] (biasnet) {Bias branch\\ChromBPNet-style CNN\\4 dilated layers};
+\node[bias, right=of biasnet] (biasheads) {Bias heads\\profile + logcount\\$pool\_factor=32$};
+
+\node[fuse, right=18mm of signal] (fusion) {Fusion\\profile: add + \texttt{sg}\\count: log-sum-exp};
+\node[outbox, right=of fusion] (full) {Full outputs\\profile logits\\log-count};
+\node[outbox, above=11mm of full] (deb) {Debiased outputs\\signal-only profile\\signal-only log-count};
+
+\draw[arrow] (dna) -- (stem);
+\draw[arrow] (stem) -- (tower);
+\draw[arrow] (tower) -- (tf);
+\draw[arrow] (tf) -- (signal);
+
+\draw[arrow] (dna.south) |- (biasnet.west);
+\draw[arrow] (biasnet) -- (biasheads);
+
+\draw[arrow] (signal) -- (fusion);
+\draw[sg] (biasheads.east) -| (fusion.south);
+\node[note, above=1mm of fusion.south] {profile path uses stop-gradient};
+
+\draw[arrow] (fusion) -- (full);
+\draw[arrow] (signal.north east) |- (deb.west);
+
+\node[note, below=5mm of tower] {shared input sequence};
+\node[note, below=5mm of full] {paper-facing default: teacher v2 + center pool};
+
+\end{tikzpicture}

@@ -1,0 +1,715 @@
+\documentclass[11pt,a4paper]{ctexart}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]{hyperref}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{caption}
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{setspace}
+\usepackage[normalem]{ulem}
+
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+\title{TransChromBP 接入 Genos-1.2B 的实验设计与执行计划\\
+\large Phase 0 重跑前的修订版执行文档}
+\author{项目工作文档}
+\date{2026 年 3 月 20 日}
+
+\begin{document}
+
+\maketitle
+\onehalfspacing
+
+\begin{abstract}
+本文档用于回答一个非常具体但会直接影响后续资源投入的问题：\textbf{把 Genos-1.2B 纳入当前
+TransChromBP 架构，是否会带来净正收益。}
+
+截至 2026 年 3 月 20 日，本地已经完成 Genos-1.2B 的整仓加载、GPU 最小前向、embedding /
+next-token / generate 的基本可用性验证；与此同时，我们也已经拿到两个与本计划直接相关的先验：
+其一，当前 V2-full 相比 noTF 基线在 held-out peak 上有稳定收益，说明长程序列建模确实有价值；
+其二，bias-safe 机制的 full/debiased gap 已经压到很小，这意味着任何新分支的收益都必须在
+\emph{不破坏解释边界} 的前提下成立。
+
+基于这些约束，本计划采用三阶段推进：
+\textbf{Phase 0} 验证 Genos embedding 对 ATAC peak/nonpeak 是否具有可分性，并实测双向推理的显存与吞吐；
+\textbf{Phase 1} 仅在 Phase 0 过线后，执行 frozen Genos + adapter + gated addition 的双分支 pilot；
+\textbf{Phase 2} 则只在 Phase 1 已显示净增益时，才考虑 LoRA、cross-attention 或更长窗口等进一步优化。
+
+\textbf{截至 2026-03-21，Phase 0 尚未形成有效结论。}上一轮脚本曾给出“500+500 样本上 AUC=1.0”的结果，
+但其线性探针评估口径是对同一批样本 \texttt{fit} 后再回到同一批样本 \texttt{predict}，
+不能作为 go/no-go 依据。因此当前文档的定位已经调整为：
+\textbf{在 6000 的 \texttt{genos-1.2b} 环境中，用修正后的 hold-out + stratified CV 脚本重新完成 Phase 0，
+并以重跑结果决定是否进入 Phase 1。}
+
+Phase 1 相关代码也尚不能直接启动。已有草案是从旧版模型快照接出来的，
+与当前 V2/bias-safe 主线并不一致；因此在新的 Phase 0 结果出来前，
+本文档只保留 Phase 1 的设计原则和接入边界，不把任何实现状态写成“已完成”。
+
+本文档的核心贡献不是重复”可以试一试”，而是把实验目标、判定标准、监控指标、资源预算、代码改动范围、
+风险缓解和 go/no-go 边界一次性写清，避免 Genos 线变成新的无边界支线。
+\end{abstract}
+
+\tableofcontents
+
+\section{实验背景与本轮要回答的问题}
+
+当前项目已经基本确认两件事。
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Transformer 主干本身有真实收益。}在
+  \texttt{ablation\_tf\_20260318} 中，V2-full 相比 noTF 组在 held-out peak 上的
+  \texttt{profile\_target\_jsd\_debiased\_mean} 约改善 $0.00978$，
+  说明 ATAC profile prediction 不只是局部 motif 语法问题，长程上下文确实值得建模。
+  \item \textbf{Bias-safe 边界已经很脆弱也很宝贵。}最新消融显示
+  full/debiased gap 维持在极小量级；这意味着后续任何 foundation model 分支如果让该 gap
+  明显放大，即使表面指标略升，也不应被视为可靠收益。
+\end{enumerate}
+
+因此，Genos 实验真正要回答的不是“Genos 能不能跑起来”，而是下面三个更严格的问题：
+
+\begin{enumerate}[leftmargin=2em]
+  \item Genos 的 frozen hidden states 在 ATAC peak 与 nonpeak 上是否具有足够强的可分性；
+  \item 这种可分性接入到当前 V2 架构后，能否转化为 profile/count 的\textbf{净正收益}；
+  \item 该收益是否在 \textbf{不破坏 bias-safe 解释边界、不明显恶化背景区质量} 的前提下成立。
+\end{enumerate}
+
+换句话说，本计划的判断标准是“\textbf{有益且安全}”，而不是单纯“可接入”。
+
+\section{截至目前的已知事实与工程边界}
+
+\subsection{Genos 侧的关键约束}
+
+\begin{table}[H]
+\centering
+\small
+\caption{截至 2026-03-20 已确认的 Genos 关键事实及其对设计的直接含义。}
+\label{tab:genos_facts}
+\begin{tabularx}{\textwidth}{l l Y}
+\toprule
+项目 & 当前事实 & 对实验设计的直接含义 \\
+\midrule
+Tokenization & 单核苷酸（A/C/G/T/N） & 与 2114bp 输入天然 1:1 对齐，不存在 k-mer 降采样或位置失配问题 \\
+隐藏维度 & 1024 & 当前 TransChromBP 主干是 \texttt{d\_model=256}，必须经过 adapter 投影 \\
+注意力方向 & causal & 不能直接把单向 hidden state 当作双向表征，必须做 forward + reverse complement 对齐 \\
+模型规模 & MoE，推理时仅激活部分专家 & 参数规模大，但推理成本并不等于 1.2B dense 模型；适合先做 frozen 接入 \\
+本地接入状态 & 已通过最小加载、GPU 前向、embedding / generate 验证 & 当前主要不确定性不是“能不能用”，而是“对本任务有没有净收益” \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{TransChromBP 侧的现有边界}
+
+\begin{table}[H]
+\centering
+\small
+\caption{当前主模型的关键约束。Genos 方案必须服从这些约束，而不是绕开它们。}
+\label{tab:trans_constraints}
+\begin{tabularx}{\textwidth}{l l Y}
+\toprule
+项目 & 当前状态 & 对 Genos 设计的含义 \\
+\midrule
+输入长度 & 2114bp 输入，1000bp 监督区 & Phase 0 与 Phase 1 均应先沿用这一口径，避免同时引入长窗口变量 \\
+序列主干 & Conv stem + local tower + 6 层 Transformer & Genos 首轮应视为补充长程先验，而不是直接推翻已验证有效的结构 \\
+偏差建模 & 保留 ChromBPNet-style bias decomposition & Genos 不应直接接入 bias branch，避免模糊 bias / regulatory 边界 \\
+安全机制 & \texttt{profile\_bias\_stop\_gradient} 设为 \texttt{true} 已被证实更合理 & Genos 线默认沿用该设置，不为新分支回退到更危险的融合方式 \\
+现有基线 & V2-full 在 held-out test 上显著优于 noTF & Genos 的目标不是“证明 foundation model 很强”，而是要超过当前 V2-full 或至少在 pilot 上给出明确增益信号 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{核心假设、判定标准与停止规则}
+
+\subsection{核心假设}
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{H1：}Genos 的 bidirectional embedding 在 ATAC peak 与 nonpeak 上存在可检测的分布差异；
+  \item \textbf{H2：}这种差异经过轻量 adapter 后，能够为当前主分支提供 V2 自身尚未学全的长程序列先验；
+  \item \textbf{H3：}只要把 Genos 限制在 signal branch、并保留 bias-safe 机制，新分支就不必然导致 bias leakage；
+  \item \textbf{H4：}如果 frozen Genos 已无明显帮助，则直接进入 LoRA 或更复杂融合大概率只是在加大搜索空间，而不是解决核心问题。
+\end{enumerate}
+
+\subsection{总判定原则}
+
+\begin{table}[H]
+\centering
+\small
+\caption{本计划采用的三级判定口径。}
+\label{tab:decision_rule}
+\begin{tabularx}{\textwidth}{l Y}
+\toprule
+级别 & 判定含义 \\
+\midrule
+绿灯 & 有明确收益信号，且资源与安全边界可接受，可进入下一阶段 \\
+黄灯 & 信号存在但不稳，或资源代价偏高，需要缩小 pilot 或调整设计后再决定 \\
+红灯 & 不显示可分性，或明显恶化 bias-safe / nonpeak 指标，应该停止继续扩展 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{明确的停止规则}
+
+以下任一情况出现时，应视为\textbf{停止条件}：
+
+\begin{enumerate}[leftmargin=2em]
+  \item Phase 0 中最佳层的 peak/nonpeak 区分度只落在随机附近，且不同层均无明显优势；
+  \item Phase 1 中 \texttt{peak.profile\_target\_jsd\_full\_mean} 无改进，且 gate 明显塌缩到接近 0；
+  \item Phase 1 中 full/debiased gap 明显放大，或 nonpeak JSD 变差到足以抵消 peak 区收益；
+  \item 真实吞吐/显存表明 pilot 训练 wall-clock 超出可接受范围，而收益又没有足够大到支撑这笔成本。
+\end{enumerate}
+
+\section{Phase 0：可行性验证}
+
+\subsection{目标}
+
+Phase 0 不负责证明最终模型更强，只负责回答三个比“跑通脚本”更硬的问题：
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{表征层面：}Genos hidden states 是否对 peak / nonpeak 有区分度；
+  \item \textbf{层位层面：}哪一层 hidden state 最值得拿去做 Phase 1 的 adapter 输入；
+  \item \textbf{资源层面：}双向推理在 2114bp 口径下的真实显存与吞吐是否足以支撑 pilot。
+\end{enumerate}
+
+\subsection{数据与样本选择}
+
+当前建议沿用 tutorial canonical v1 预处理结果，并只使用 validation 染色体：
+
+\begin{table}[H]
+\centering
+\small
+\caption{Phase 0 数据口径。}
+\label{tab:phase0_data}
+\begin{tabularx}{\textwidth}{l l Y}
+\toprule
+项目 & 选择 & 说明 \\
+\midrule
+Peak 来源 & \texttt{filtered.peaks.bed} & 使用当前主线同口径 peak 集，避免另起数据语义 \\
+Nonpeak 来源 & \texttt{filtered.nonpeaks.bed} & 与现有训练管线保持一致，便于后续迁移到 Phase 1 \\
+染色体集合 & \texttt{folds.json} 中的 validation split & 避免 train/test 泄漏；Phase 0 只做可行性验证，不碰 held-out test \\
+窗口长度 & 2114bp，以区域中心截取 & 与当前主模型输入完全一致 \\
+样本数 & smoke：每类 50；正式：每类 500 & 先确认链路可跑，再做正式分析；如结果边缘，可扩至每类 2000 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{双向特征提取方案}
+
+由于 Genos 是 causal 模型，位置 $i$ 的 forward hidden state 只看见左侧上下文。
+因此 Phase 0 默认采用\textbf{双向拼接前的最简对称方案}：
+
+\begin{align}
+h_i^{\rightarrow} &= \mathrm{Genos}(x)_i, \\
+h_i^{\leftarrow} &= \mathrm{Flip}\left(\mathrm{Genos}(\mathrm{RC}(x))\right)_i, \\
+h_i^{\mathrm{bidir}} &= \frac{1}{2}\left(h_i^{\rightarrow} + h_i^{\leftarrow}\right).
+\end{align}
+
+其中 $\mathrm{RC}(x)$ 为输入序列的 reverse complement，
+$\mathrm{Flip}(\cdot)$ 用于把 RC 路径重新对齐到原始坐标系。
+
+这套方案有三个优点：
+
+\begin{enumerate}[leftmargin=2em]
+  \item 实现简单，可直接建立“causal 补偿后还有没有信息”的最小结论；
+  \item 额外代价清楚，就是约 2 倍前向；
+  \item 若连这个最保守方案都无帮助，就没有必要先上更复杂的 cross-direction fusion。
+\end{enumerate}
+
+\subsection{层位选择策略}
+
+当前不应先验认定“最后一层最好”。Genos 的中层往往更偏表征，末层更偏语言模型输出头相关特征。
+因此正式分析建议至少检查以下层位：
+
+\[
+\{0, 3, 6, 9, \mathrm{last}\}.
+\]
+
+对每一层都计算两种 pooling：
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{global mean}：全 2114bp 平均，反映整体序列背景；
+  \item \textbf{center mean}：仅对中间 1000bp 监督区平均，反映任务相关区域。
+\end{enumerate}
+
+若中层和末层表现接近，Phase 1 优先选择\textbf{更中间的一层}，
+因为它通常更少带有 next-token 专属偏置，也更符合“迁移表征”而非“直接语言头”的用途。
+
+\subsection{分析方法}
+
+Phase 0 的核心分析不应依赖 t-SNE 这类视觉上容易“看起来分开”的方法。
+推荐按以下顺序判断：
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{线性探针（主证据）}：
+  对 pooled embedding 做标准化，使用 stratified split 或 5-fold CV 评估
+  logistic regression 的 AUC / accuracy；
+  \item \textbf{中心/侧翼对比（辅助证据）}：
+  比较 center 1000bp 与两侧 flank 的 positional variance ratio，
+  看判别信息是否集中在监督区；
+  \item \textbf{PCA（可解释可视化）}：
+  作为定性图，不作为主要结论；
+  \item \textbf{t-SNE/UMAP（可选）}：
+  只用于补充展示，不能单独作为“可分”的证据；
+  \item \textbf{吞吐与显存 benchmark（资源证据）}：
+  测量 batch size $\in \{4, 8, 16\}$ 下的双向推理时延与峰值显存。
+\end{enumerate}
+
+\paragraph{对现有脚本的使用说明}
+仓库中的 \texttt{scripts/genos\_feasibility.py} 已修正为当前正式口径：
+覆盖多层提取（layers 0/3/6/9/12）、peak/nonpeak 抽样（默认 validation split）、
+双向 embedding（forward + RC averaging）、hold-out 线性探针、stratified CV、
+以及 batch throughput benchmark。
+本节后续若出现任何数值，应以该修正版脚本在 6000 上重新生成的
+\texttt{feasibility\_report.json} 为准，而不是引用旧的训练集内回评结果。
+
+\subsection{Phase 0 输出物}
+
+\begin{table}[H]
+\centering
+\small
+\caption{建议的 Phase 0 输出物。}
+\label{tab:phase0_outputs}
+\begin{tabularx}{\textwidth}{l Y}
+\toprule
+输出物 & 用途 \\
+\midrule
+\texttt{feasibility\_report.json} & 汇总各层 AUC、accuracy、variance ratio 与 throughput benchmark \\
+\texttt{layer\_probe\_summary.csv} & 便于横向比较不同层位与不同 pooling 的结果 \\
+\texttt{pca\_peak\_nonpeak\_*.png} & 定性展示可分性，不作为主证据 \\
+\texttt{throughput\_benchmark.json} & 为 Phase 1 的 batch 与 wall-clock 预算提供依据 \\
+\texttt{phase0\_note.md} 或补充日志 & 记录最终选中的层位和理由，避免后续反复改口径 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Phase 0 的 go/no-go 阈值}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Phase 0 判定阈值。}
+\label{tab:phase0_thresholds}
+\begin{tabularx}{\textwidth}{l Y}
+\toprule
+判定 & 建议阈值 \\
+\midrule
+绿灯 & 最佳层 \texttt{center AUC $\ge 0.70$}，且单卡 A6000 在 batch=8 双向推理峰值显存 $\le 25$\,GB（留够训练余量） \\
+黄灯 & 最佳层 \texttt{0.60 $\le$ AUC $< 0.70$}，或 batch=8 显存超 25\,GB 但 batch=4 仍可用；可考虑只做最小 pilot \\
+红灯 & 最佳层 \texttt{AUC $< 0.55$}，或最小 batch 显存也超出单卡容量；应停止进入 Phase 1 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{说明}
+这里的 AUC 阈值不是统计学绝对真理，而是一个工程门槛：
+如果 frozen embedding 在最简单的 peak/nonpeak 线性判别上都无法超过这个门槛，
+那么它在更难的 profile regression 中带来稳定净收益的概率就很低。
+
+\subsection{Phase 0 当前状态（2026-03-21 修订）}
+
+\textbf{当前状态不是“已完成”，而是“待重跑”。}
+上一轮结果曾提示 Genos 中层可能有很强的 peak/nonpeak 区分度，
+但由于评估口径存在训练集内回评，所有具体数值都不应继续作为正式结论引用。
+
+\subsubsection{本轮修订后真正要产出的内容}
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Smoke run：}在 6000 上用 \texttt{QUICK=1}（50+50）确认路径、环境、GPU 前向与输出文件全部正常；
+  \item \textbf{正式 run：}用每类 500 个样本完成多层 hold-out + stratified CV 分析；
+  \item \textbf{资源评估：}重新测量 batch size $\in \{4, 8, 16\}$ 的双向推理吞吐与峰值显存；
+  \item \textbf{层位选择：}仅在新结果中依据 \texttt{center\_cv\_auc\_mean} 选择候选层位。
+\end{enumerate}
+
+\subsubsection{本轮判定前的保守约束}
+
+\begin{itemize}[leftmargin=2em]
+  \item 在新的 \texttt{feasibility\_report.json} 产出前，不预设最佳层位，也不预设推荐 batch size；
+  \item 所有关于 “AUC=1.0”、“layer 3 最优”、“batch=8 需 22.1\,GB” 的表述，当前都只应视为\textbf{待复核的历史观察}；
+  \item 若正式 run 的 hold-out / CV 结果只达到黄灯区间，则 Phase 1 应先收缩为最小 frozen pilot，而不是直接扩展实现范围。
+\end{itemize}
+
+\section{Phase 1：Frozen Genos 双分支融合 Pilot}
+
+\subsection{总体思路}
+
+Phase 1 的原则是：\textbf{先验证净增益，再谈更复杂的适配。}
+因此首轮只允许训练以下新增部分：
+
+\begin{enumerate}[leftmargin=2em]
+  \item Genos layer selector（固定选中某一层，或极轻量 scalar mix）；
+  \item adapter（$1024 \rightarrow 256$）；
+  \item gate；
+  \item 与现有主模型一致的 signal branch / heads / bias branch 可训练部分。
+\end{enumerate}
+
+Genos 主体保持 \textbf{frozen + eval + no\_grad}，
+不让本轮实验被“大模型微调”这个额外变量污染。
+
+\subsection{默认架构}
+
+在 Phase 0 重跑完成前，Phase 1 只保留\textbf{结构模板}，不把任何单层选择写死。
+默认结构如下：
+
+\begin{align}
+f^{\mathrm{local}} &= \mathrm{LocalTower}(\mathrm{ConvStem}(x)), \\
+h^{\mathrm{genos}} &= \mathrm{BidirGenos}(x, \mathrm{layer}=l^\star), \quad \text{（frozen，1024维）}\\
+z &= \mathrm{LN}\!\left(W_{\mathrm{proj}} h^{\mathrm{genos}}\right), \quad \text{（$1024 \rightarrow 256$）}\\
+g &= \sigma\!\left(W_{\mathrm{gate}} f^{\mathrm{local}} + b_{\mathrm{gate}}\right), \\
+f^{\mathrm{fused}} &= f^{\mathrm{local}} + g \odot z.
+\end{align}
+
+随后把 $f^{\mathrm{fused}}$ 送入现有 6 层 Transformer 与原有 profile/count heads；
+bias branch、profile fusion、count fusion 全部维持现状。
+
+\paragraph{关于层位选择的约束}
+最终层位 $l^\star$ 必须由新的 Phase 0 结果决定。
+在此之前，文档只保留两个原则：
+（1）若中层与末层表现接近，优先选更中间的层位；
+（2）除非代码真的实现按层截断前向，否则\textbf{不能}把“读取中间层 hidden state”
+写成“early exit 节省 75\% 计算”。
+
+\paragraph{为什么选 gated addition}
+这是当前最稳妥的首轮方案，因为它同时满足三件事：
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{允许模型忽略 Genos。}如果 foundation feature 没帮助，gate 可以自然收缩到接近 0；
+  \item \textbf{保留现有主干。}当前 V2 已经证明 local + Transformer 有效，不需要先把成熟部分拆掉；
+  \item \textbf{比 cross-attention 更易归因。}一旦无收益，我们更容易判断问题是“特征无用”还是“融合太弱”，不会被复杂交互掩盖。
+\end{enumerate}
+
+\paragraph{关键实现细节}
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{gate 初始偏置取负值。}建议让 $b_{\mathrm{gate}}$ 初始在 $-2$ 左右，
+  对应初始 gate $\approx 0.12$，保证训练早期仍以 local branch 为主；
+  \item \textbf{adapter 后加 LayerNorm。}防止 1024 维 foundation feature 的数值尺度压过本地主干；
+  \item \textbf{Genos 特征不进入 bias branch。}避免 foundation model 成为新的 shortcut 通道；
+  \item \textbf{继续保留 \texttt{profile\_bias\_stop\_gradient} 设为 \texttt{true}。}
+  新分支不应以牺牲 bias-safe 为代价换取表面提升。
+\end{enumerate}
+
+\subsection{对照矩阵}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Phase 1 的对照矩阵（含 Phase 0 启发的关键对照组）。}
+\label{tab:phase1_matrix}
+\begin{tabularx}{\textwidth}{l l Y}
+\toprule
+组别 & Genos 输入方式 & 目的 \\
+\midrule
+G0: baseline\_v2 & 无（现有 V2-full 同口径） & 作为主比较对象 \\
+G1: genos\_gate & frozen Genos 候选层 $l^\star$，\textbf{逐位置}嵌入 [B, L, 256] & 主实验：Genos 是否带来净增益 \\
+G2: genos\_mean & frozen Genos 候选层 $l^\star$，全序列\textbf{均值广播} [B, L, 256] & 关键对照：增益来自精细位置信息还是粗粒度 peak indicator？ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{为什么用 G2（均值广播）替代原来的 genos\_only}
+只要新的 Phase 0 重跑再次显示 Genos 对 peak/nonpeak 存在明显可分性，
+就会引发一个核心疑问：Genos 提供的到底是精细的碱基分辨率调控信息，
+还是仅仅一个"这里是开放染色质"的粗粒度信号？
+G2 通过 mean-pooling 后广播到每个位置，保留了\textbf{完全相同的全局信息量}，
+但丢掉了所有位置细节。
+G1 vs G2 的比较直接回答这个问题：
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{G1 $>$ G2 $\approx$ G0}：Genos 逐位置表征有精细贡献 → Phase 2 值得推进
+  \item \textbf{G1 $\approx$ G2 $>$ G0}：只有粗粒度信号有效 → Genos 仅充当 peak indicator，价值有限
+  \item \textbf{G1 $\approx$ G2 $\approx$ G0}：Genos 对 profile 回归无帮助 → 停止
+\end{itemize}
+
+原方案中的 \texttt{genos\_only}（移除 Transformer）可推迟到 G1 确认有收益后再做，
+因为当前的核心问题不是"Genos 能否替代本地 Transformer"（ablation\_tf 已证明其有效），
+而是"Genos 能否与本地 Transformer 互补"。
+
+\paragraph{关于 baseline 的比较口径}
+pilot 只跑 20 epoch，因此最稳妥的做法是准备一个\textbf{同口径 baseline\_20ep\_s42}（G0）；
+若资源不允许重跑，也至少应取现有 baseline 在相同 epoch 范围内的验证轨迹做近似比较，
+避免把 20 epoch pilot 和 40 epoch fully trained 结果直接硬比。
+
+\subsection{训练配置建议}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Phase 1 pilot 的默认训练配置。}
+\label{tab:phase1_train}
+\begin{tabularx}{\textwidth}{l l Y}
+\toprule
+项目 & 建议值 & 说明 \\
+\midrule
+训练轮数 & 20 epoch & 先看趋势，不直接投入完整多 seed 长跑 \\
+随机种子 & 42 & 首轮只用单 seed；通过后再扩多 seed \\
+精度 & bf16 & 与现有主线一致 \\
+Genos 参数 & frozen & 本轮不做全参微调 \\
+Adapter & 单层线性或线性 + LN & 先从最小可用结构开始 \\
+Gate & position-wise, channel-wise sigmoid gate & 可学习地控制 Genos 注入强度 \\
+Batch 选择 & 待 Phase 0 重跑后确定 & 仅以新的 throughput / peak memory 结果作为预算依据，不继续沿用旧数值 \\
+硬件建议 & 6000 单卡或双卡 A6000 & 6002 暂不作为首选，因为当前 Genos 使用验证主要完成于 6000 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Phase 1 的主监控指标}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Phase 1 监控指标，分为收益指标与安全指标。}
+\label{tab:phase1_metrics}
+\begin{tabularx}{\textwidth}{l l Y}
+\toprule
+类别 & 指标 & 判读方式 \\
+\midrule
+主收益 & \texttt{peak.profile\_target\_jsd\_full\_mean} & 首要指标，下降为优；pilot 阶段优先看验证集，收口后再看 held-out test \\
+信号质量 & \texttt{peak.profile\_target\_jsd\_debiased\_mean} & 判断收益是否真的来自 signal branch，而不是 full 输出“看起来更好” \\
+Count 质量 & \texttt{peak.count\_pearson\_{full,debiased}}、\texttt{MAE} & 如果 JSD 持平而 count 明显改善，也可以视作有限正收益 \\
+背景质量 & \texttt{nonpeak.profile\_target\_jsd\_full\_mean} & 若背景区明显恶化，需要警惕 foundation feature 的背景偏置 \\
+安全边界 & full/debiased gap & gap 仍应保持极小；若显著上升，说明解释边界被破坏 \\
+融合行为（全局） & gate 的均值/标准差/min/max 轨迹 & 若长期接近 0，说明 Genos 无贡献；若长期接近 1，说明本地主干被压制 \\
+融合行为（区域） & gate 分 center 1000bp 与 flank 两侧的均值 & 若 center $\gg$ flank，说明 Genos 在监督区有针对性贡献；若均匀，说明 Genos 只提供全局背景 \\
+G1 vs G2 比较 & 同指标下 genos\_gate 与 genos\_mean 的差异 & 如果两者接近，说明位置细节无用（见对照矩阵） \\
+稳定性 & 各层 scale / loss 曲线 & 观察是否出现训练不稳、震荡或收敛显著变慢 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Phase 1 的 go/no-go 阈值}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Phase 1 pilot 结束后的建议判定规则。}
+\label{tab:phase1_thresholds}
+\begin{tabularx}{\textwidth}{l Y}
+\toprule
+判定 & 建议阈值 \\
+\midrule
+绿灯 & 相比 matched baseline，\texttt{peak.profile\_target\_jsd\_full\_mean} 改善 $\ge 0.002$，且 full/debiased gap 仍保持在极小量级，nonpeak JSD 无明显恶化 \\
+黄灯 & JSD 改善 $< 0.002$ 但 count 指标有稳定提升，或 gate 行为显示 Genos 只在部分位置有帮助；可考虑小幅扩展但不应直接上多 seed 长跑 \\
+红灯 & 无明显收益，或 gate 完全塌缩，或安全指标恶化；应终止 Phase 2，回到基线主线 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Epoch 5 中间检查点}
+不应等到 20 epoch 结束后才做判定。训练配置中 \texttt{checkpoint\_every\_epochs} 设为 5，
+在 epoch 5 时进行显式的中间 go/no-go 检查：
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{gate 活性检查}：gate 均值是否 $> 0.05$（$\text{sigmoid}(-3) \approx 0.05$）？
+  如果已经塌缩到 $\approx 0$，说明 Genos 特征对梯度信号没有响应，继续训练大概率无收益；
+  \item \textbf{趋势检查}：G1 的验证 JSD 是否有任何优于 G0 的趋势？
+  不要求 epoch 5 就显著领先，但应至少可见收敛方向；
+  \item \textbf{G1 vs G2 初步比较}：如果 epoch 5 时 G1 $\approx$ G2，
+  提前预警位置信息可能无效，可继续跑到 epoch 10 再最终判定。
+\end{enumerate}
+
+如果 epoch 5 同时满足"gate 塌缩"和"无趋势优势"，应考虑提前终止以节省 GPU 资源。
+
+\section{Phase 2：仅在 Phase 1 有收益时才触发}
+
+Phase 2 不是默认路线，而是\textbf{条件触发路线}。它的存在前提是：
+Phase 1 已证明 frozen Genos 至少有一项稳定净收益，且没有破坏 bias-safe 边界。
+
+\subsection{可选方向}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Phase 2 的候选方向与触发条件。}
+\label{tab:phase2}
+\begin{tabularx}{\textwidth}{l l Y}
+\toprule
+方向 & 触发条件 & 目的 \\
+\midrule
+LoRA 微调 & frozen Genos 已有收益，但 gate 仍偏保守 & 在不放开全参的前提下，适配最后 2--4 层以争取额外收益 \\
+Cross-attention & Genos 有信息，但 gated addition 不够用 & 让 local branch 以 query 主动读取 foundation feature \\
+更长窗口 & 明确观察到 distal 依赖受限于 2114bp & 把问题升级为“长窗口实验线”，而不是简单融合改造 \\
+多层 scalar mix & Phase 0 显示不同层各有优势 & 学习少量层间权重，而非手工固定单层 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{为什么不直接从 LoRA 开始}
+因为一旦从第一天就允许 foundation model 发生参数更新，实验很难分清：
+收益究竟来自 Genos 原有知识，还是来自“再训练了一个更大的模型”。
+对当前项目而言，先拿到 frozen 增益证据，比更早上复杂适配更重要。
+
+\section{代码改动范围与建议的文件拆分}
+
+\subsection{Phase 0}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Phase 0 相关文件。}
+\label{tab:phase0_files}
+\begin{tabularx}{\textwidth}{l Y}
+\toprule
+文件 & 职责 \\
+\midrule
+\texttt{scripts/genos\_feasibility.py} & 已有草案；负责 peak/nonpeak 采样、多层 embedding 提取、区分度分析、吞吐 benchmark \\
+\texttt{outputs/genos\_feasibility/} & 保存 JSON 报告、图和基准结果 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Phase 1}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Phase 1 相关文件（计划接入，尚未按当前主线重接）。}
+\label{tab:phase1_files}
+\begin{tabularx}{\textwidth}{l l Y}
+\toprule
+文件 & 操作 & 职责 \\
+\midrule
+\texttt{src/.../models/genos\_adapter.py} & 计划新建 & \texttt{GenosFeatureExtractor}（冻结提取器，独立于 DDP）+ \texttt{GenosGatedAdapter}（可训练 adapter + gate） \\
+\texttt{src/.../models/transchrombp.py} & 计划修改 & forward() 增加 \texttt{genos\_feat} 参数；build 函数解析 genos config \\
+\texttt{src/.../models/\_\_init\_\_.py} & 计划修改 & 导出新模块 \\
+\texttt{src/.../training/train\_ddp.py} & 计划修改 & 训练/验证循环中加入 Genos 特征提取（no\_grad 上下文） \\
+\texttt{configs/model/v2\_genos\_frozen.yaml} & 计划新建 & G1：逐位置 Genos 嵌入 (\texttt{pool\_mode: none}) \\
+\texttt{configs/model/v2\_genos\_mean.yaml} & 计划新建 & G2：均值广播对照 (\texttt{pool\_mode: mean}) \\
+\texttt{configs/train/train\_genos\_pilot.yaml} & 计划新建 & 20ep, s42, matched baseline 口径 \\
+\texttt{scripts/run\_genos\_pilot.sh} & 计划新建 & 统一启动，支持 \texttt{gate}/\texttt{mean}/\texttt{baseline} 参数 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{核心设计决策}
+Genos 1.2B 参数作为\textbf{外部预处理器}运行，不进入 DDP、optimizer 或 checkpoint。
+\texttt{GenosFeatureExtractor} 在训练循环中以 \texttt{torch.no\_grad()} 提取特征后，
+作为额外输入传入主模型的 \texttt{forward(genos\_feat=...)}。
+但这套实现\textbf{必须}在当前 \texttt{tmp\_remote\_edit/transchrombp} 主线上重接，
+并保留现有的 \texttt{local\_tower}、bias-safe 机制与 validation 指标口径；
+旧版 \texttt{.codex\_remote\_edit} 草案不能直接视为可运行实现。
+
+\subsection{命名与输出目录建议}
+
+\begin{table}[H]
+\centering
+\small
+\caption{推荐命名规范。}
+\label{tab:naming}
+\begin{tabularx}{\textwidth}{l l Y}
+\toprule
+类别 & 模板 & 说明 \\
+\midrule
+Phase 0 smoke & \texttt{genos\_p0\_smoke\_\{date\}} & 快速验证脚本能跑通 \\
+Phase 0 full & \texttt{genos\_p0\_full\_\{date\}} & 正式层位与资源分析 \\
+Phase 1 baseline (G0) & \texttt{genos\_baseline\_pilot\_\{date\}\_s42} & 同口径 baseline 对照 \\
+Phase 1 gate (G1) & \texttt{genos\_gate\_pilot\_\{date\}\_s42} & 冻结双分支主实验 \\
+Phase 1 mean (G2) & \texttt{genos\_mean\_pilot\_\{date\}\_s42} & 均值广播关键对照 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{资源预算与时间线}
+
+\subsection{资源预算原则}
+
+本计划不建议在没有 Phase 0 证据前直接投入双卡长训。
+更合理的预算方式是“\textbf{先用最小代价排除无效路线，再决定是否扩大投入}”。
+
+\begin{table}[H]
+\centering
+\small
+\caption{分阶段资源预算。}
+\label{tab:budget}
+\begin{tabularx}{\textwidth}{l l Y}
+\toprule
+阶段 & 资源口径 & 预算原则 \\
+\midrule
+Phase 0 smoke & 6000 单卡 A6000，50+50 样本 & 用于验证链路、环境、文件路径与基本显存 \\
+Phase 0 full & 6000 单卡 A6000，500+500 样本 & 用于正式层位选择与资源评估 \\
+Phase 1 pilot & 6000 单卡或双卡 A6000，20 epoch，seed=42 & 只要能得到明确趋势即可，不追求一次到位的论文级统计稳定性 \\
+Phase 2 & 视 Phase 1 结果而定 & 只有在已看到净收益时才追加预算 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{建议时间线}
+
+\begin{table}[H]
+\centering
+\small
+\caption{建议时间线。}
+\label{tab:timeline}
+\begin{tabularx}{\textwidth}{l Y}
+\toprule
+时间点 & 工作内容 \\
+\midrule
+Day 0 & 修订文档、纠正脚本口径、确认 6000 环境与输出目录 \\
+Day 1 & 运行 Phase 0 smoke（50+50）；若通过，再跑正式验证（500+500） \\
+Day 2 & 根据新的 Phase 0 结果确定候选层位与 batch 预算，并完成 Phase 1 rebase checklist \\
+Day 3--5 & 仅在 Phase 0 过线后，按当前主线实现 \texttt{genos\_adapter.py}、修改 \texttt{transchrombp.py}、跑 Phase 1 pilot（seed=42，20 epoch） \\
+Day 6 & 复盘：若 pilot 有净收益，再决定是否扩到多 seed 或进入 Phase 2；若无收益，直接收口 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{主要风险与缓解策略}
+
+\begin{table}[H]
+\centering
+\small
+\caption{本轮 Genos 线最值得警惕的风险。}
+\label{tab:risk}
+\begin{tabularx}{\textwidth}{l Y Y}
+\toprule
+风险 & 表现 & 缓解策略 \\
+\midrule
+Credit assignment 失败 & gate 很快塌到 0 或饱和到 1，训练难以判断谁在起作用 & gate 低值初始化；首轮只做 frozen + 最小 adapter；优先监控 gate 分布而不是只看最终分数 \\
+Bias leakage 回潮 & full/debiased gap 放大 & Genos 不进入 bias branch；继续保留 \texttt{profile\_bias\_stop\_gradient} 设为 \texttt{true}；把 gap 设为强约束指标 \\
+背景区偏置 & nonpeak JSD 恶化 & 把 nonpeak 指标纳入主监控，不允许只盯 peak 指标 \\
+层位选错 & 最后一层无效但中层有效，或反之 & Phase 0 明确做多层比较，不直接拍脑袋固定最后一层 \\
+吞吐过慢 & wall-clock 高到挤占主线实验资源 & 先做 Phase 0 benchmark，再反推 pilot batch 和训练预算；必要时只跑单 seed \\
+比较口径失真 & 用 20 epoch pilot 对比 40 epoch fully trained baseline & 尽量准备 matched baseline，或至少用相同 epoch 范围做趋势比较 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{推荐的立即执行顺序}
+
+Phase 0 尚待重跑，当前状态为\textbf{重新建立 go/no-go 依据}。后续推荐执行顺序：
+
+\begin{enumerate}[leftmargin=2em]
+  \item 先在 6000 的 \texttt{genos-1.2b} 环境里用 \texttt{QUICK=1} 跑通修正后的 \texttt{scripts/genos\_feasibility.py}；
+  \item 再跑正式 Phase 0（500+500 样本），只认 hold-out + stratified CV 的新结果；
+  \item 根据新结果决定候选层位、batch 预算与 go/no-go；
+  \item 只有在 Phase 0 过线后，才在当前主线实现 \texttt{genos\_adapter.py}、修改 \texttt{transchrombp.py} 接入双分支融合，
+  创建 matched baseline 口径的 \texttt{v2\_genos\_frozen.yaml} 配置；
+  \item 先只做 \texttt{seed=42, 20 epoch} 的最小 pilot，不要同时打开 LoRA、cross-attention 或更长窗口；
+  \item 只有在 pilot 已经显示净收益且安全指标稳定时，才把 Genos 线升级为多 seed 或更复杂适配路线。
+\end{enumerate}
+
+\section{结论}
+
+对当前项目而言，Genos-1.2B 是一条\textbf{值得验证但必须控边界}的实验线。
+它最吸引人的地方不是“模型更大”，而是：
+单核苷酸 tokenization 与当前输入天然对齐，且已有外部长程表示能力；
+它最危险的地方也很明确：
+一旦新分支让 credit assignment 失控、让 bias-safe 边界退化，哪怕分数略升，也会削弱整条方法线的解释力。
+
+当前还不能说 Phase 0 已经回答了问题。更准确的表述是：
+\textbf{Genos-1.2B 这条线已经具备了重新做有效验证的工程条件，但“是否有正收益”仍需新的 Phase 0 结果来回答。}
+
+当前推荐的策略是：
+\textbf{先在 6000 的 \texttt{genos-1.2b} 环境中重跑 Phase 0，拿到有效的 hold-out / CV 证据；
+只有在 frozen 路线显示明确增益信号后，才进入 Phase 1 pilot，更不要在此之前上 LoRA 或更复杂融合。}
+
+这条节奏虽然保守，但它能最大程度保证：
+后续如果 Genos 真的有帮助，我们拿到的是一条边界清楚、证据完整、可写进论文的方法线；
+如果它没有帮助，我们也能尽快、低成本、可复盘地收口，而不是在大模型支线上持续失血。
+
+\end{document}

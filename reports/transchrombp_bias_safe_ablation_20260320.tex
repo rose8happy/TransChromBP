@@ -1,0 +1,465 @@
+\documentclass[11pt,a4paper]{ctexart}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]{hyperref}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{caption}
+\usepackage{amsmath}
+\usepackage{multirow}
+
+\title{TransChromBP Bias-Safe 机制消融实验分析报告\\
+\large 基于 RTX\,3080 的 $2 \times 2$ 析因实验：\texttt{pool\_factor} $\times$ \texttt{stop\_gradient}}
+\author{项目工作文档}
+\date{2026 年 3 月 20 日}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+本报告分析了在 6002 服务器（单卡 RTX\,3080 12\,GB）上完成的 Bias-Safe 机制消融实验。
+该实验采用 $2 \times 2$ 析因设计，系统考察了偏差分支中
+\texttt{profile\_pool\_factor} $\in \{32, 1\}$ 与
+\texttt{profile\_bias\_stop\_gradient} $\in \{\mathrm{true}, \mathrm{false}\}$
+两个超参数对模型性能和偏差隔离效果的影响。
+
+四组实验（B1--B4）均顺利完成，全部由 early stopping 终止（patience=8）。
+核心发现如下：
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{性能差异极小}：四组变体在主评估指标
+    \texttt{peak.profile\_target\_jsd\_debiased\_mean} 上的最优值范围仅为
+    $[0.44130, 0.44222]$，全距仅 $0.00092$，远小于 epoch 间自然波动。
+    这说明在当前训练框架下，这两个超参数对最终 profile 预测质量的影响可以忽略。
+  \item \textbf{stop\_gradient 是偏差隔离的关键}：虽然四组的最终 JSD 接近，
+    但 \texttt{stop\_gradient=true} 的两组（B1、B2）在偏差隔离指标上显著优于
+    \texttt{stop\_gradient=false} 的两组（B3、B4）。
+    训练末期的 full/debiased JSD gap 分别为 $< 0.0005$ 与 $0.001 \sim 0.003$，
+    相差一个数量级。
+  \item \textbf{pool\_factor 的影响有限}：\texttt{pool\_factor=1}（无池化瓶颈）
+    在 \texttt{sg=true} 时略优于 \texttt{pool\_factor=32}，
+    但在 \texttt{sg=false} 时反转，不存在稳健的主效应。
+\end{enumerate}
+
+综合考虑性能与安全性，推荐默认配置为
+\texttt{stop\_gradient=true}，\texttt{pool\_factor} 可保持默认值 32 或降至 1
+（性能无显著差异，但 1 更简洁）。
+\end{abstract}
+
+\tableofcontents
+
+% ============================================================
+\section{实验背景与动机}
+% ============================================================
+
+TransChromBP 的 bias-safe 训练框架通过将偏差分支（bias branch）与主分支
+（main branch）分离来防止偏差泄露（bias leakage）。两个关键的架构超参数控制了
+这种分离的程度：
+
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{\texttt{profile\_pool\_factor}}：偏差分支输出在与主分支融合前的
+    空间平均池化因子。\texttt{pool\_factor=32} 表示将 1000\,bp 的 profile 先下采样到
+    约 31 个 bin，再上采样回 1000\,bp 进行相加融合——这使偏差分支只能提供低频信息，
+    防止其「偷走」高频的 TF 信号。\texttt{pool\_factor=1} 表示不池化，
+    偏差分支保留全分辨率输出。
+  \item \textbf{\texttt{profile\_bias\_stop\_gradient}}：是否对融合后反传到偏差分支
+    profile 路径的梯度施加 \texttt{stop\_gradient}。\texttt{true} 意味着主分支的
+    profile loss 不会通过融合操作向偏差分支传梯度，偏差分支只靠自身的 debiased loss
+    来更新；\texttt{false} 则允许梯度自由回传。
+\end{itemize}
+
+此前的实验已验证了 Transformer 主干的独立收益（在 A6000 上的
+\texttt{ablation\_tf\_20260318}）。本轮实验聚焦于 bias-safe 机制本身的设计选择，
+目的是回答：\emph{不同的偏差隔离强度是否会影响模型的最终性能或偏差泄露程度？}
+
+% ============================================================
+\section{实验设计}
+% ============================================================
+
+\subsection{析因矩阵}
+
+\begin{table}[H]
+\centering
+\caption{$2 \times 2$ 析因设计矩阵。}
+\label{tab:factorial}
+\begin{tabular}{lccl}
+\toprule
+组别 & \texttt{pool\_factor} & \texttt{stop\_gradient} & 描述 \\
+\midrule
+B1 & 32 & true  & 基线（强隔离：低频瓶颈 + 梯度截断） \\
+B2 & 1  & true  & 无瓶颈（全分辨率偏差，但梯度截断） \\
+B3 & 32 & false & 无梯度截断（低频瓶颈，但允许回传） \\
+B4 & 1  & false & 完全耦合（无瓶颈 + 无梯度截断） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{训练配置}
+
+\begin{table}[H]
+\centering
+\small
+\caption{训练超参数。四组实验仅 \texttt{pool\_factor} 和 \texttt{stop\_gradient} 不同，其余完全相同。}
+\label{tab:train_config}
+\begin{tabular}{ll}
+\toprule
+项目 & 设置 \\
+\midrule
+实验标签 & \texttt{bias\_safe\_ablation\_20260318} \\
+服务器 & 6002（RTX\,3080 12\,GB $\times$ 1） \\
+数据集 & tutorial canonical v1（hg38, ENCODE ATAC-seq） \\
+序列长度 & 2114\,bp（输入）→ 1000\,bp（输出 profile） \\
+共享偏差预训练 & \texttt{ablation\_tf\_20260318\_shared\_bias/best.pt} \\
+随机种子 & 42 \\
+最大训练轮数 & 30 \\
+批大小 & 16/GPU $\times$ grad\_accum=2 = 有效 32 \\
+优化器 & AdamW（$\mathrm{lr}=5\times 10^{-4}$, $\beta=(0.9, 0.95)$, wd=$0.01$） \\
+调度器 & cosine（warmup 6\%, min\_lr\_ratio=0.1） \\
+精度 & bf16 \\
+损失权重 & profile=1.0, count=0.1, debiased\_profile=2.0 \\
+Early stopping & patience=8, metric=\texttt{peak.profile\_target\_jsd\_debiased\_mean}（$\downarrow$） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{串行执行}
+
+四组实验在单卡上串行运行：B1 → B2 → B3 → B4。
+Orchestrator 脚本于 2026-03-18 21:47 启动，2026-03-20 17:52 完成，
+总耗时约 44 小时，失败数 0/4。
+
+% ============================================================
+\section{主要结果}
+% ============================================================
+
+\subsection{最优验证指标对比}
+
+\begin{table}[H]
+\centering
+\small
+\caption{四组实验的 best checkpoint 验证指标（\texttt{peak} split）。
+  所有值取自 early stopping 触发前的历史最优 epoch。
+  最优指标为 \texttt{peak.profile\_target\_jsd\_debiased\_mean}（$\downarrow$更优）。}
+\label{tab:best_metrics}
+\begin{tabular}{l c c c c c c}
+\toprule
+组别 & best JSD$_\text{deb}$ & best epoch & JSD$_\text{full}$ & count $r_\text{deb}$ & count $r_\text{full}$ & MAE$_\text{deb}$ \\
+\midrule
+B1 (p32, sg) & 0.44222 & 13 & 0.44221 & 0.7965 & 0.8032 & 764.3 \\
+\textbf{B2 (p1, sg)} & \textbf{0.44130} & 15 & 0.44129 & 0.7959 & 0.8018 & 706.4 \\
+B3 (p32, ¬sg) & 0.44172 & 15 & 0.44169 & 0.7937 & 0.7991 & 718.3 \\
+B4 (p1, ¬sg) & 0.44202 & 13 & 0.44181 & 0.7834 & 0.7939 & 770.1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{关键观察}：
+\begin{itemize}[leftmargin=2em]
+  \item 四组的 best JSD$_\text{deb}$ 全距仅为 $0.44222 - 0.44130 = 0.00092$。
+    参考各 run 在 epoch 13--15 附近的自然波动幅度（约 $\pm 0.003$），
+    这个差异 \textbf{不具有统计显著性}。
+  \item 排序为 B2 $>$ B3 $>$ B4 $>$ B1，但差异太小无法得出因果结论。
+  \item count 相关性方面，B1 和 B2（\texttt{sg=true}）略优于 B3 和 B4，
+    其中 B4 的 $r_\text{deb}=0.7834$ 是四组中最低的。
+\end{itemize}
+
+\subsection{析因主效应分析}
+
+\begin{table}[H]
+\centering
+\caption{$2 \times 2$ 析因效应分解（基于 best JSD$_\text{deb}$）。}
+\label{tab:factorial_effects}
+\begin{tabular}{l l c}
+\toprule
+效应 & 计算 & 值 \\
+\midrule
+\texttt{pool\_factor} 主效应 & $\frac{1}{2}[(B2-B1) + (B4-B3)]$ & $-0.00001$ \\
+\texttt{stop\_gradient} 主效应 & $\frac{1}{2}[(B3-B1) + (B4-B2)]$ & $+0.00011$ \\
+交互效应 & $\frac{1}{2}[(B4-B3) - (B2-B1)]$ & $+0.00061$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+三个效应均在 $10^{-4}$ 量级，远小于 epoch 间噪声（$\sim 10^{-3}$）。
+结论：\textbf{在 profile JSD 这一最终性能指标上，两个超参数均无显著主效应或交互效应}。
+
+% ============================================================
+\section{训练动态分析}
+% ============================================================
+
+虽然最终性能差异可忽略，但四组实验的训练动态呈现出有意义的差异，
+这些差异对理解 bias-safe 机制的工作原理非常重要。
+
+\subsection{Profile scale 收敛轨迹}
+
+Profile scale（\texttt{effective\_profile\_scale}）反映偏差分支 profile 输出
+在融合中的权重。训练初始为 1.0，随着主分支学会生成高质量 profile，
+偏差分支的贡献应当被压低。
+
+\begin{table}[H]
+\centering
+\small
+\caption{各组的 profile scale 收敛速度。Epoch 1 和最终 epoch 的值来自训练日志。}
+\label{tab:profile_scale}
+\begin{tabular}{l c c c c}
+\toprule
+组别 & Epoch 1 & Epoch 5 & Epoch 10 & 最终 epoch \\
+\midrule
+B1 (p32, sg)   & 0.901 & 0.040 & 0.016 & 0.006\,(e21) \\
+B2 (p1, sg)    & 0.900 & 0.010 & 0.003 & 0.001\,(e23) \\
+B3 (p32, ¬sg)  & 0.981 & 0.377 & 0.098 & 0.028\,(e23) \\
+B4 (p1, ¬sg)   & 0.944 & 0.182 & 0.050 & 0.018\,(e21) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{分析}：
+\begin{itemize}[leftmargin=2em]
+  \item \texttt{stop\_gradient=true}（B1、B2）使 profile scale 收敛速度比
+    \texttt{stop\_gradient=false}（B3、B4）快约一个数量级。
+    到 epoch 10，B1/B2 已降至 $0.003 \sim 0.016$，
+    而 B3/B4 仍在 $0.050 \sim 0.098$。
+  \item 在 \texttt{sg=true} 的前提下，\texttt{pool=1}（B2）比 \texttt{pool=32}（B1）
+    收敛更快——这是因为无池化时偏差分支有全分辨率能力，主分支需要更积极地压低其权重。
+  \item 所有组别最终都趋向很低的 profile scale，说明 bias-safe 框架在长时间训练后
+    总能学会将偏差贡献压缩到极小值，只是收敛速度不同。
+\end{itemize}
+
+\subsection{偏差信号强度（Bias RMS Ratio）}
+
+\texttt{profile\_bias\_rms\_over\_signal\_rms} 度量偏差分支输出的 RMS 与主分支
+信号 RMS 的比值。越低表示偏差分支在最终预测中的实际贡献越小。
+
+\begin{table}[H]
+\centering
+\small
+\caption{各组最终 epoch 的偏差信号强度与 full/debiased 指标差距。}
+\label{tab:bias_leakage}
+\begin{tabular}{l c c c c}
+\toprule
+组别 & bias\_rms & JSD gap & count $r$ gap & count MAE gap \\
+\midrule
+B1 (p32, sg)   & 0.00100 & 0.00039 & 0.0081 & 53.2 \\
+B2 (p1, sg)    & 0.00055 & 0.00022 & 0.0094 & 31.4 \\
+B3 (p32, ¬sg)  & 0.00297 & 0.00125 & 0.0065 & 24.8 \\
+B4 (p1, ¬sg)   & 0.00834 & 0.00336 & 0.0060 & 22.5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent 说明：JSD gap = $\mathrm{JSD}_\text{full,mean}^{\text{val}} -
+\mathrm{JSD}_\text{deb,mean}^{\text{val}}$，取自最终 epoch 的 overall 验证。
+Count $r$ gap = $r_\text{full} - r_\text{deb}$。
+MAE gap = $\mathrm{MAE}_\text{deb} - \mathrm{MAE}_\text{full}$。
+
+\textbf{关键发现}：
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{JSD gap 是最灵敏的偏差泄露指标}。\texttt{sg=true} 的两组
+    JSD gap 在 $2 \times 10^{-4} \sim 4 \times 10^{-4}$，
+    而 \texttt{sg=false} 的两组在 $1.3 \times 10^{-3} \sim 3.4 \times 10^{-3}$，
+    相差约 \textbf{一个数量级}。
+  \item 在 \texttt{sg=false} 内部，\texttt{pool=1}（B4）的 JSD gap 是
+    \texttt{pool=32}（B3）的 2.7 倍（$0.00336$ vs.\ $0.00125$），
+    说明没有梯度截断时，池化瓶颈仍能起到一定的隔离作用。
+  \item 有趣的是，count 相关性的 gap 和 MAE gap 呈反向趋势——
+    \texttt{sg=false} 的组别 count gap 更小。
+    这是因为 count 预测使用 \texttt{logsumexp} 融合，其结构本身已经提供了一定程度的
+    隔离；而 profile 使用简单的加法融合，更依赖 \texttt{stop\_gradient} 来防止泄露。
+\end{itemize}
+
+\subsection{训练收敛行为}
+
+\begin{table}[H]
+\centering
+\small
+\caption{各组的训练收敛统计。}
+\label{tab:convergence}
+\begin{tabular}{l c c c c}
+\toprule
+组别 & 总 epoch & best epoch & 停止原因 & 训练总时长 \\
+\midrule
+B1 (p32, sg)   & 21 & 13 & early stop & $\sim$10.3\,h \\
+B2 (p1, sg)    & 23 & 15 & early stop & $\sim$11.5\,h \\
+B3 (p32, ¬sg)  & 23 & 15 & early stop & $\sim$11.5\,h \\
+B4 (p1, ¬sg)   & 21 & 13 & early stop & $\sim$10.5\,h \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+四组实验的 best epoch 均在 13--15，之后 8 个 epoch 内无改善被 early stopping 终止。
+这表明 \textbf{当前训练预算（30 epoch）是充足的}，模型在一半左右已经达到最优，
+不需要更长的训练来区分这四组配置。
+
+% ============================================================
+\section{Validation 曲线的 epoch-level 分析}
+% ============================================================
+
+为了进一步理解四组实验的行为一致性，我们检查所有 epoch 的验证 JSD 值。
+
+\begin{table}[H]
+\centering
+\small
+\caption{选取关键 epoch 的 peak JSD$_\text{deb}$ 对比。粗体标记每个 epoch 的最优值。}
+\label{tab:epoch_comparison}
+\begin{tabular}{c c c c c}
+\toprule
+Epoch & B1 & B2 & B3 & B4 \\
+\midrule
+1  & 0.46987 & 0.47262 & 0.46738 & 0.46681 \\
+5  & 0.45022 & 0.45074 & \textbf{0.45044} & \textbf{0.45007} \\
+10 & \textbf{0.44719} & 0.44649 & 0.44661 & 0.44649 \\
+13 & 0.44222 & 0.44242 & \textbf{0.44228} & \textbf{0.44202} \\
+15 & 0.44231 & \textbf{0.44130} & \textbf{0.44172} & 0.44211 \\
+20 & 0.44815 & 0.44784 & 0.44865 & 0.44783 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{观察}：
+\begin{enumerate}[leftmargin=2em]
+  \item 四条验证曲线高度同步，在几乎相同的 epoch 达到各自的谷值和峰值。
+  \item 在任何单个 epoch 上，四组的 JSD 差异都小于 $0.003$，通常小于 $0.001$。
+  \item 到 epoch 20 以后，四组均呈现轻微上升趋势，说明验证集上的过拟合迹象开始出现。
+  \item 这种高度同步的行为表明，四组配置的差异主要体现在偏差分支的内部动态上，
+    而不是对主分支预测质量的影响。
+\end{enumerate}
+
+% ============================================================
+\section{与 A6000 Transformer 消融实验的交叉对比}
+% ============================================================
+
+\begin{table}[H]
+\centering
+\small
+\caption{6002 bias-safe 消融（验证集）与 6000 Transformer 消融（held-out 测试集）的指标对比。
+\textbf{注意}：两组实验的评估 split 不同，绝对值不可直接比较；此表旨在展示各自实验内的相对关系。}
+\label{tab:cross_compare}
+\begin{tabular}{l l c c c}
+\toprule
+实验 & 组别 & peak JSD$_\text{deb}$ & count $r_\text{deb}$ & 评估 split \\
+\midrule
+\multirow{2}{*}{\shortstack[l]{A6000 TF ablation\\(3 seeds, mean$\pm$std)}}
+  & V2-full & $0.31425 \pm 0.00012$ & $0.83533 \pm 0.00540$ & test \\
+  & V2-noTF & $0.32403 \pm 0.00021$ & $0.82320 \pm 0.00554$ & test \\
+\midrule
+\multirow{4}{*}{\shortstack[l]{RTX\,3080 bias-safe\\(seed=42, best val)}}
+  & B1 (p32, sg) & 0.44222 & 0.7965 & val \\
+  & B2 (p1, sg) & 0.44130 & 0.7959 & val \\
+  & B3 (p32, ¬sg) & 0.44172 & 0.7937 & val \\
+  & B4 (p1, ¬sg) & 0.44202 & 0.7834 & val \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{解读}：
+\begin{itemize}[leftmargin=2em]
+  \item 6002 的验证 JSD（$\sim 0.44$）与 A6000 的测试 JSD（$\sim 0.31$）有较大绝对差距。
+    这主要是因为评估 split 不同（validation vs.\ held-out test），两者的区域分布不同。
+    此外，6002 只使用了单种子（42），而 A6000 使用了 3 个种子。
+  \item 两组实验的一致结论是：\textbf{full/debiased gap 在所有配置下都极小}
+    （A6000: $0.00006$；6002 sg=true: $< 0.0005$），确认 bias-safe 框架有效。
+  \item A6000 实验关注 Transformer 主干的独立收益（full vs.\ noTF），
+    而 6002 实验关注 bias-safe 机制的内部设计（pool\_factor × stop\_gradient）。
+    两组实验互为补充。
+\end{itemize}
+
+% ============================================================
+\section{结论与建议}
+% ============================================================
+
+\subsection{核心结论}
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Bias-safe 机制的两个超参数不影响最终 profile 预测质量}。
+    四组变体的 peak debiased JSD 差异仅 $0.00092$，在噪声范围内。
+    这意味着当前的 bias-safe 框架设计是\emph{鲁棒的}——
+    无论如何调整偏差隔离强度，主分支最终都能学到同等质量的信号。
+
+  \item \textbf{\texttt{stop\_gradient=true} 是偏差隔离的关键机制}。
+    虽然对最终性能无影响，但 \texttt{stop\_gradient} 对训练过程中的偏差泄露程度有
+    一个数量级的影响：
+    \begin{itemize}
+      \item \texttt{sg=true}: JSD gap $< 5 \times 10^{-4}$，bias RMS ratio $< 0.001$
+      \item \texttt{sg=false}: JSD gap $\sim 1 \times 10^{-3} \text{--} 3 \times 10^{-3}$，
+        bias RMS ratio $0.003 \sim 0.008$
+    \end{itemize}
+    在实际应用中，更低的 JSD gap 意味着 debiased 预测更可信，
+    对下游的 TF motif 分析和归因解释更加安全。
+
+  \item \textbf{\texttt{pool\_factor} 的作用在有 \texttt{stop\_gradient} 时被覆盖}。
+    当 \texttt{sg=true} 时，梯度截断已经是足够强的隔离手段，
+    池化瓶颈不再提供额外的显著收益。
+    当 \texttt{sg=false} 时，\texttt{pool\_factor=32} 仍能将 JSD gap 控制在较低水平
+    （$0.00125$ vs.\ $0.00336$），起到「第二道防线」的作用。
+
+  \item \textbf{训练预算充足}。所有组别在 epoch 13--15 达到最优，
+    远早于 30 epoch 的上限，说明当前的 early stopping 设置（patience=8）是合理的。
+\end{enumerate}
+
+\subsection{推荐配置}
+
+\begin{table}[H]
+\centering
+\caption{推荐的 bias-safe 默认配置。}
+\begin{tabular}{l l l}
+\toprule
+超参数 & 推荐值 & 理由 \\
+\midrule
+\texttt{stop\_gradient} & \textbf{true} & 偏差隔离效果显著优于 false \\
+\texttt{pool\_factor} & 32 或 1 均可 & 性能无差异；32 更保守，1 更简洁 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{后续建议}
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{可以不再扩展此消融}。四组差异太小，加种子也难以得出统计显著结论，
+    资源应优先用于 V2 代码改进消融（v2fix）。
+  \item \textbf{在 v2fix 实验中保持 \texttt{sg=true} 作为默认}。
+    本实验已确认其安全性和鲁棒性。
+  \item \textbf{如需更严格的对比}，可将 B1--B4 的 best.pt 在 held-out test 上
+    统一评估（类似 A6000 上 \texttt{evaluate\_ablation.sh} 的流程），
+    以获得与 A6000 实验直接可比的指标。但考虑到验证集上的差异已如此微小，
+    预计测试集上也不会出现反转。
+\end{enumerate}
+
+% ============================================================
+\appendix
+\section{实验元数据}
+% ============================================================
+
+\begin{table}[H]
+\centering
+\small
+\caption{实验运行的完整元数据。}
+\begin{tabular}{l l}
+\toprule
+项目 & 值 \\
+\midrule
+Orchestrator 启动时间 & 2026-03-18 21:47:18 \\
+Orchestrator 完成时间 & 2026-03-20 17:52:15 \\
+总挂钟时间 & $\sim$44 小时 \\
+GPU & NVIDIA GeForce RTX 3080（12\,GB） \\
+运行模式 & B1 → B2 → B3 → B4 串行 \\
+失败数 & 0 / 4 \\
+\midrule
+B1 log & \texttt{bias\_safe\_B1\_pool32\_sgtrue.log}（2.5\,MB） \\
+B2 log & \texttt{bias\_safe\_B2\_pool1\_sgtrue.log}（2.8\,MB） \\
+B3 log & \texttt{bias\_safe\_B3\_pool32\_sgfalse.log}（2.7\,MB） \\
+B4 log & \texttt{bias\_safe\_B4\_pool1\_sgfalse.log}（2.5\,MB） \\
+\midrule
+Checkpoint 路径 & \texttt{outputs/checkpoints/bias\_safe\_B\{1..4\}\_*/best.pt} \\
+Epoch metrics & \texttt{outputs/logs/bias\_safe\_B\{1..4\}\_*/epoch\_metrics.jsonl} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}

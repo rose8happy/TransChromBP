@@ -1,0 +1,13 @@
+{
+  "bias2main_best_epoch": 10,
+  "bias2main_final_epoch": 20,
+  "baseline_final_epoch": 20,
+  "test_dataset_size": 62342,
+  "deltas_vs_baseline": {
+    "best_peak_loss_total": -0.0817269450879099,
+    "epoch20_overall_loss_total": -0.05581973241599325,
+    "epoch20_nonpeak_loss_total": -0.046876889022273716,
+    "best_peak_count_r": 0.015941465834535706,
+    "epoch20_nonpeak_count_r": 0.04845613843238364
+  }
+}

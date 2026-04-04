@@ -1,5 +1,7 @@
 # 📊 ChromBPNet 数据处理完全指南
 
+> 注：本文件里的 peak/nonpeak、jitter、revcomp、batch 生成等概念仍然有参考价值，但当前主线训练入口已经演进为 `TransChromBP` 的 `train_ddp.py + YAML` 配置体系。若要对齐当前模型，请结合 [TransChromBP当前模型学习总览.md](TransChromBP当前模型学习总览.md) 一起阅读。
+
 > 从原始文件到训练批次的完整流程
 
 ---
