@@ -20,8 +20,8 @@
 
 入口：
 
-- launcher：`tmp_remote_edit/transchrombp/scripts/run_genos_pilot.sh`
-- train config：`tmp_remote_edit/transchrombp/configs/train/train_v2fix_genos_profile_select.yaml`
+- launcher：`vendor/transchrombp/transchrombp/scripts/run_genos_pilot.sh`
+- train config：`vendor/transchrombp/transchrombp/configs/train/train_v2fix_genos_profile_select.yaml`
 - model config：
   - `G0`：`v2fix_baseline.yaml`
   - `G1`：`v2fix_genos_gate.yaml`
@@ -66,7 +66,7 @@
 
 ### 1.4 数据语义约束
 
-真实数据集实现：`tmp_remote_edit/transchrombp/data/real_data.py`
+真实数据集实现：`vendor/transchrombp/transchrombp/data/real_data.py`
 
 当前训练语义：
 
@@ -337,7 +337,12 @@ Probe B 是辅证，不替代 Probe A。
 - `validate_every_epochs = 1`
 - `checkpoint_every_epochs = 1`
 - `early_stop_patience = 3`
-- `batch_size_per_gpu = 20`
+- pilot 默认改为 `2-rank DDP`
+- `batch_size_per_gpu = 10`
+- `global_batch = 20`
+- `num_workers = 4`（每个 rank）
+- 在当前 `profile_bias_stop_gradient` 修补后，双卡默认 `find_unused_parameters = false`
+- `P0/P2/P1` 必须复用同一套 `nproc_per_node / batch_size_per_gpu / lr` 口径，避免把训练拓扑差异混进实验对比
 
 ### `P0 baseline_short10`
 
@@ -434,10 +439,10 @@ Probe B 是辅证，不替代 Probe A。
 
 ### 7.2 修改文件
 
-- `tmp_remote_edit/transchrombp/models/genos_adapter.py`
-- `tmp_remote_edit/transchrombp/models/transchrombp.py`
-- `tmp_remote_edit/transchrombp/data/real_data.py`
-- `tmp_remote_edit/transchrombp/training/train_ddp.py`
+- `vendor/transchrombp/transchrombp/models/genos_adapter.py`
+- `vendor/transchrombp/transchrombp/models/transchrombp.py`
+- `vendor/transchrombp/transchrombp/data/real_data.py`
+- `vendor/transchrombp/transchrombp/training/train_ddp.py`
 
 ### 7.3 `genos_adapter.py`
 
@@ -529,7 +534,63 @@ if genos_summary is not None and self.genos_film is not None:
 
 ---
 
-## 8. cache builder 伪代码
+## 8. 下一批数据管线优化候选
+
+以下优化方向有工程价值，但不纳入当前正在跑的 `P0`，也不直接混入本轮 `P0/P2/P1` 对比：
+
+- 预计算 `FASTA + bigWig` 数据管线缓存
+- 提高 DataLoader worker / prefetch 配置
+- 把 sequence one-hot 延后到 GPU 端完成
+
+这样做的原因不是这些优化“没用”，而是它们会改变当前 real-data backend 的实现路径。若在 `P0` 已经开跑后再引入，容易把“训练拓扑差异”和“数据管线差异”混进同一轮实验。
+
+### 8.1 优先级判断
+
+优先级建议：
+
+1. `FASTA + bigWig` 预计算缓存
+2. `num_workers / prefetch_factor / persistent_workers`
+3. GPU 端 one-hot
+
+当前真实瓶颈更像是 `ChromBPNetBigWigDataset.__getitem__` 里的在线随机读取，而不是 one-hot 本身：
+
+- `_fetch_onehot()` 里按窗口随机读 `FASTA`
+- `_fetch_profile()` 里按窗口随机读 `bigWig`
+
+因此最值得做的是减少在线随机 I/O，而不是优先重写 one-hot。
+
+### 8.2 语义边界
+
+下一批若启用上述优化，必须把它们视为“新数据管线”：
+
+- 当前这条 `P0` 只作为现有 backend 下的 matched control
+- 若未来切换到预计算 cache backend 或 GPU one-hot backend，应重跑一条新的 `P0`
+- 后续 `P2/P1` 必须与该新 `P0` 共享同一套数据管线口径
+
+换句话说：
+
+- `DDP / batch / workers` 这类训练基础设施修正，不构成实验语义改变
+- `FASTA/bigWig` cache、GPU one-hot 这类数据路径重写，应视为新一批实验
+
+### 8.3 建议的落地顺序
+
+若下一批正式尝试，建议顺序为：
+
+1. 先补更准确的 loader profiling，把 `next(dataloader)`、H2D copy、forward/backward 分开记
+2. 先实现 `bigWig profile cache`，再考虑 `sequence index cache`
+3. 在 cache backend 稳定后，再评估 GPU 端 one-hot 是否仍值得加
+
+缓存介质优先建议：
+
+- 首选 `numpy memmap`
+- 次选 `zarr`
+- 暂不把单文件 `HDF5` 作为第一实现
+
+原因是当前场景是多 worker、DDP、只读随机访问，`memmap` 更直接，也更接近现有 `genos_cache` 的使用方式。
+
+---
+
+## 9. cache builder 伪代码
 
 ```python
 def build_cache(split: str, features: list[str]) -> None:
@@ -568,9 +629,9 @@ def build_cache(split: str, features: list[str]) -> None:
 
 ---
 
-## 9. Go / No-Go 判据
+## 10. Go / No-Go 判据
 
-### 9.1 ROI 硬约束
+### 10.1 ROI 硬约束
 
 cached pilot 相对 `P0` 的 step-time overhead：
 
@@ -578,7 +639,7 @@ cached pilot 相对 `P0` 的 step-time overhead：
 
 超出则先排查实现，而不是继续解释指标。
 
-### 9.2 指标判据
+### 10.2 指标判据
 
 在 `epoch 5-8` 的同 epoch 对齐下，满足以下任一项视为 `Go`：
 
@@ -597,16 +658,16 @@ cached pilot 相对 `P0` 的 step-time overhead：
 - usage 统计始终接近初始化
 - 或 cached path 的开销超出 ROI 上限
 
-### 9.3 第二轮后的收口条件
+### 10.3 第二轮后的收口条件
 
 若做到 `P3/P4` 后，最佳方案仍只有 `< 0.002` 的稳定 JSD 改善，则 `Genos` 线正式降级。
 
 ---
 
-## 10. 最终执行顺序
+## 11. 最终执行顺序
 
 1. 不再继续扩大当前 `G1/G2` online recipe
-2. 先实现 cache builder、probe、`P0/P1/P2`
+2. 先实现 cache builder、probe、`P0/P2/P1`
 3. 跑 cache 预检查，记录：
    - `train_regions`
    - `train_epoch_regions`
@@ -617,12 +678,12 @@ cached pilot 相对 `P0` 的 step-time overhead：
    - 可选：预算内顺手构建 `bins4_mean`
 5. 先跑 `Probe A`
 6. 再跑 `Probe B`
-7. 串行跑 `P0 -> P1 -> P2`
+7. 串行跑 `P0 -> P2 -> P1`
 8. 根据 `Go / No-Go` 决定是否继续 `P3/P4`
 
 ---
 
-## 11. 一句话结论
+## 12. 一句话结论
 
 最终合并后的方案是：
 

@@ -1,0 +1,67 @@
+# GM12878-only 20-epoch pilot on 6000 single GPU.
+# 用于把先前只在 6002/3080 上跑过的独立真实数据线迁到 A6000。
+seed: 42
+max_epochs: 20
+
+trainer:
+  backend: nccl
+  precision: bf16
+  grad_accum_steps: 1
+  clip_grad_norm: 1.0
+  log_every_steps: 20
+  validate_every_epochs: 1
+  checkpoint_every_epochs: 1
+  find_unused_parameters: false
+  compile: false
+  strict_max_len_check: true
+  best_metric: peak.profile_target_jsd_full_mean
+  best_metric_mode: min
+  early_stop_patience: 10
+  early_stop_min_delta: 0.0
+
+optimizer:
+  name: adamw
+  learning_rate: 5.0e-4
+  weight_decay: 0.01
+  betas: [0.9, 0.95]
+
+loss:
+  profile_weight: 1.0
+  count_weight: 0.1
+  debiased_profile_weight: 2.0
+  debiased_count_weight: 0.0
+
+schedule:
+  name: cosine
+  warmup_steps: 0
+  warmup_ratio: 0.06
+  min_lr_ratio: 0.1
+
+data:
+  source: chrombpnet_bigwig
+  config_path: configs/data/data_gm12878_canonical_v1_6000.yaml
+  max_seq_len: 2114
+  input_len: 2114
+  output_len: 1000
+  supervised_bp: 1000
+  profile_bin_size: 1
+  batch_size_per_gpu: 6
+  num_workers: 2
+  pin_memory: true
+  prefetch_factor: 2
+  persistent_workers: true
+  region_source: both
+  train_region_source: both
+  val_region_source: both
+  nonpeak_ratio: 0.1
+  max_jitter: 500
+  peak_max_jitter: 500
+  nonpeak_max_jitter: 0
+  train_revcomp: true
+  val_revcomp: false
+  revcomp_prob: 0.5
+  track_total_count_target: 0.0
+
+logging:
+  output_dir: /data1/zhoujiazhen/bylw_atac/TransChromBP/outputs
+  run_name: gm12878_v2_6000_pilot20

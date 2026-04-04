@@ -1,0 +1,66 @@
+# Corrected-B baseline + cached NT v2 residual head.
+# Initial production path for foundation-model restart v3:
+# keep the strong local backbone, inject cached NT features only through a
+# zero-init residual expert head, and warm-start with backbone frozen.
+
+model_name: transchrombp_teacher_v2_center_pool_ntv2_residual
+
+sequence_encoder:
+  type: transformer
+  enabled: true
+  d_model: 256
+  n_heads: 8
+  n_layers: 6
+  ff_mult: 4
+  dropout: 0.1
+  use_rope: true
+  rope_theta: 10000.0
+  max_len: 2114
+  use_sdpa: true
+
+conv_stem:
+  stem_kernel_size: 21
+  conv_kernel_size: 7
+  n_conv_layers: 2
+
+local_tower:
+  kernel_size: 3
+  n_dil_layers: 8
+  dilation_cycle_length: 8
+
+bias_branch:
+  type: chrombpnet_bias
+  enabled: true
+  hidden_channels: 128
+  kernel_size: 21
+  n_dil_layers: 4
+  pretrained_path: ""
+  freeze_bias_core: false
+  profile_pool_factor: 32
+
+fusion:
+  profile_fusion: add
+  count_fusion: logsumexp
+  profile_scale_init: 1.0
+  count_scale_init: 1.0
+  learnable_scales: true
+  positive_scales: true
+  profile_bias_stop_gradient: true
+
+heads:
+  profile_output_len: 1000
+  count_head: linear
+  count_pool_mode: center
+
+foundation_model:
+  enabled: true
+  source: ntv2
+  mode: residual_head
+  feature_name: layer_07__bins4_mean
+  feature_layout: token
+  feature_tokens: 4
+  hidden_size: 1024
+  residual_hidden_size: 512
+  profile_bin_count: 16
+  freeze_backbone_until_epoch: 3
+  unfreeze_transformer_last_n_blocks: 2
