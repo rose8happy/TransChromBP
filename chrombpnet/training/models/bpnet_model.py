@@ -1,6 +1,6 @@
 import numpy as np ;
 from tensorflow.keras.backend import int_shape
-from tensorflow.keras.layers import Input, Cropping1D, add, Conv1D, GlobalAvgPool1D, Dense, Flatten
+from tensorflow.keras.layers import Input, Cropping1D, add, Conv1D, GlobalAvgPool1D, Dense, Flatten, Lambda
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Model
 from chrombpnet.training.utils.losses import multinomial_nll
@@ -9,6 +9,19 @@ import random as rn
 import os 
 
 os.environ['PYTHONHASHSEED'] = '0'
+
+
+def maybe_debug_batch_shape(inp):
+    if os.environ.get("CHROMBPNET_DEBUG_BATCH_SHAPE", "0") != "1":
+        return inp
+
+    def _debug(x):
+        replica_ctx = tf.distribute.get_replica_context()
+        replica_id = replica_ctx.replica_id_in_sync_group if replica_ctx is not None else tf.constant(-1, dtype=tf.int32)
+        tf.print("[batch-debug] replica", replica_id, "input_shape", tf.shape(x))
+        return x
+
+    return Lambda(_debug, name="debug_batch_shape")(inp)
 
 def getModelGivenModelOptionsAndWeightInits(args, model_params):
     #default params (can be overwritten by providing model_params file as input to the training function)
@@ -37,13 +50,14 @@ def getModelGivenModelOptionsAndWeightInits(args, model_params):
 
     #define inputs
     inp = Input(shape=(sequence_len, 4),name='sequence')    
+    model_inp = maybe_debug_batch_shape(inp)
 
     # first convolution without dilation
     x = Conv1D(filters,
                 kernel_size=conv1_kernel_size,
                 padding='valid', 
                 activation='relu',
-                name='bpnet_1st_conv')(inp)
+                name='bpnet_1st_conv')(model_inp)
 
     layer_names = [str(i) for i in range(1,n_dil_layers+1)]
     for i in range(1, n_dil_layers + 1):

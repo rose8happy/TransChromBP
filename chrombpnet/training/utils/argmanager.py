@@ -16,6 +16,7 @@ def update_train_args(parser):
     parser.add_argument("-l", "--learning-rate", type=float, default=0.001)
     parser.add_argument("-pf", "--params", type=str, required=True, default=None)
     parser.add_argument("--trackables",nargs="*",default=['loss','val_loss'], help="list of things to track per batch, such as logcount_predictions_loss,loss,profile_predictions_loss,val_logcount_predictions_loss,val_loss,val_profile_predictions_loss")
+    parser.add_argument("--save-all-checkpoints", action="store_true", help="Also save one model checkpoint per epoch alongside the best model")
 
 def update_model_args(parser):
     parser.add_argument("-s", "--seed", type=int, default=1234, help="seed to use for model training")
@@ -40,6 +41,8 @@ def fetch_predict_args():
     parser.add_argument("-s", "--seed", type=int, default=1234, help="seed to use for model training")
     parser.add_argument("-il", "--inputlen", type=int, default=2114, help="Sequence input length")
     parser.add_argument("-ol", "--outputlen", type=int, default=1000, help="Prediction output length")
+    parser.add_argument("--split", choices=["train", "valid", "test"], default="test", help="Fold split to evaluate")
+    parser.add_argument("--metrics-only", action="store_true", help="Skip prediction HDF5 and plots, and only write metrics JSON")
     args = parser.parse_args()
 
     assert((args.peaks.lower() != "none") or (args.nonpeaks.lower() != "none")) #Both peaks and nonpeaks are empty" 

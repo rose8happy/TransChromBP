@@ -96,65 +96,109 @@ def predict_on_batch_wrapper(model,test_generator):
 def main(args):
 
 
-    metrics_dictionary = {"counts_metrics":{}, "profile_metrics":{}}
+    metrics_dictionary = {"counts_metrics":{}, "profile_metrics":{}, "classification_metrics": {}}
+    metrics_only = bool(getattr(args, "metrics_only", False))
+    split = getattr(args, "split", "test")
 
     # get model architecture to load - can load .hdf5 and .weights/.arch
     model=load_model_wrapper(args)
 
 
-    test_generator = initializers.initialize_generators(args, mode="test", parameters=None, return_coords=True)
-    true_counts, profile_probs_predictions, true_counts_sum, counts_sum_predictions, coordinates = predict_on_batch_wrapper(model, test_generator)
+    eval_generator = initializers.initialize_generators(args, mode=split, parameters=None, return_coords=True)
+    true_counts, profile_probs_predictions, true_counts_sum, counts_sum_predictions, coordinates = predict_on_batch_wrapper(model, eval_generator)
 
 
     # generate prediction on test set and store metrics
-    write_predictions_h5py(args.output_prefix, profile_probs_predictions, counts_sum_predictions, coordinates)
+    if not metrics_only:
+        write_predictions_h5py(args.output_prefix, profile_probs_predictions, counts_sum_predictions, coordinates)
 
     # store regions, their predictions and corresponding pointwise metrics
     mnll_pw, mnll_norm, jsd_pw, jsd_norm, jsd_rnd, jsd_rnd_norm, mnll_rnd, mnll_rnd_norm =  metrics.profile_metrics(true_counts,profile_probs_predictions)
 
     # including both metrics    
     if args.peaks != "None" and args.nonpeaks != "None":
-        spearman_cor, pearson_cor, mse = metrics.counts_metrics(true_counts_sum, counts_sum_predictions,args.output_prefix+"_peaks_and_nonpeaks", "Both peaks and non peaks")
+        labels = np.array(
+            [
+                1.0 if value in ('1', 1, b'1') or str(value) == '1' else 0.0
+                for value in coordinates[:,3]
+            ],
+            dtype=np.float64,
+        )
+        logcount_scores = counts_sum_predictions.astype(np.float64, copy=False)
+        count_scores = np.maximum(np.expm1(logcount_scores), 0.0)
+        spearman_cor, pearson_cor, mse = metrics.counts_metrics(
+            true_counts_sum,
+            counts_sum_predictions,
+            args.output_prefix+"_peaks_and_nonpeaks",
+            "Both peaks and non peaks",
+            write_plot=(not metrics_only),
+        )
         metrics_dictionary["counts_metrics"]["peaks_and_nonpeaks"] = {}
         metrics_dictionary["counts_metrics"]["peaks_and_nonpeaks"]["spearmanr"] = spearman_cor
         metrics_dictionary["counts_metrics"]["peaks_and_nonpeaks"]["pearsonr"] = pearson_cor
         metrics_dictionary["counts_metrics"]["peaks_and_nonpeaks"]["mse"] = mse
 
         metrics_dictionary["profile_metrics"]["peaks_and_nonpeaks"] = {}
+        metrics_dictionary["profile_metrics"]["peaks_and_nonpeaks"]["mean_jsd"] = np.nanmean(jsd_pw)
         metrics_dictionary["profile_metrics"]["peaks_and_nonpeaks"]["median_jsd"] = np.nanmedian(jsd_pw)        
+        metrics_dictionary["profile_metrics"]["peaks_and_nonpeaks"]["mean_norm_jsd"] = np.nanmean(jsd_norm)
         metrics_dictionary["profile_metrics"]["peaks_and_nonpeaks"]["median_norm_jsd"] = np.nanmedian(jsd_norm)
 
-        metrics.plot_histogram(jsd_pw, jsd_rnd, args.output_prefix+"_peaks_and_nonpeaks", "Both peaks and non peaks")
+        metrics_dictionary["classification_metrics"]["peaks_vs_nonpeaks"] = {
+            "logcounts": metrics.classification_metrics(labels, logcount_scores),
+            "counts": metrics.classification_metrics(labels, count_scores),
+        }
+
+        if not metrics_only:
+            metrics.plot_histogram(jsd_pw, jsd_rnd, args.output_prefix+"_peaks_and_nonpeaks", "Both peaks and non peaks")
 
 
     # including only nonpeak metrics
     if args.nonpeaks != "None":
         non_peaks_idx = coordinates[:,3] == '0'
-        spearman_cor, pearson_cor, mse = metrics.counts_metrics(true_counts_sum[non_peaks_idx], counts_sum_predictions[non_peaks_idx],args.output_prefix+"_only_nonpeaks", "Only non peaks")
+        spearman_cor, pearson_cor, mse = metrics.counts_metrics(
+            true_counts_sum[non_peaks_idx],
+            counts_sum_predictions[non_peaks_idx],
+            args.output_prefix+"_only_nonpeaks",
+            "Only non peaks",
+            write_plot=(not metrics_only),
+        )
         metrics_dictionary["counts_metrics"]["nonpeaks"] = {}
         metrics_dictionary["counts_metrics"]["nonpeaks"]["spearmanr"] = spearman_cor
         metrics_dictionary["counts_metrics"]["nonpeaks"]["pearsonr"] = pearson_cor
         metrics_dictionary["counts_metrics"]["nonpeaks"]["mse"] = mse
 
         metrics_dictionary["profile_metrics"]["nonpeaks"] = {}
+        metrics_dictionary["profile_metrics"]["nonpeaks"]["mean_jsd"] = np.nanmean(jsd_pw[non_peaks_idx])
         metrics_dictionary["profile_metrics"]["nonpeaks"]["median_jsd"] = np.nanmedian(jsd_pw[non_peaks_idx])        
+        metrics_dictionary["profile_metrics"]["nonpeaks"]["mean_norm_jsd"] = np.nanmean(jsd_norm[non_peaks_idx])
         metrics_dictionary["profile_metrics"]["nonpeaks"]["median_norm_jsd"] = np.nanmedian(jsd_norm[non_peaks_idx])
 
-        metrics.plot_histogram(jsd_pw[non_peaks_idx], jsd_rnd[non_peaks_idx], args.output_prefix+"_only_nonpeaks", "Only non peaks")
+        if not metrics_only:
+            metrics.plot_histogram(jsd_pw[non_peaks_idx], jsd_rnd[non_peaks_idx], args.output_prefix+"_only_nonpeaks", "Only non peaks")
 
     # including only peak metrics
     if args.peaks != "None":
         peaks_idx = coordinates[:,3] == '1'
-        spearman_cor, pearson_cor, mse = metrics.counts_metrics(true_counts_sum[peaks_idx], counts_sum_predictions[peaks_idx],args.output_prefix+"_only_peaks", "Only peaks")
+        spearman_cor, pearson_cor, mse = metrics.counts_metrics(
+            true_counts_sum[peaks_idx],
+            counts_sum_predictions[peaks_idx],
+            args.output_prefix+"_only_peaks",
+            "Only peaks",
+            write_plot=(not metrics_only),
+        )
         metrics_dictionary["counts_metrics"]["peaks"] = {}
         metrics_dictionary["counts_metrics"]["peaks"]["spearmanr"] = spearman_cor
         metrics_dictionary["counts_metrics"]["peaks"]["pearsonr"] = pearson_cor
         metrics_dictionary["counts_metrics"]["peaks"]["mse"] = mse
 
         metrics_dictionary["profile_metrics"]["peaks"] = {}
+        metrics_dictionary["profile_metrics"]["peaks"]["mean_jsd"] = np.nanmean(jsd_pw[peaks_idx])
         metrics_dictionary["profile_metrics"]["peaks"]["median_jsd"] = np.nanmedian(jsd_pw[peaks_idx])        
+        metrics_dictionary["profile_metrics"]["peaks"]["mean_norm_jsd"] = np.nanmean(jsd_norm[peaks_idx])
         metrics_dictionary["profile_metrics"]["peaks"]["median_norm_jsd"] = np.nanmedian(jsd_norm[peaks_idx])
-        metrics.plot_histogram(jsd_pw[peaks_idx], jsd_rnd[peaks_idx], args.output_prefix+"_only_peaks", "Only peaks")
+        if not metrics_only:
+            metrics.plot_histogram(jsd_pw[peaks_idx], jsd_rnd[peaks_idx], args.output_prefix+"_only_peaks", "Only peaks")
 
         #ofile = open(args.output_prefix+"_pearson_cor.txt","w")
         #ofile.write(str(round(pearson_cor,2)))
@@ -171,4 +215,3 @@ if __name__=="__main__":
     # read arguments
     args=argmanager.fetch_predict_args()
     main(args)
-

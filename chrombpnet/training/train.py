@@ -37,11 +37,33 @@ def fit_and_evaluate(model,train_gen,valid_gen,args,architecture_module):
     #reduce_lr = tfcallbacks.ReduceLROnPlateau(monitor='val_loss',factor=0.4, patience=args.early_stop-2, min_lr=0.00000001)
     cur_callbacks=[checkpointer,earlystopper,csvlogger,history]
 
+    if getattr(args, "save_all_checkpoints", False):
+        epoch_checkpoint_pattern = args.output_prefix + ".epoch_{epoch:03d}.h5"
+        epoch_checkpointer = tfcallbacks.ModelCheckpoint(
+            filepath=epoch_checkpoint_pattern,
+            monitor="val_loss",
+            mode="min",
+            verbose=0,
+            save_best_only=False,
+        )
+        cur_callbacks.append(epoch_checkpointer)
+
+    fit_kwargs = {}
+    debug_max_steps = int(os.environ.get("CHROMBPNET_DEBUG_MAX_STEPS", "0"))
+    if debug_max_steps > 0:
+        fit_kwargs["steps_per_epoch"] = debug_max_steps
+        fit_kwargs["validation_steps"] = min(debug_max_steps, len(valid_gen))
+        print(
+            "CHROMBPNET_DEBUG_MAX_STEPS=%d: limiting steps_per_epoch=%d validation_steps=%d"
+            % (debug_max_steps, fit_kwargs["steps_per_epoch"], fit_kwargs["validation_steps"])
+        )
+
     model.fit(train_gen,
               validation_data=valid_gen,
               epochs=args.epochs,
               verbose=1,
-              callbacks=cur_callbacks)
+              callbacks=cur_callbacks,
+              **fit_kwargs)
 
     print('save model') 
     model.save(model_output_path_h5_name)

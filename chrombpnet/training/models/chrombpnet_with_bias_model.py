@@ -11,6 +11,19 @@ import os
 os.environ['PYTHONHASHSEED'] = '0'
 
 
+def maybe_debug_batch_shape(inp):
+    if os.environ.get("CHROMBPNET_DEBUG_BATCH_SHAPE", "0") != "1":
+        return inp
+
+    def _debug(x):
+        replica_ctx = tf.distribute.get_replica_context()
+        replica_id = replica_ctx.replica_id_in_sync_group if replica_ctx is not None else tf.constant(-1, dtype=tf.int32)
+        tf.print("[batch-debug] replica", replica_id, "input_shape", tf.shape(x))
+        return x
+
+    return Lambda(_debug, name="debug_batch_shape")(inp)
+
+
 def load_pretrained_bias(model_hdf5):
     from tensorflow.keras.models import load_model
     from tensorflow.keras.utils import get_custom_objects
@@ -110,11 +123,12 @@ def getModelGivenModelOptionsAndWeightInits(args, model_params):
     rn.seed(seed)
     
     inp = Input(shape=(sequence_len, 4),name='sequence')    
+    model_inp = maybe_debug_batch_shape(inp)
 
     ## get bias output
-    bias_output=bias_model(inp)
+    bias_output=bias_model(model_inp)
     ## get wo bias output
-    output_wo_bias=bpnet_model_wo_bias(inp)
+    output_wo_bias=bpnet_model_wo_bias(model_inp)
     assert(len(bias_output[1].shape)==2) # bias model counts head is of incorrect shape (None,1) expected
     assert(len(bias_output[0].shape)==2) # bias model profile head is of incorrect shape (None,out_pred_len) expected
     assert(len(output_wo_bias[0].shape)==2)

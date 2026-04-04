@@ -17,12 +17,18 @@ def fetch_data_and_model_params_based_on_mode(mode, args, parameters, nonpeak_re
         
 
     elif mode=="valid":
-        inputlen=int(parameters["inputlen"])
-        outputlen=int(parameters["outputlen"])
-        # fix negatives set for validation
-        if (nonpeak_regions is not None) and (peak_regions is not None):
-            nonpeak_regions=nonpeak_regions.sample(n=int(float(parameters["negative_sampling_ratio"])*peak_regions.shape[0]), replace=False, random_state=args.seed)
-        negative_sampling_ratio=1.0 # already subsampled
+        if parameters is None:
+            # External checkpoint selection evaluates an already-fixed valid split.
+            inputlen=args.inputlen
+            outputlen=args.outputlen
+            negative_sampling_ratio=1.0
+        else:
+            inputlen=int(parameters["inputlen"])
+            outputlen=int(parameters["outputlen"])
+            # fix negatives set for validation
+            if (nonpeak_regions is not None) and (peak_regions is not None):
+                nonpeak_regions=nonpeak_regions.sample(n=int(float(parameters["negative_sampling_ratio"])*peak_regions.shape[0]), replace=False, random_state=args.seed)
+            negative_sampling_ratio=1.0 # already subsampled
         # do not jitter at valid time - we are testing only at summits
         max_jitter=0
         # no reverse complementation at valid time

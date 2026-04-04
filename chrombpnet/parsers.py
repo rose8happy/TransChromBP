@@ -69,6 +69,7 @@ def read_parser():
         	optional_train.add_argument("-es", "--early-stop", type=int, default=5, help="Early stop limit, corresponds to 'patience' in callback")
         	optional_train.add_argument("-l", "--learning-rate", type=float, default=0.001, help="Learning rate for model training")
         	optional_train.add_argument("-track","--trackables",nargs="*",default=['logcount_predictions_loss', 'loss', 'logits_profile_predictions_loss', 'val_logcount_predictions_loss', 'val_loss', 'val_logits_profile_predictions_loss'], help="list of things to track per batch, such as logcount_predictions_loss,loss,profile_predictions_loss,val_logcount_predictions_loss,val_loss,val_profile_predictions_loss")
+        	optional_train.add_argument("--save-all-checkpoints", required=False, default=False, action='store_true', help="Also save one model checkpoint per epoch alongside the best model")
         	optional_train.add_argument("-a","--architecture-from-file",type=str,required=False, default=None, help="Model to use for training")
         	optional_train.add_argument("-fp","--file-prefix",type=str,required=False, default=None, help="File prefix for output to use. All the files will be prefixed with this string if provided.")
         	optional_train.add_argument('-hp', '--html-prefix', required=False, default="./", help="The html prefix to use for the html file output.")
@@ -221,6 +222,7 @@ def read_parser():
         required_preds.add_argument("-op", "--output-prefix", type=str, required=True, help="Output prefix for bigwig files")
         optional_preds.add_argument("-os", "--output-prefix-stats", type=str, default=None, required=False, help="Output stats on bigwig")
         optional_preds.add_argument("-bs", "--batch-size", type=int, default=64, help="batch size to use for prediction")
+        optional_preds.add_argument("--metrics-only", required=False, default=False, action='store_true', help="Skip prediction HDF5 and plots, and only write metrics JSON")
         optional_preds.add_argument("-t", "--tqdm", type=int,default=1, help="Use tqdm. If yes then you need to have it installed.")
         optional_preds.add_argument("-d", "--debug-chr", nargs="+", type=str, default=None, help="Run for specific chromosomes only (e.g. chr1 chr2) for debugging")
         optional_preds.add_argument("-bw", "--bigwig", type=str, default=None, help="If provided .h5 with predictions are output along with calculated metrics considering bigwig as groundtruth.")
@@ -294,4 +296,3 @@ def read_parser():
         args = parser.parse_args()
 
         return args
-

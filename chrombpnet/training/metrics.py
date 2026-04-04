@@ -16,7 +16,7 @@ font = {'weight' : 'bold',
 matplotlib.rc('font', **font)
 
    
-def counts_metrics(labels,preds,outf,title):
+def counts_metrics(labels,preds,outf,title,write_plot=True):
     '''
     Get count metrics
     '''
@@ -28,17 +28,95 @@ def counts_metrics(labels,preds,outf,title):
     #print("pearson:"+str(pearson_cor))
     #print("mse:"+str(mse))
 
-    plt.rcParams["figure.figsize"]=8,8
-    fig=plt.figure() 
-    density_scatter(labels,
-                    preds,
-                    xlab='Log Count Labels',
-                    ylab='Log Count Predictions')
-    plt.suptitle(title+" count: spearman R="+str(round(spearman_cor,3))+", Pearson R="+str(round(pearson_cor,3))+", mse="+str(round(mse,3)))
-    plt.legend(loc='best')
-    plt.savefig(outf+'.counts_pearsonr.png',format='png',dpi=300)
+    if write_plot:
+        plt.rcParams["figure.figsize"]=8,8
+        fig=plt.figure() 
+        density_scatter(labels,
+                        preds,
+                        xlab='Log Count Labels',
+                        ylab='Log Count Predictions')
+        plt.suptitle(title+" count: spearman R="+str(round(spearman_cor,3))+", Pearson R="+str(round(pearson_cor,3))+", mse="+str(round(mse,3)))
+        plt.legend(loc='best')
+        plt.savefig(outf+'.counts_pearsonr.png',format='png',dpi=300)
+        plt.close(fig)
     
     return spearman_cor, pearson_cor, mse
+
+
+def auroc(labels, scores):
+    labels = np.asarray(labels, dtype=np.float64).reshape(-1)
+    scores = np.asarray(scores, dtype=np.float64).reshape(-1)
+    if labels.size < 2:
+        return np.nan
+    n_pos = int(labels.sum())
+    n_neg = labels.size - n_pos
+    if n_pos == 0 or n_neg == 0:
+        return np.nan
+    order = np.argsort(-scores, kind='mergesort')
+    sorted_labels = labels[order]
+    tps = np.cumsum(sorted_labels)
+    fps = np.cumsum(1.0 - sorted_labels)
+    tpr = np.concatenate([[0.0], tps / n_pos])
+    fpr = np.concatenate([[0.0], fps / n_neg])
+    return float(np.trapz(tpr, fpr))
+
+
+def auprc(labels, scores):
+    labels = np.asarray(labels, dtype=np.float64).reshape(-1)
+    scores = np.asarray(scores, dtype=np.float64).reshape(-1)
+    if labels.size < 2:
+        return np.nan
+    n_pos = int(labels.sum())
+    if n_pos == 0 or n_pos == labels.size:
+        return np.nan
+    order = np.argsort(-scores, kind='mergesort')
+    sorted_labels = labels[order]
+    tps = np.cumsum(sorted_labels)
+    precision = tps / np.arange(1, labels.size + 1, dtype=np.float64)
+    recall = tps / n_pos
+    recall_change = np.diff(recall, prepend=0.0)
+    return float(np.sum(precision * recall_change))
+
+
+def best_f1_metrics(labels, scores):
+    labels = np.asarray(labels, dtype=np.float64).reshape(-1)
+    scores = np.asarray(scores, dtype=np.float64).reshape(-1)
+    n_pos = int(labels.sum())
+    if labels.size < 2 or n_pos == 0 or n_pos == labels.size:
+        return {
+            "best_f1": np.nan,
+            "best_f1_precision": np.nan,
+            "best_f1_recall": np.nan,
+            "best_f1_threshold": np.nan,
+        }
+    order = np.argsort(-scores, kind='mergesort')
+    sorted_labels = labels[order]
+    sorted_scores = scores[order]
+    tps = np.cumsum(sorted_labels)
+    fps = np.cumsum(1.0 - sorted_labels)
+    precision = tps / (tps + fps)
+    recall = tps / n_pos
+    f1 = 2 * precision * recall / np.maximum(precision + recall, 1e-8)
+    best_idx = int(np.argmax(f1))
+    return {
+        "best_f1": float(f1[best_idx]),
+        "best_f1_precision": float(precision[best_idx]),
+        "best_f1_recall": float(recall[best_idx]),
+        "best_f1_threshold": float(sorted_scores[best_idx]),
+    }
+
+
+def classification_metrics(labels, scores):
+    labels = np.asarray(labels, dtype=np.float64).reshape(-1)
+    scores = np.asarray(scores, dtype=np.float64).reshape(-1)
+    metrics_dict = {
+        "n_pos": int(labels.sum()) if labels.size else 0,
+        "n_neg": int(labels.size - labels.sum()) if labels.size else 0,
+        "auroc": auroc(labels, scores),
+        "auprc": auprc(labels, scores),
+    }
+    metrics_dict.update(best_f1_metrics(labels, scores))
+    return metrics_dict
 
 def profile_metrics(true_counts,pred_probs,pseudocount=0.001):
     '''
