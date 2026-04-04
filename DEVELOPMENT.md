@@ -1,6 +1,6 @@
 # TransChromBP 开发工作流指南 (Development Workflow)
 
-本文档描述了 TransChromBP 项目的开发、同步和版本管理流程。我们采用了 **"Git 版本控制 + Rsync 快速同步"** 的混合模式，以兼顾代码安全性和开发效率。
+本文档描述了 TransChromBP 项目的开发、同步和版本管理流程。我们采用了 **"Git 版本控制 + Rsync/Scp 快速同步"** 的混合模式，以兼顾代码安全性和开发效率。
 
 ## 1. 核心流程图解
 
@@ -16,7 +16,70 @@ graph TD
     C -->|Download Results (Rsync)| A
 ```
 
-## 2. 常用操作命令
+## 2. 版本管理主从关系
+
+从 2026-03-21 起，本项目对“哪里是档案源”采用更硬的约定：
+
+1. **本地仓库** 是唯一的代码与文档主档案。
+2. **GitHub** 负责长期备份与版本历史，不是实验运行目录。
+3. **6000 工作区** 是训练/评估用的远端工作副本，不应被视为最终版本真源。
+4. **6002 工作区** 当前按部署/运行目录管理，默认不作为 Git 档案节点。
+
+这意味着：
+
+- 代码、配置、实验计划、launcher、结果摘要，应先落本地仓库，再同步到远端。
+- 远端允许存在运行期临时改动，但必须回收并整理回本地。
+- 模型权重、原始数据、原始训练日志这类大文件，不作为 Git 版本管理对象。
+
+### 2.1 当前三处工作区的角色
+
+| 位置 | 当前角色 | 是否应视为主档案 |
+| :--- | :--- | :---: |
+| 本地 `/home/zhengwei/project/python/chromBPNet` | 主开发仓库、文档与分析汇总中心 | ✅ |
+| 6000 `/data1/zhoujiazhen/bylw_atac/chromBPNet` | 训练机上的 Git 工作副本 | ❌ |
+| 6002 `/home/zhengwei/bylw_atac/TransChromBP` | 运行/部署目录 | ❌ |
+
+### 2.2 哪些内容必须回收到本地版本管理
+
+以下内容默认应进入本地仓库并参与 Git 版本管理：
+
+- `chrombpnet/`、`scripts/`、`docs/`、`tests/` 等代码与文档目录
+- `vendor/transchrombp/` 中的版本化 TransChromBP snapshot 与辅助脚本
+- `configs/`、launcher、runtime config 模板、实验清单、计划文档
+- `reports/*.tex`
+- `reports/assets/` 下的小型结果摘要，例如 `csv`、`png`、`json`
+- `TRACKING.md`、`DEVELOPMENT.md`、实验安排文档
+
+以下内容默认不进入 Git：
+
+- checkpoint、权重、`*.h5`、`*.pt`
+- 原始训练数据与派生大文件：`bam/bw/bigWig/fa/fai/bed.gz`
+- 远端 `outputs/` 下的大型中间产物
+- 原始长训练日志全文
+
+### 2.3 原始日志与摘要的处理规则
+
+- `logs/` 目录下的原始训练日志仍然默认 **不进 Git**。
+- 但日志中的关键信息不应只留在远端：
+  - 需要整理成 `md/txt/csv/json/png` 摘要后回收到本地仓库。
+- 如果一份 `json` 很小、且是结果摘要而不是大规模中间产物，则应允许版本化。
+
+### 2.4 每次实验的最小归档动作
+
+在启动实验前，至少保证以下文件已经存在于本地仓库：
+
+1. 对应的 launcher
+2. 对应的 `model/train/data config`
+3. 对应的计划文档或实验清单
+
+在实验结束后，至少补齐以下动作：
+
+1. 将关键结果摘要带回本地
+2. 更新 `TRACKING.md`
+3. 如有必要，补 `reports/` 或 `docs/plan/` 中的结论文档
+4. 再决定是否提交 Git
+
+## 3. 常用操作命令
 
 所有操作均通过封装好的脚本 `./scripts/sync_project.sh` 完成。
 
@@ -54,7 +117,7 @@ graph TD
     ```
     *   **功能**: 将服务器的 `logs/` 和 `reports/` 目录同步回本地对应目录。
 
-## 3. 目录结构与同步规则
+## 4. 目录结构与同步规则
 
 为了防止数据丢失和冲突，我们定义了严格的同步规则：
 
@@ -62,21 +125,47 @@ graph TD
 | :--- | :---: | :---: | :---: | :--- |
 | `chrombpnet/` | ✅ | ✅ | ❌ | 核心代码库 |
 | `scripts/` | ✅ | ✅ | ❌ | 脚本工具 |
-| `logs/` | ❌ | ❌ (排除) | ✅ (下载) | 训练日志 |
-| `reports/` | ✅ (部分) | ✅ | ✅ (下载) | 评估报告 |
-| `outputs/` | ❌ | ❌ (排除) | ❌ | 模型检查点 (过大，手动管理) |
+| `docs/` | ✅ | ✅ | ✅（必要时） | 计划、清单、结果说明 |
+| `logs/` | 原始日志 ❌；摘要 ✅ | ❌ (排除) | ✅ (下载) | 原始日志不入 Git，摘要需整理回本地 |
+| `reports/` | ✅ (源码与摘要) | ✅ | ✅ (下载) | 保留 `tex/md/assets` 源文件；PDF 与 LaTeX 构建产物默认不入 Git |
+| `vendor/transchrombp/` | ✅ | ✅ | ❌ | 版本化的 TransChromBP 本地 snapshot |
+| `outputs/` | 大文件 ❌；小摘要视情况 ✅ | ❌ (排除) | ❌ | checkpoint 不进 Git；小型汇总需手动回收 |
 | `data/` | ❌ | ❌ (排除) | ❌ | 训练数据 (只在服务器存在) |
 | `*.h5`, `*.bw` | ❌ | ❌ (排除) | ❌ | 大文件 |
 
-## 4. 环境配置信息
+## 5. 环境配置信息
 
 *   **本地 Git 用户**: `yangmeisuan <345687960@qq.com>`
 *   **服务器 Git 用户**: `yangmeisuan <345687960@qq.com>`
 *   **服务器地址**: `127.0.0.1` (Port 6000)
 *   **部署路径**: `/data1/zhoujiazhen/bylw_atac/chromBPNet`
 
-## 5. 故障排查
+### 6000 上的多环境分工
+
+6000 上 `chrombpnet`、`transchrombp`、`genos-1.2b` 三套环境的用途、版本、激活方式与已知坑，已集中整理到：
+
+- `docs/env/transchrombp_genos_env.md`
+
+### 本地报告/画图独立环境
+
+为避免把 `matplotlib`、`pandas`、`seaborn`、`plotly` 等报告依赖混入训练环境，仓库提供了独立环境脚本：
+
+```bash
+bash scripts/setup_report_env.sh
+source .venv-report/bin/activate
+```
+
+默认安装的是画图与表格处理核心包，适合生成报告、CSV 汇总和可视化脚本。
+
+如果还需要 Jupyter / ipykernel，再执行：
+
+```bash
+INSTALL_NOTEBOOK=1 bash scripts/setup_report_env.sh
+```
+
+## 6. 故障排查
 
 *   **SSH 连接失败**: 确保你的 SSH 密钥已添加到服务器，且可以通过 `ssh zhoujiazhen@127.0.0.1 -p 6000` 直接登录。
 *   **权限错误**: 确保你对服务器上的目标目录有写权限。
 *   **Git 冲突**: 如果 `pull` 时出现冲突，请先手动解决冲突 (`git merge` 或 `git rebase`)，然后再继续。
+*   **远端代码与本地不一致**: 以本地仓库为准，先把远端有效改动回收成本地文件，再决定 `commit` 或重新部署；不要把 6000/6002 工作目录当成最终档案源。

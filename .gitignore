@@ -2,11 +2,19 @@
 *.a
 *.bat
 *.exe
-*.json
 *.pyc
 *.ipynb_checkpoints
 *.pkl
 *.npy
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.xdv
+*.Zone.Identifier
 # Directories #
 # logs
 results
@@ -42,6 +50,8 @@ MANIFEST
 # Environments
 .env
 .venv
+.venv-report/
+.venv-*/
 env/
 venv/
 ENV/
@@ -49,9 +59,12 @@ ENV/
 # IDEs
 .vscode/
 .idea/
+.claude/
+.codex
 
 # ChromBPNet Data & Models (Large files)
 *.h5
+*.pt
 *.bed
 *.bed.gz
 *.bigWig
@@ -86,3 +99,13 @@ bias_training_log.csv
 bias_training_curve.svg
 bias_training_curve_detailed.svg
 .codex_remote_edit/
+.agents/
+server_public_key.txt
+*.deb
+*.checked
+reports/*.pdf
+reports/texput.log
+tmp_remote_edit/*
+!tmp_remote_edit/README.md
+transchrombp_*.pdf
+transchrombp_training_perf_benchmark_20260320.pdf
