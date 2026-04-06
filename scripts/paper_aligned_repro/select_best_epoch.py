@@ -142,7 +142,6 @@ def run_predict_subprocess(model_path: Path, out_dir: Path, args: argparse.Names
         build_predict_cmd(model_path, output_prefix, args, predict_py),
         check=True,
         env=env,
-        cwd=args.official_root,
     )
 
 

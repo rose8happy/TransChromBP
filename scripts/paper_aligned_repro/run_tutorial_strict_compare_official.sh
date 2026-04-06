@@ -159,6 +159,9 @@ fi
 if [[ -n "${SHARED_BIGWIG}" ]]; then
   CMD+=(--eval-bigwig "${SHARED_BIGWIG}")
 fi
+if [[ -n "${CHROMBPNET_OFFICIAL_ROOT:-}" ]]; then
+  CMD+=(--official-root "${CHROMBPNET_OFFICIAL_ROOT}")
+fi
 
 echo "[strict-compare] mode=${MODE}"
 echo "[strict-compare] name=${NAME}"
@@ -174,5 +177,6 @@ echo "[strict-compare] work_root=${WORK_ROOT}"
 echo "[strict-compare] shared_peaks=${SHARED_PEAKS:-<none>}"
 echo "[strict-compare] shared_nonpeaks=${SHARED_NONPEAKS:-<none>}"
 echo "[strict-compare] shared_bigwig=${SHARED_BIGWIG:-<none>}"
+echo "[strict-compare] official_root=${CHROMBPNET_OFFICIAL_ROOT:-<none>}"
 
 "${CMD[@]}"
