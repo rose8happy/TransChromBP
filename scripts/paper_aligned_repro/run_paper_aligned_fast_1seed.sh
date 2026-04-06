@@ -139,6 +139,7 @@ if [[ -z "${OFFICIAL_ROOT}" ]]; then
   exit 1
 fi
 
+OFFICIAL_ROOT="$(cd "${OFFICIAL_ROOT}" && pwd)"
 OFFICIAL_PREDICT="${OFFICIAL_ROOT}/chrombpnet/training/predict.py"
 if [[ ! -f "${OFFICIAL_PREDICT}" ]]; then
   echo "ERROR: official predict.py not found: ${OFFICIAL_PREDICT}" >&2
@@ -225,6 +226,53 @@ run_official_predict() {
     CHROMBPNET_MULTI_GPU=0 PYTHONPATH="${official_pythonpath}" \
       python3 "${OFFICIAL_PREDICT}" "$@"
   fi
+}
+
+official_metrics_provenance_valid() {
+  local metrics_path="$1"
+  local expected_root="$2"
+  local expected_predict_py="$3"
+  python3 - "$metrics_path" "$expected_root" "$expected_predict_py" <<'PY'
+from __future__ import annotations
+
+import json
+import pathlib
+import sys
+
+metrics_path = pathlib.Path(sys.argv[1])
+expected = {
+    "official_root": sys.argv[2],
+    "predict_py": sys.argv[3],
+}
+try:
+    payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError, TypeError, ValueError):
+    raise SystemExit(1)
+if payload.get("_official_predict_provenance") != expected:
+    raise SystemExit(1)
+PY
+}
+
+official_metrics_annotate_provenance() {
+  local metrics_path="$1"
+  local expected_root="$2"
+  local expected_predict_py="$3"
+  python3 - "$metrics_path" "$expected_root" "$expected_predict_py" <<'PY'
+from __future__ import annotations
+
+import json
+import pathlib
+import sys
+
+metrics_path = pathlib.Path(sys.argv[1])
+expected = {
+    "official_root": sys.argv[2],
+    "predict_py": sys.argv[3],
+}
+payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+payload["_official_predict_provenance"] = expected
+metrics_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
 }
 
 run_fold() {
@@ -326,6 +374,27 @@ run_fold() {
       -il 2114 \
       -ol 1000 \
       -s "${SEED}"
+    official_metrics_annotate_provenance "${bias_metrics}" "${OFFICIAL_ROOT}" "${OFFICIAL_PREDICT}"
+  elif ! official_metrics_provenance_valid "${bias_metrics}" "${OFFICIAL_ROOT}" "${OFFICIAL_PREDICT}"; then
+    local bias_bigwig="${bias_dir}/auxiliary/data_unstranded.bw"
+    if [[ ! -f "${bias_bigwig}" ]]; then
+      echo "ERROR: bias bigwig missing: ${bias_bigwig}" >&2
+      return 1
+    fi
+    echo "[INFO][${fold_key}] bias predict metrics: refresh stale provenance"
+    run_official_predict "${predict_gpu}" \
+      -g "${GENOME}" \
+      -b "${bias_bigwig}" \
+      -p "${PEAKS}" \
+      -n "${nonpeaks}" \
+      -o "${bias_dir}/evaluation/bias" \
+      -fl "${fold_json}" \
+      -m "${bias_model}" \
+      -bs "${PREDICT_BATCH_SIZE}" \
+      -il 2114 \
+      -ol 1000 \
+      -s "${SEED}"
+    official_metrics_annotate_provenance "${bias_metrics}" "${OFFICIAL_ROOT}" "${OFFICIAL_PREDICT}"
   else
     echo "[INFO][${fold_key}] bias metrics: skip"
   fi
@@ -393,6 +462,42 @@ run_fold() {
       -il 2114 \
       -ol 1000 \
       -s "${SEED}"
+    official_metrics_annotate_provenance "${chrom_metrics}" "${OFFICIAL_ROOT}" "${OFFICIAL_PREDICT}"
+  elif ! official_metrics_provenance_valid "${chrom_metrics}" "${OFFICIAL_ROOT}" "${OFFICIAL_PREDICT}"; then
+    local chrom_bigwig="${chrom_dir}/auxiliary/data_unstranded.bw"
+    if [[ ! -f "${chrom_bigwig}" ]]; then
+      echo "ERROR: chrombpnet bigwig missing: ${chrom_bigwig}" >&2
+      return 1
+    fi
+    local eval_bigwig="${chrom_bigwig}"
+    if [[ -n "${EVAL_BIGWIG}" ]]; then
+      eval_bigwig="${EVAL_BIGWIG}"
+    fi
+    local eval_peaks="${chrom_dir}/auxiliary/filtered.peaks.bed"
+    local eval_nonpeaks="None"
+    if [[ -n "${EXTERNAL_NONPEAKS}" ]]; then
+      eval_nonpeaks="${nonpeaks}"
+    fi
+    if [[ "${USE_INPUT_PEAKS_FOR_EVAL}" == "1" ]]; then
+      eval_peaks="${PEAKS}"
+    elif [[ ! -f "${eval_peaks}" ]]; then
+      echo "ERROR: filtered peaks missing: ${eval_peaks}" >&2
+      return 1
+    fi
+    echo "[INFO][${fold_key}] chrombpnet predict metrics: refresh stale provenance"
+    run_official_predict "${predict_gpu}" \
+      -g "${GENOME}" \
+      -b "${eval_bigwig}" \
+      -p "${eval_peaks}" \
+      -n "${eval_nonpeaks}" \
+      -o "${chrom_dir}/evaluation/chrombpnet" \
+      -fl "${fold_json}" \
+      -m "${chrom_model}" \
+      -bs "${PREDICT_BATCH_SIZE}" \
+      -il 2114 \
+      -ol 1000 \
+      -s "${SEED}"
+    official_metrics_annotate_provenance "${chrom_metrics}" "${OFFICIAL_ROOT}" "${OFFICIAL_PREDICT}"
   else
     echo "[INFO][${fold_key}] chrombpnet metrics: skip"
   fi

@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 EPOCH_RE = re.compile(r"\.epoch_(\d+)\.h5$")
+OFFICIAL_PROVENANCE_KEY = "_official_predict_provenance"
 
 
 def parse_args() -> argparse.Namespace:
@@ -128,21 +129,59 @@ def metrics_path_for(model_path: Path, out_dir: Path) -> Path:
     return Path(f"{out_dir / model_path.stem}_metrics.json")
 
 
-def run_predict_subprocess(model_path: Path, out_dir: Path, args: argparse.Namespace, gpu: str, predict_py: Path) -> None:
+def official_provenance_payload(official_root: Path, predict_py: Path) -> dict[str, str]:
+    return {
+        "official_root": str(official_root),
+        "predict_py": str(predict_py),
+    }
+
+
+def metrics_has_valid_provenance(metrics_path: Path, official_root: Path, predict_py: Path) -> bool:
+    try:
+        payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return False
+    return payload.get(OFFICIAL_PROVENANCE_KEY) == official_provenance_payload(official_root, predict_py)
+
+
+def annotate_metrics_provenance(metrics_path: Path, official_root: Path, predict_py: Path) -> None:
+    payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+    payload[OFFICIAL_PROVENANCE_KEY] = official_provenance_payload(official_root, predict_py)
+    metrics_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def should_recompute_metrics(
+    metrics_path: Path,
+    args: argparse.Namespace,
+    official_root: Path,
+    predict_py: Path,
+) -> bool:
+    if args.force or not metrics_path.exists():
+        return True
+    return not metrics_has_valid_provenance(metrics_path, official_root, predict_py)
+
+
+def run_predict_subprocess(
+    model_path: Path,
+    out_dir: Path,
+    args: argparse.Namespace,
+    gpu: str,
+    official_root: Path,
+    predict_py: Path,
+) -> None:
     output_prefix = out_dir / model_path.stem
     env = os.environ.copy()
     if gpu:
         env["CUDA_VISIBLE_DEVICES"] = gpu
     env["CHROMBPNET_MULTI_GPU"] = "0"
-    env["PYTHONPATH"] = (
-        f"{args.official_root}:{env['PYTHONPATH']}" if env.get("PYTHONPATH") else str(args.official_root)
-    )
+    env["PYTHONPATH"] = f"{official_root}:{env['PYTHONPATH']}" if env.get("PYTHONPATH") else str(official_root)
     print(f"[selector] gpu={gpu} evaluate {model_path.name}")
     subprocess.run(
         build_predict_cmd(model_path, output_prefix, args, predict_py),
         check=True,
         env=env,
     )
+    annotate_metrics_provenance(metrics_path_for(model_path, out_dir), official_root, predict_py)
 
 
 def evaluate_assigned_models(
@@ -150,18 +189,20 @@ def evaluate_assigned_models(
     out_dir: Path,
     args: argparse.Namespace,
     gpu: str,
+    official_root: Path,
     predict_py: Path,
 ) -> None:
     for model_path in model_paths:
         metrics_path = metrics_path_for(model_path, out_dir)
-        if args.force or not metrics_path.exists():
-            run_predict_subprocess(model_path, out_dir, args, gpu, predict_py)
+        if should_recompute_metrics(metrics_path, args, official_root, predict_py):
+            run_predict_subprocess(model_path, out_dir, args, gpu, official_root, predict_py)
 
 
 def evaluate_models(
     model_paths: list[Path],
     out_dir: Path,
     args: argparse.Namespace,
+    official_root: Path,
     predict_py: Path,
 ) -> None:
     gpu_list = parse_gpu_list(args.gpus)
@@ -169,8 +210,8 @@ def evaluate_models(
     if len(gpu_list) <= 1:
         for model_path in model_paths:
             metrics_path = metrics_path_for(model_path, out_dir)
-            if args.force or not metrics_path.exists():
-                run_predict_subprocess(model_path, out_dir, args, gpu, predict_py)
+            if should_recompute_metrics(metrics_path, args, official_root, predict_py):
+                run_predict_subprocess(model_path, out_dir, args, gpu, official_root, predict_py)
         return
 
     worker_count = len(gpu_list) if args.max_workers <= 0 else min(args.max_workers, len(gpu_list))
@@ -182,7 +223,7 @@ def evaluate_models(
 
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = [
-            executor.submit(evaluate_assigned_models, assigned_paths, out_dir, args, gpu, predict_py)
+            executor.submit(evaluate_assigned_models, assigned_paths, out_dir, args, gpu, official_root, predict_py)
             for gpu, assigned_paths in assignments.items()
             if assigned_paths
         ]
@@ -227,7 +268,7 @@ def main() -> None:
     best_row: dict[str, Any] | None = None
     best_value = float("nan")
 
-    evaluate_models(model_paths, out_dir, args, predict_py)
+    evaluate_models(model_paths, out_dir, args, official_root, predict_py)
 
     for model_path in model_paths:
         metrics_path = metrics_path_for(model_path, out_dir)

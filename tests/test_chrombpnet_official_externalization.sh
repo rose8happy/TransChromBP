@@ -195,6 +195,20 @@ cat > "${tmpdir}/relwork/data/nonpeaks.bed" <<'EOF'
 chr1	10	20
 EOF
 : > "${tmpdir}/relwork/models/chrombpnet.epoch_1.h5"
+cat > "${tmpdir}/relwork/out/chrombpnet.epoch_1_metrics.json" <<'EOF'
+{
+  "_official_predict_provenance": {
+    "official_root": "/stale",
+    "predict_py": "/stale"
+  },
+  "imported_chrombpnet_file": "stale",
+  "profile_metrics": {
+    "peaks": {
+      "median_jsd": 9.999
+    }
+  }
+}
+EOF
 
 (
   cd "${tmpdir}/relwork"
@@ -219,10 +233,15 @@ import sys
 payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 imported = payload["imported_chrombpnet_file"]
 cuda_visible_devices = payload["cuda_visible_devices"]
+provenance = payload["_official_predict_provenance"]
 if not imported.startswith(sys.argv[2]):
     raise SystemExit(f"import came from wrong package: {imported}")
 if cuda_visible_devices != "9":
     raise SystemExit(f"CUDA_VISIBLE_DEVICES was not preserved: {cuda_visible_devices!r}")
+if provenance["official_root"] != sys.argv[2]:
+    raise SystemExit(f"selector provenance did not refresh: {provenance}")
+if payload["profile_metrics"]["peaks"]["median_jsd"] != 0.123:
+    raise SystemExit(f"selector metrics did not refresh: {payload['profile_metrics']['peaks']['median_jsd']}")
 PY
 
 fake_official_root_run="${tmpdir}/official_run"
@@ -249,6 +268,36 @@ chr1	40	50
 EOF
 cat > "${tmpdir}/run/folds/fold_0.json" <<'EOF'
 {"fold": 0}
+EOF
+mkdir -p "${tmpdir}/run/work/runs/test_official_externalization/fold_0/seed_7/bias/evaluation" \
+  "${tmpdir}/run/work/runs/test_official_externalization/fold_0/seed_7/chrombpnet/evaluation"
+cat > "${tmpdir}/run/work/runs/test_official_externalization/fold_0/seed_7/bias/evaluation/bias_metrics.json" <<'EOF'
+{
+  "_official_predict_provenance": {
+    "official_root": "/stale",
+    "predict_py": "/stale"
+  },
+  "imported_chrombpnet_file": "stale",
+  "profile_metrics": {
+    "peaks": {
+      "median_jsd": 9.999
+    }
+  }
+}
+EOF
+cat > "${tmpdir}/run/work/runs/test_official_externalization/fold_0/seed_7/chrombpnet/evaluation/chrombpnet_metrics.json" <<'EOF'
+{
+  "_official_predict_provenance": {
+    "official_root": "/stale",
+    "predict_py": "/stale"
+  },
+  "imported_chrombpnet_file": "stale",
+  "profile_metrics": {
+    "peaks": {
+      "median_jsd": 9.999
+    }
+  }
+}
 EOF
 
 PATH="${fake_official_root_run}/bin:${PATH}" \
@@ -277,6 +326,24 @@ payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 imported = payload["imported_chrombpnet_file"]
 if not imported.startswith(sys.argv[2]):
     raise SystemExit(f"run script imported chrombpnet from wrong package: {imported}")
+if payload["_official_predict_provenance"]["official_root"] != sys.argv[2]:
+    raise SystemExit(f"run script provenance did not refresh: {payload['_official_predict_provenance']}")
+if payload["profile_metrics"]["peaks"]["median_jsd"] != 0.123:
+    raise SystemExit(f"run script metrics did not refresh: {payload['profile_metrics']['peaks']['median_jsd']}")
+PY
+
+python3 - "${tmpdir}/run/work/runs/test_official_externalization/fold_0/seed_7/bias/evaluation/bias_metrics.json" "${fake_official_root_run}" <<'PY'
+import json
+import pathlib
+import sys
+
+payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+if payload["imported_chrombpnet_file"] == "stale":
+    raise SystemExit("bias metrics cache was not refreshed")
+if payload["_official_predict_provenance"]["official_root"] != sys.argv[2]:
+    raise SystemExit(f"bias metrics provenance did not refresh: {payload['_official_predict_provenance']}")
+if payload["profile_metrics"]["peaks"]["median_jsd"] != 0.123:
+    raise SystemExit(f"bias metrics did not refresh: {payload['profile_metrics']['peaks']['median_jsd']}")
 PY
 
 wrapper_tmp="${tmpdir}/wrapper"
