@@ -45,6 +45,7 @@ Optional:
   --use-input-peaks-for-eval Evaluate with the input `--peaks` file instead of `filtered.peaks.bed`
   --save-all-checkpoints     Also save one checkpoint per epoch for external best-epoch selection
   --multi-gpu-train          Train bias/chrombpnet with MirroredStrategy across all GPUs in --gpus
+  --official-root PATH       Official ChromBPNet repo root (default: \$CHROMBPNET_OFFICIAL_ROOT)
   --folds "fold_0 fold_1"    (default: all fold_*.json in fold-dir)
 USAGE
 }
@@ -80,6 +81,7 @@ MULTI_GPU_TRAIN="0"
 EXTERNAL_NONPEAKS=""
 EVAL_BIGWIG=""
 USE_INPUT_PEAKS_FOR_EVAL="0"
+OFFICIAL_ROOT="${CHROMBPNET_OFFICIAL_ROOT:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -105,6 +107,7 @@ while [[ $# -gt 0 ]]; do
     --use-input-peaks-for-eval) USE_INPUT_PEAKS_FOR_EVAL="1"; shift 1 ;;
     --save-all-checkpoints) SAVE_ALL_CHECKPOINTS="1"; shift 1 ;;
     --multi-gpu-train) MULTI_GPU_TRAIN="1"; shift 1 ;;
+    --official-root) OFFICIAL_ROOT="$2"; shift 2 ;;
     --folds) FOLDS="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *)
@@ -128,6 +131,17 @@ fi
 
 if [[ -n "${EVAL_BIGWIG}" && ! -f "${EVAL_BIGWIG}" ]]; then
   echo "ERROR: evaluation bigwig not found: ${EVAL_BIGWIG}" >&2
+  exit 1
+fi
+
+if [[ -z "${OFFICIAL_ROOT}" ]]; then
+  echo "ERROR: missing official ChromBPNet root; pass --official-root or set CHROMBPNET_OFFICIAL_ROOT" >&2
+  exit 1
+fi
+
+OFFICIAL_PREDICT="${OFFICIAL_ROOT}/chrombpnet/training/predict.py"
+if [[ ! -f "${OFFICIAL_PREDICT}" ]]; then
+  echo "ERROR: official predict.py not found: ${OFFICIAL_PREDICT}" >&2
   exit 1
 fi
 
@@ -192,6 +206,7 @@ echo "[INFO] max parallel folds: ${MAX_PARALLEL}"
 echo "[INFO] total folds: ${#FOLD_FILES[@]}"
 echo "[INFO] save all checkpoints: ${SAVE_ALL_CHECKPOINTS}"
 echo "[INFO] multi gpu train: ${MULTI_GPU_TRAIN}"
+echo "[INFO] official root: ${OFFICIAL_ROOT}"
 echo "[INFO] external nonpeaks: ${EXTERNAL_NONPEAKS:-<none>}"
 echo "[INFO] eval bigwig override: ${EVAL_BIGWIG:-<none>}"
 echo "[INFO] use input peaks for eval: ${USE_INPUT_PEAKS_FOR_EVAL}"
@@ -283,7 +298,7 @@ run_fold() {
       return 1
     fi
     echo "[INFO][${fold_key}] bias predict metrics"
-    CUDA_VISIBLE_DEVICES="${predict_gpu}" CHROMBPNET_MULTI_GPU=0 python3 "${REPO_ROOT}/chrombpnet/training/predict.py" \
+    CUDA_VISIBLE_DEVICES="${predict_gpu}" CHROMBPNET_MULTI_GPU=0 python3 "${OFFICIAL_PREDICT}" \
       -g "${GENOME}" \
       -b "${bias_bigwig}" \
       -p "${PEAKS}" \
@@ -350,7 +365,7 @@ run_fold() {
       return 1
     fi
     echo "[INFO][${fold_key}] chrombpnet predict metrics"
-    CUDA_VISIBLE_DEVICES="${predict_gpu}" CHROMBPNET_MULTI_GPU=0 python3 "${REPO_ROOT}/chrombpnet/training/predict.py" \
+    CUDA_VISIBLE_DEVICES="${predict_gpu}" CHROMBPNET_MULTI_GPU=0 python3 "${OFFICIAL_PREDICT}" \
       -g "${GENOME}" \
       -b "${eval_bigwig}" \
       -p "${eval_peaks}" \

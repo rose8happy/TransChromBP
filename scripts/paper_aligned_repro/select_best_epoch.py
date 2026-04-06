@@ -12,15 +12,9 @@ import os
 import re
 import subprocess
 import sys
-from argparse import Namespace
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
 
 EPOCH_RE = re.compile(r"\.epoch_(\d+)\.h5$")
 
@@ -39,6 +33,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--metric", default="profile_metrics.peaks.median_jsd", help="Metric path used to select best epoch")
     parser.add_argument("--mode", choices=["min", "max"], default="min", help="Whether lower or higher metric is better")
     parser.add_argument("--split", choices=["train", "valid", "test"], default="valid", help="Fold split used for external checkpoint selection")
+    parser.add_argument(
+        "--official-root",
+        default="",
+        help="Path to the official ChromBPNet repo root; defaults to $CHROMBPNET_OFFICIAL_ROOT",
+    )
     parser.add_argument("--batch-size", type=int, default=512, help="Predict batch size")
     parser.add_argument("--seed", type=int, default=1234, help="Predict seed")
     parser.add_argument("--inputlen", type=int, default=2114, help="Input sequence length")
@@ -69,36 +68,30 @@ def epoch_sort_key(path_str: str) -> tuple[int, str]:
     return (10**9, path.name)
 
 
-def build_predict_args(
-    model_path: Path,
-    output_prefix: Path,
-    args: argparse.Namespace,
-) -> Namespace:
-    return Namespace(
-        genome=args.genome,
-        bigwig=args.bigwig,
-        peaks=args.peaks,
-        nonpeaks=args.nonpeaks,
-        output_prefix=str(output_prefix),
-        chr_fold_path=args.fold_json,
-        model_h5=str(model_path),
-        batch_size=args.batch_size,
-        seed=args.seed,
-        inputlen=args.inputlen,
-        outputlen=args.outputlen,
-        split=args.split,
-        metrics_only=True,
-    )
+def resolve_official_root(args: argparse.Namespace) -> tuple[Path, Path]:
+    raw_root = args.official_root or os.environ.get("CHROMBPNET_OFFICIAL_ROOT", "")
+    if not raw_root:
+        raise SystemExit("ERROR: missing official ChromBPNet root; pass --official-root or set CHROMBPNET_OFFICIAL_ROOT")
+
+    official_root = Path(raw_root).expanduser().resolve()
+    predict_py = official_root / "chrombpnet" / "training" / "predict.py"
+    if not predict_py.is_file():
+        raise SystemExit(
+            f"ERROR: official predict.py not found: {predict_py} "
+            "(set --official-root or CHROMBPNET_OFFICIAL_ROOT to the official ChromBPNet repo root)"
+        )
+    return official_root, predict_py
 
 
 def build_predict_cmd(
     model_path: Path,
     output_prefix: Path,
     args: argparse.Namespace,
+    predict_py: Path,
 ) -> list[str]:
     return [
         sys.executable,
-        str(REPO_ROOT / "chrombpnet" / "training" / "predict.py"),
+        str(predict_py),
         "-g",
         args.genome,
         "-b",
@@ -135,14 +128,16 @@ def metrics_path_for(model_path: Path, out_dir: Path) -> Path:
     return Path(f"{out_dir / model_path.stem}_metrics.json")
 
 
-def run_predict_subprocess(model_path: Path, out_dir: Path, args: argparse.Namespace, gpu: str) -> None:
+def run_predict_subprocess(model_path: Path, out_dir: Path, args: argparse.Namespace, gpu: str, predict_py: Path) -> None:
     output_prefix = out_dir / model_path.stem
     env = os.environ.copy()
-    env["CUDA_VISIBLE_DEVICES"] = gpu
+    if gpu:
+        env["CUDA_VISIBLE_DEVICES"] = gpu
+    else:
+        env.pop("CUDA_VISIBLE_DEVICES", None)
     env["CHROMBPNET_MULTI_GPU"] = "0"
-    env["PYTHONPATH"] = f"{REPO_ROOT}:{env.get('PYTHONPATH', '')}" if env.get("PYTHONPATH") else str(REPO_ROOT)
     print(f"[selector] gpu={gpu} evaluate {model_path.name}")
-    subprocess.run(build_predict_cmd(model_path, output_prefix, args), check=True, env=env)
+    subprocess.run(build_predict_cmd(model_path, output_prefix, args, predict_py), check=True, env=env)
 
 
 def evaluate_assigned_models(
@@ -150,27 +145,27 @@ def evaluate_assigned_models(
     out_dir: Path,
     args: argparse.Namespace,
     gpu: str,
+    predict_py: Path,
 ) -> None:
     for model_path in model_paths:
         metrics_path = metrics_path_for(model_path, out_dir)
         if args.force or not metrics_path.exists():
-            run_predict_subprocess(model_path, out_dir, args, gpu)
+            run_predict_subprocess(model_path, out_dir, args, gpu, predict_py)
 
 
 def evaluate_models(
     model_paths: list[Path],
     out_dir: Path,
     args: argparse.Namespace,
+    predict_py: Path,
 ) -> None:
     gpu_list = parse_gpu_list(args.gpus)
+    gpu = gpu_list[0] if gpu_list else ""
     if len(gpu_list) <= 1:
-        from chrombpnet.training import predict as predict_module
-
         for model_path in model_paths:
             metrics_path = metrics_path_for(model_path, out_dir)
             if args.force or not metrics_path.exists():
-                predict_args = build_predict_args(model_path=model_path, output_prefix=out_dir / model_path.stem, args=args)
-                predict_module.main(predict_args)
+                run_predict_subprocess(model_path, out_dir, args, gpu, predict_py)
         return
 
     worker_count = len(gpu_list) if args.max_workers <= 0 else min(args.max_workers, len(gpu_list))
@@ -182,7 +177,7 @@ def evaluate_models(
 
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = [
-            executor.submit(evaluate_assigned_models, assigned_paths, out_dir, args, gpu)
+            executor.submit(evaluate_assigned_models, assigned_paths, out_dir, args, gpu, predict_py)
             for gpu, assigned_paths in assignments.items()
             if assigned_paths
         ]
@@ -212,6 +207,7 @@ def is_better(candidate: float, current_best: float, mode: str) -> bool:
 
 def main() -> None:
     args = parse_args()
+    _official_root, predict_py = resolve_official_root(args)
 
     out_dir = Path(args.output_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -225,7 +221,7 @@ def main() -> None:
     best_row: dict[str, Any] | None = None
     best_value = float("nan")
 
-    evaluate_models(model_paths, out_dir, args)
+    evaluate_models(model_paths, out_dir, args, predict_py)
 
     for model_path in model_paths:
         metrics_path = metrics_path_for(model_path, out_dir)
