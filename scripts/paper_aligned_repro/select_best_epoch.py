@@ -133,11 +133,17 @@ def run_predict_subprocess(model_path: Path, out_dir: Path, args: argparse.Names
     env = os.environ.copy()
     if gpu:
         env["CUDA_VISIBLE_DEVICES"] = gpu
-    else:
-        env.pop("CUDA_VISIBLE_DEVICES", None)
     env["CHROMBPNET_MULTI_GPU"] = "0"
+    env["PYTHONPATH"] = (
+        f"{args.official_root}:{env['PYTHONPATH']}" if env.get("PYTHONPATH") else str(args.official_root)
+    )
     print(f"[selector] gpu={gpu} evaluate {model_path.name}")
-    subprocess.run(build_predict_cmd(model_path, output_prefix, args, predict_py), check=True, env=env)
+    subprocess.run(
+        build_predict_cmd(model_path, output_prefix, args, predict_py),
+        check=True,
+        env=env,
+        cwd=args.official_root,
+    )
 
 
 def evaluate_assigned_models(
@@ -207,7 +213,8 @@ def is_better(candidate: float, current_best: float, mode: str) -> bool:
 
 def main() -> None:
     args = parse_args()
-    _official_root, predict_py = resolve_official_root(args)
+    official_root, predict_py = resolve_official_root(args)
+    args.official_root = str(official_root)
 
     out_dir = Path(args.output_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)

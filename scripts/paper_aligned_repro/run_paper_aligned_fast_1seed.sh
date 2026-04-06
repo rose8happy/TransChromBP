@@ -211,6 +211,22 @@ echo "[INFO] external nonpeaks: ${EXTERNAL_NONPEAKS:-<none>}"
 echo "[INFO] eval bigwig override: ${EVAL_BIGWIG:-<none>}"
 echo "[INFO] use input peaks for eval: ${USE_INPUT_PEAKS_FOR_EVAL}"
 
+run_official_predict() {
+  local gpu="$1"
+  shift
+  local official_pythonpath="${OFFICIAL_ROOT}"
+  if [[ -n "${PYTHONPATH:-}" ]]; then
+    official_pythonpath="${OFFICIAL_ROOT}:${PYTHONPATH}"
+  fi
+  if [[ -n "${gpu}" ]]; then
+    CUDA_VISIBLE_DEVICES="${gpu}" CHROMBPNET_MULTI_GPU=0 PYTHONPATH="${official_pythonpath}" \
+      python3 "${OFFICIAL_PREDICT}" "$@"
+  else
+    CHROMBPNET_MULTI_GPU=0 PYTHONPATH="${official_pythonpath}" \
+      python3 "${OFFICIAL_PREDICT}" "$@"
+  fi
+}
+
 run_fold() {
   local fold_json="$1"
   local gpu="$2"
@@ -298,7 +314,7 @@ run_fold() {
       return 1
     fi
     echo "[INFO][${fold_key}] bias predict metrics"
-    CUDA_VISIBLE_DEVICES="${predict_gpu}" CHROMBPNET_MULTI_GPU=0 python3 "${OFFICIAL_PREDICT}" \
+    run_official_predict "${predict_gpu}" \
       -g "${GENOME}" \
       -b "${bias_bigwig}" \
       -p "${PEAKS}" \
@@ -365,7 +381,7 @@ run_fold() {
       return 1
     fi
     echo "[INFO][${fold_key}] chrombpnet predict metrics"
-    CUDA_VISIBLE_DEVICES="${predict_gpu}" CHROMBPNET_MULTI_GPU=0 python3 "${OFFICIAL_PREDICT}" \
+    run_official_predict "${predict_gpu}" \
       -g "${GENOME}" \
       -b "${eval_bigwig}" \
       -p "${eval_peaks}" \
