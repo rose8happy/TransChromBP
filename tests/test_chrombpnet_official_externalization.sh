@@ -8,10 +8,20 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 select_best_epoch="${REPO_ROOT}/scripts/paper_aligned_repro/select_best_epoch.py"
 run_fast_1seed="${REPO_ROOT}/scripts/paper_aligned_repro/run_paper_aligned_fast_1seed.sh"
 
-if rg -n "REPO_ROOT/chrombpnet/training/predict.py|from chrombpnet.training import predict" "${select_best_epoch}" "${run_fast_1seed}"; then
-  echo "ERROR: target files still reference the local chrombpnet predict entrypoint" >&2
-  exit 1
-fi
+local_predict_patterns=(
+  'REPO_ROOT/chrombpnet/training/predict.py'
+  '${REPO_ROOT}/chrombpnet/training/predict.py'
+  'REPO_ROOT / "chrombpnet" / "training" / "predict.py"'
+  'str(REPO_ROOT / "chrombpnet" / "training" / "predict.py")'
+  'from chrombpnet.training import predict'
+)
+
+for pattern in "${local_predict_patterns[@]}"; do
+  if rg -F -n "${pattern}" "${select_best_epoch}" "${run_fast_1seed}"; then
+    echo "ERROR: target files still reference the local chrombpnet predict entrypoint: ${pattern}" >&2
+    exit 1
+  fi
+done
 
 if ! python3 "${select_best_epoch}" --help 2>&1 | grep -q -- '--official-root'; then
   echo "ERROR: select_best_epoch.py --help does not expose --official-root" >&2
