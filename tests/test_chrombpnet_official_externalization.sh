@@ -33,8 +33,18 @@ if ! bash "${run_fast_1seed}" --help 2>&1 | grep -q -- '--official-root'; then
   exit 1
 fi
 
+if ! bash "${REPO_ROOT}/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh" --help 2>&1 | grep -q -- '--official-root'; then
+  echo "ERROR: run_tutorial_strict_compare_official.sh --help does not expose --official-root" >&2
+  exit 1
+fi
+
 if ! rg -n "CHROMBPNET_OFFICIAL_ROOT" "${run_fast_1seed}" >/dev/null; then
   echo "ERROR: run_paper_aligned_fast_1seed.sh does not mention CHROMBPNET_OFFICIAL_ROOT" >&2
+  exit 1
+fi
+
+if ! rg -n "CHROMBPNET_OFFICIAL_ROOT|--official-root" "${REPO_ROOT}/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh" >/dev/null; then
+  echo "ERROR: run_tutorial_strict_compare_official.sh does not clearly handle official root" >&2
   exit 1
 fi
 
@@ -268,5 +278,21 @@ imported = payload["imported_chrombpnet_file"]
 if not imported.startswith(sys.argv[2]):
     raise SystemExit(f"run script imported chrombpnet from wrong package: {imported}")
 PY
+
+wrapper_tmp="${tmpdir}/wrapper"
+mkdir -p "${wrapper_tmp}/work"
+if bash "${REPO_ROOT}/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh" \
+  --mode controlled \
+  --work-root "${wrapper_tmp}/work" \
+  --seed 7 \
+  --folds fold_0 \
+  --gpus 0 2> "${wrapper_tmp}/stderr"; then
+  echo "ERROR: wrapper preflight unexpectedly succeeded without --official-root" >&2
+  exit 1
+fi
+if ! grep -q "pass --official-root or set CHROMBPNET_OFFICIAL_ROOT" "${wrapper_tmp}/stderr"; then
+  echo "ERROR: wrapper preflight did not emit the expected official-root error" >&2
+  exit 1
+fi
 
 echo "official externalization guard passed"

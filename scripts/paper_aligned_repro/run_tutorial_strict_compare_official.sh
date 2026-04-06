@@ -19,6 +19,7 @@ Optional shared-region overrides:
   --shared-peaks /path/to/shared_filtered_peaks.bed
   --shared-nonpeaks /path/to/shared_filtered_nonpeaks.bed
   --shared-bigwig /path/to/shared_unstranded.bw
+  --official-root /path/to/official/chrombpnet
 
 Modes:
   fidelity
@@ -42,6 +43,7 @@ RUN_SUFFIX=""
 SHARED_PEAKS=""
 SHARED_NONPEAKS=""
 SHARED_BIGWIG=""
+OFFICIAL_ROOT="${CHROMBPNET_OFFICIAL_ROOT:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -56,6 +58,7 @@ while [[ $# -gt 0 ]]; do
     --shared-peaks) SHARED_PEAKS="$2"; shift 2 ;;
     --shared-nonpeaks) SHARED_NONPEAKS="$2"; shift 2 ;;
     --shared-bigwig) SHARED_BIGWIG="$2"; shift 2 ;;
+    --official-root) OFFICIAL_ROOT="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *)
       echo "ERROR: unknown argument: $1" >&2
@@ -109,6 +112,11 @@ if [[ -n "${SHARED_BIGWIG}" && ! -f "${SHARED_BIGWIG}" ]]; then
   exit 1
 fi
 
+if [[ -z "${OFFICIAL_ROOT}" ]]; then
+  echo "ERROR: missing official ChromBPNet root; pass --official-root or set CHROMBPNET_OFFICIAL_ROOT" >&2
+  exit 1
+fi
+
 if [[ -z "${NAME}" ]]; then
   NAME="${RUN_NAME_DEFAULT}${RUN_SUFFIX}"
 fi
@@ -159,9 +167,7 @@ fi
 if [[ -n "${SHARED_BIGWIG}" ]]; then
   CMD+=(--eval-bigwig "${SHARED_BIGWIG}")
 fi
-if [[ -n "${CHROMBPNET_OFFICIAL_ROOT:-}" ]]; then
-  CMD+=(--official-root "${CHROMBPNET_OFFICIAL_ROOT}")
-fi
+CMD+=(--official-root "${OFFICIAL_ROOT}")
 
 echo "[strict-compare] mode=${MODE}"
 echo "[strict-compare] name=${NAME}"
@@ -177,6 +183,6 @@ echo "[strict-compare] work_root=${WORK_ROOT}"
 echo "[strict-compare] shared_peaks=${SHARED_PEAKS:-<none>}"
 echo "[strict-compare] shared_nonpeaks=${SHARED_NONPEAKS:-<none>}"
 echo "[strict-compare] shared_bigwig=${SHARED_BIGWIG:-<none>}"
-echo "[strict-compare] official_root=${CHROMBPNET_OFFICIAL_ROOT:-<none>}"
+echo "[strict-compare] official_root=${OFFICIAL_ROOT}"
 
 "${CMD[@]}"
