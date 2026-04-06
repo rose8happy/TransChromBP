@@ -29,7 +29,7 @@ export CHROMBPNET_ENV=/data1/zhoujiazhen/bylw_atac/.mamba/envs/chrombpnet
 export CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chrombpnet_official
 export PATH="$CHROMBPNET_ENV/bin:$PATH"
 export LD_LIBRARY_PATH="$CHROMBPNET_ENV/lib:$LD_LIBRARY_PATH"
-export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/chromBPNet/vendor/transchrombp:$PYTHONPATH
+export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/TransChromBP/vendor/transchrombp:$PYTHONPATH
 ```
 
 说明：
