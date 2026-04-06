@@ -136,6 +136,14 @@ assert_log_lacks() {
   fi
 }
 
+assert_log_empty() {
+  local file="$1"
+  if [[ -e "${file}" && -s "${file}" ]]; then
+    echo "ERROR: expected no remote command log entries in ${file}" >&2
+    exit 1
+  fi
+}
+
 make_fake_full_workflow_tools() {
   local fakebin="$1"
   mkdir -p "${fakebin}"
@@ -273,6 +281,246 @@ EOF
     "${fakebin}/step5_interpret_bias_model.sh" \
     "${fakebin}/step6_train_chrombpnet_model.sh" \
     "${fakebin}/step7_interpret_chrombpnet_model.sh"
+}
+
+make_fake_run_remote_prep_fixture() {
+  local base="$1"
+  local root="${base}/root"
+  local env_dir="${base}/env"
+  local dataset_dir="${root}/chrombpnet_datasets/GM12878"
+  local tutorial_dir="${root}/chrombpnet_tutorial/data"
+
+  mkdir -p "${env_dir}/bin" "${dataset_dir}" "${tutorial_dir}"
+
+  cat > "${env_dir}/bin/python" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-" ]]; then
+  cat >/dev/null
+  exit 0
+fi
+script_name="$(basename "${1:?missing script}")"
+shift
+case "${script_name}" in
+  get_genomewide_gc_bins.py)
+    prefix=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -o)
+          prefix="$2"
+          shift 2
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+    cat > "${prefix}.bed" <<'BED'
+chr1	0	10
+BED
+    ;;
+  get_gc_content.py)
+    prefix=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -op)
+          prefix="$2"
+          shift 2
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+    cat > "${prefix}.bed" <<'BED'
+chr1	30	40
+BED
+    ;;
+  get_gc_matched_negatives.py)
+    prefix=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -o)
+          prefix="$2"
+          shift 2
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+    cat > "${prefix}.bed" <<'BED'
+chr1	20	30
+BED
+    ;;
+  *)
+    printf 'unexpected fake python script: %s\n' "${script_name}" >&2
+    exit 1
+    ;;
+esac
+EOF
+
+  cat > "${env_dir}/bin/samtools" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+subcommand="${1:?missing subcommand}"
+shift
+case "${subcommand}" in
+  faidx)
+    printf 'chr1\t4\t0\t4\t5\n' > "${1:?missing fasta}.fai"
+    ;;
+  quickcheck)
+    exit 0
+    ;;
+  index)
+    bam="${@: -1}"
+    printf 'fake bai\n' > "${bam}.bai"
+    ;;
+  merge)
+    out=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -f)
+          out="$2"
+          shift 2
+          ;;
+        -@)
+          shift 2
+          ;;
+        *)
+          cat "$1" > "${out}"
+          break
+          ;;
+      esac
+    done
+    ;;
+  *)
+    printf 'unexpected fake samtools subcommand: %s\n' "${subcommand}" >&2
+    exit 1
+    ;;
+esac
+EOF
+
+  cat > "${env_dir}/bin/bedtools" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+subcommand="${1:?missing subcommand}"
+shift
+case "${subcommand}" in
+  bamtobed)
+    printf 'chr1\t0\t10\t.\t0\t+\n'
+    ;;
+  genomecov)
+    cat
+    ;;
+  slop)
+    input=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -i)
+          input="$2"
+          shift 2
+          ;;
+        -g|-b)
+          shift 2
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+    cat "${input}"
+    ;;
+  sort|merge)
+    cat
+    ;;
+  intersect)
+    input=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -a)
+          input="$2"
+          shift 2
+          ;;
+        -b)
+          shift 2
+          ;;
+        -v)
+          shift
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+    cat "${input}"
+    ;;
+  *)
+    printf 'unexpected fake bedtools subcommand: %s\n' "${subcommand}" >&2
+    exit 1
+    ;;
+esac
+EOF
+
+  cat > "${env_dir}/bin/bedGraphToBigWig" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+cp "${1:?missing bedgraph}" "${3:?missing bigwig}"
+EOF
+
+  cat > "${env_dir}/bin/gzip" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-dc" ]]; then
+  cat "${2:?missing file}"
+  exit 0
+fi
+printf 'unexpected fake gzip invocation\n' >&2
+exit 1
+EOF
+
+  chmod +x \
+    "${env_dir}/bin/python" \
+    "${env_dir}/bin/samtools" \
+    "${env_dir}/bin/bedtools" \
+    "${env_dir}/bin/bedGraphToBigWig" \
+    "${env_dir}/bin/gzip"
+
+  cat > "${root}/hg38.fa" <<'EOF'
+>chr1
+ACGT
+EOF
+  cat > "${tutorial_dir}/hg38.chrom.sizes" <<'EOF'
+chr1	1000
+EOF
+  cat > "${tutorial_dir}/blacklist.bed.gz" <<'EOF'
+chr1	10	20
+EOF
+  cat > "${tutorial_dir}/folds.json" <<'EOF'
+{"fold": 0}
+EOF
+  cat > "${dataset_dir}/overlap.bed" <<'EOF'
+chr1	30	40
+EOF
+  cat > "${dataset_dir}/rep1.bam" <<'EOF'
+fake bam
+EOF
+}
+
+make_fake_official_helper_root() {
+  local root="$1"
+  mkdir -p "${root}/chrombpnet/helpers/make_gc_matched_negatives/get_genomewide_gc_buckets"
+  : > "${root}/chrombpnet/helpers/make_gc_matched_negatives/get_gc_content.py"
+  : > "${root}/chrombpnet/helpers/make_gc_matched_negatives/get_gc_matched_negatives.py"
+  : > "${root}/chrombpnet/helpers/make_gc_matched_negatives/get_genomewide_gc_buckets/get_genomewide_gc_bins.py"
+}
+
+make_fake_staged_gc_helper_dir() {
+  local root="$1"
+  mkdir -p "${root}"
+  : > "${root}/get_gc_content.py"
+  : > "${root}/get_gc_matched_negatives.py"
+  : > "${root}/get_genomewide_gc_bins.py"
 }
 
 if ! rg -n "CHROMBPNET_OFFICIAL_ROOT|--official-root" "${REPO_ROOT}/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh" >/dev/null; then
@@ -430,6 +678,63 @@ assert_log_contains "remote6002:/srv/remote6002/.codex_jobs/chrombpnet_dataset_p
 assert_log_contains "--gc-helper-dir '/srv/remote6002/.codex_jobs/chrombpnet_dataset_prep/unit_6002'" "${launcher_tmp}/ssh.log"
 assert_log_lacks "${REPO_ROOT}/chrombpnet/helpers" "${launcher_tmp}/scp.log"
 
+: > "${launcher_tmp}/ssh.log"
+: > "${launcher_tmp}/scp.log"
+
+if FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
+  FAKE_SCP_LOG="${launcher_tmp}/scp.log" \
+  PATH="${launcher_tmp}/fakebin:${PATH}" \
+  REMOTE_HOST="remote6000" \
+  REMOTE_PORT="6600" \
+  REMOTE_ROOT="/srv/remote6000" \
+  REMOTE_ENV="/envs/chrombpnet" \
+  REMOTE_PYTHON="/envs/chrombpnet/bin/python" \
+  CHROMBPNET_OFFICIAL_ROOT="/official/chrombpnet" \
+  DATASETS="GM12878 K562" \
+  THREADS="8" \
+  NICE_LEVEL="3" \
+  RUN_TAG="unit_unsafe_6000" \
+  bash "${start_dataset_prep_6000}" > "${launcher_tmp}/unsafe6000.stdout" 2> "${launcher_tmp}/unsafe6000.stderr"; then
+  echo "ERROR: start_6000 unexpectedly accepted unsafe dataset input" >&2
+  exit 1
+fi
+if ! grep -q "unsafe value for DATASETS" "${launcher_tmp}/unsafe6000.stderr"; then
+  echo "ERROR: start_6000 did not emit the expected unsafe-value error" >&2
+  exit 1
+fi
+assert_log_empty "${launcher_tmp}/ssh.log"
+assert_log_empty "${launcher_tmp}/scp.log"
+
+: > "${launcher_tmp}/ssh.log"
+: > "${launcher_tmp}/scp.log"
+
+if FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
+  FAKE_SCP_LOG="${launcher_tmp}/scp.log" \
+  PATH="${launcher_tmp}/fakebin:${PATH}" \
+  REMOTE_HOST="remote6002" \
+  REMOTE_PORT="6602" \
+  REMOTE_KEY="/tmp/fake_6002_key" \
+  REMOTE_ROOT="/srv/remote6002" \
+  REMOTE_ENV="/envs/transchrombp" \
+  REMOTE_PYTHON="/envs/transchrombp/bin/python" \
+  SOURCE_HOST="source6000" \
+  SOURCE_PORT="6610" \
+  SOURCE_OFFICIAL_ROOT="/official/\$unsafe" \
+  DATASETS="K562" \
+  THREADS="6" \
+  NICE_LEVEL="4" \
+  RUN_TAG="unit_unsafe_6002" \
+  bash "${start_dataset_prep_6002}" > "${launcher_tmp}/unsafe6002.stdout" 2> "${launcher_tmp}/unsafe6002.stderr"; then
+  echo "ERROR: start_6002 unexpectedly accepted unsafe source official root input" >&2
+  exit 1
+fi
+if ! grep -q "unsafe value for SOURCE_OFFICIAL_ROOT" "${launcher_tmp}/unsafe6002.stderr"; then
+  echo "ERROR: start_6002 did not emit the expected unsafe-value error" >&2
+  exit 1
+fi
+assert_log_empty "${launcher_tmp}/ssh.log"
+assert_log_empty "${launcher_tmp}/scp.log"
+
 step3_smoke_tmp="${tmpdir}/step3_smoke"
 mkdir -p "${step3_smoke_tmp}/fakebin" "${step3_smoke_tmp}/out"
 cat > "${step3_smoke_tmp}/fakebin/bedtools" <<'EOF'
@@ -525,8 +830,40 @@ if ! grep -F -q -- "${step3_smoke_tmp}/overlap.bed ${step3_smoke_tmp}/out/exclud
   exit 1
 fi
 
+step3_official_tmp="${tmpdir}/step3_official_smoke"
+mkdir -p "${step3_official_tmp}/official_root/chrombpnet/helpers/make_gc_matched_negatives" "${step3_official_tmp}/out"
+cp "${step3_smoke_tmp}/fakebin/bedtools" "${step3_official_tmp}/bedtools"
+mkdir -p "${step3_official_tmp}/fakebin"
+mv "${step3_official_tmp}/bedtools" "${step3_official_tmp}/fakebin/bedtools"
+cat > "${step3_official_tmp}/official_root/chrombpnet/helpers/make_gc_matched_negatives/make_gc_matched_negatives.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" > "$4/helper_args.txt"
+cat > "$4/negatives.bed" <<'BED'
+chr1	300	400
+BED
+EOF
+chmod +x "${step3_official_tmp}/official_root/chrombpnet/helpers/make_gc_matched_negatives/make_gc_matched_negatives.sh" "${step3_official_tmp}/fakebin/bedtools"
+
+PATH="${step3_official_tmp}/fakebin:${PATH}" \
+CHROMBPNET_OFFICIAL_ROOT="${step3_official_tmp}/official_root" \
+bash "${tutorial_step3}" \
+  "${step3_smoke_tmp}/reference.fa" \
+  "${step3_smoke_tmp}/chrom.sizes" \
+  "${step3_smoke_tmp}/blacklist.bed" \
+  "${step3_smoke_tmp}/overlap.bed" \
+  2114 \
+  "${step3_smoke_tmp}/genomewide_gc.bed" \
+  "${step3_official_tmp}/out" \
+  "${step3_smoke_tmp}/fold.json"
+
+if ! grep -q $'^chr1\t300\t400' "${step3_official_tmp}/out/negatives_with_summit.bed"; then
+  echo "ERROR: step3 official-root smoke test produced unexpected negatives_with_summit.bed contents" >&2
+  exit 1
+fi
+
 full_workflow_tmp="${tmpdir}/full_workflow_smoke"
-mkdir -p "${full_workflow_tmp}/case_a" "${full_workflow_tmp}/case_b" "${full_workflow_tmp}/fakebin"
+mkdir -p "${full_workflow_tmp}/case_a" "${full_workflow_tmp}/case_b" "${full_workflow_tmp}/case_c" "${full_workflow_tmp}/fakebin"
 make_fake_full_workflow_tools "${full_workflow_tmp}/fakebin"
 
 (
@@ -539,6 +876,21 @@ make_fake_full_workflow_tools "${full_workflow_tmp}/fakebin"
 
 if [[ "$(<"${full_workflow_tmp}/case_a/step3_env.txt")" != "/custom/root" ]]; then
   echo "ERROR: tests/full_workflow.sh did not pass through the pre-set CHROMBPNET_OFFICIAL_ROOT" >&2
+  exit 1
+fi
+
+mkdir -p "${full_workflow_tmp}/fallback_root"
+(
+  cd "${full_workflow_tmp}/case_c"
+  env -u CHROMBPNET_OFFICIAL_ROOT \
+    PATH="${full_workflow_tmp}/fakebin:${PATH}" \
+    CHROMBPNET_OFFICIAL_ROOT_FALLBACK="${full_workflow_tmp}/fallback_root" \
+    FAKE_FULL_WORKFLOW_STEP3_ENV_FILE="${full_workflow_tmp}/case_c/step3_env.txt" \
+    bash "${full_workflow_test}" 0 > "${full_workflow_tmp}/case_c/stdout" 2> "${full_workflow_tmp}/case_c/stderr"
+)
+
+if [[ "$(<"${full_workflow_tmp}/case_c/step3_env.txt")" != "${full_workflow_tmp}/fallback_root" ]]; then
+  echo "ERROR: tests/full_workflow.sh did not pass through the existing fallback official root" >&2
   exit 1
 fi
 
@@ -561,6 +913,56 @@ if [[ -e "${full_workflow_tmp}/case_b/step3_env.txt" ]]; then
   echo "ERROR: tests/full_workflow.sh reached step 3 despite missing helper root configuration" >&2
   exit 1
 fi
+
+run_remote_smoke_tmp="${tmpdir}/run_remote_success_smoke"
+mkdir -p "${run_remote_smoke_tmp}/official_mode" "${run_remote_smoke_tmp}/gc_helper_mode"
+make_fake_run_remote_prep_fixture "${run_remote_smoke_tmp}/official_mode"
+make_fake_official_helper_root "${run_remote_smoke_tmp}/official_mode/official_root"
+
+bash "${run_remote_dataset_prep}" \
+  --root "${run_remote_smoke_tmp}/official_mode/root" \
+  --env-dir "${run_remote_smoke_tmp}/official_mode/env" \
+  --python-bin "${run_remote_smoke_tmp}/official_mode/env/bin/python" \
+  --datasets GM12878 \
+  --official-root "${run_remote_smoke_tmp}/official_mode/official_root" \
+  > "${run_remote_smoke_tmp}/official_mode/stdout" \
+  2> "${run_remote_smoke_tmp}/official_mode/stderr"
+
+for path in \
+  "${run_remote_smoke_tmp}/official_mode/root/chrombpnet_refs/genomewide_gc_hg38_stride_1000_inputlen_2114.bed" \
+  "${run_remote_smoke_tmp}/official_mode/root/chrombpnet_datasets/GM12878/merged.bam" \
+  "${run_remote_smoke_tmp}/official_mode/root/chrombpnet_datasets/GM12878/merged.bam.bai" \
+  "${run_remote_smoke_tmp}/official_mode/root/chrombpnet_datasets/GM12878/prep_v1/bigwig/merged_unstranded.bw" \
+  "${run_remote_smoke_tmp}/official_mode/root/chrombpnet_datasets/GM12878/prep_v1/background/tutorial_folds/nonpeaks_tutorial_folds.bed"; do
+  if [[ ! -s "${path}" ]]; then
+    echo "ERROR: run_remote official-root smoke missing expected output: ${path}" >&2
+    exit 1
+  fi
+done
+
+make_fake_run_remote_prep_fixture "${run_remote_smoke_tmp}/gc_helper_mode"
+make_fake_staged_gc_helper_dir "${run_remote_smoke_tmp}/gc_helper_mode/staged_gc_helpers"
+
+bash "${run_remote_dataset_prep}" \
+  --root "${run_remote_smoke_tmp}/gc_helper_mode/root" \
+  --env-dir "${run_remote_smoke_tmp}/gc_helper_mode/env" \
+  --python-bin "${run_remote_smoke_tmp}/gc_helper_mode/env/bin/python" \
+  --datasets GM12878 \
+  --gc-helper-dir "${run_remote_smoke_tmp}/gc_helper_mode/staged_gc_helpers" \
+  > "${run_remote_smoke_tmp}/gc_helper_mode/stdout" \
+  2> "${run_remote_smoke_tmp}/gc_helper_mode/stderr"
+
+for path in \
+  "${run_remote_smoke_tmp}/gc_helper_mode/root/chrombpnet_refs/genomewide_gc_hg38_stride_1000_inputlen_2114.bed" \
+  "${run_remote_smoke_tmp}/gc_helper_mode/root/chrombpnet_datasets/GM12878/merged.bam" \
+  "${run_remote_smoke_tmp}/gc_helper_mode/root/chrombpnet_datasets/GM12878/merged.bam.bai" \
+  "${run_remote_smoke_tmp}/gc_helper_mode/root/chrombpnet_datasets/GM12878/prep_v1/bigwig/merged_unstranded.bw" \
+  "${run_remote_smoke_tmp}/gc_helper_mode/root/chrombpnet_datasets/GM12878/prep_v1/background/tutorial_folds/nonpeaks_tutorial_folds.bed"; do
+  if [[ ! -s "${path}" ]]; then
+    echo "ERROR: run_remote gc-helper-dir smoke missing expected output: ${path}" >&2
+    exit 1
+  fi
+done
 
 write_fake_official_root() {
   local root="$1"

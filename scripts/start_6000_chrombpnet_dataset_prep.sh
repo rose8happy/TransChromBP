@@ -18,6 +18,33 @@ RUN_TAG="${RUN_TAG:-chrombpnet_dataset_prep_6000_$(date +%Y%m%d_%H%M%S)}"
 REMOTE_JOB_DIR="$REMOTE_ROOT/.codex_jobs/chrombpnet_dataset_prep/$RUN_TAG"
 REMOTE_LOG="$REMOTE_ROOT/logs/${RUN_TAG}.log"
 
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+contains_unsafe_remote_chars() {
+  local value="$1"
+  [[ "$value" == *"'"* || "$value" == *'"'* || "$value" == *'$'* || "$value" == *'`'* || "$value" == *'\'* || "$value" == *$' '* || "$value" == *$'\t'* || "$value" == *$'\n'* || "$value" == *$'\r'* ]]
+}
+
+validate_remote_value() {
+  local name="$1"
+  local value="$2"
+  if contains_unsafe_remote_chars "$value"; then
+    fail "unsafe value for ${name}: ${value}"
+  fi
+}
+
+validate_remote_value "REMOTE_ROOT" "$REMOTE_ROOT"
+validate_remote_value "REMOTE_ENV" "$REMOTE_ENV"
+validate_remote_value "REMOTE_PYTHON" "$REMOTE_PYTHON"
+validate_remote_value "OFFICIAL_ROOT" "$OFFICIAL_ROOT"
+validate_remote_value "DATASETS" "$DATASETS"
+validate_remote_value "THREADS" "$THREADS"
+validate_remote_value "NICE_LEVEL" "$NICE_LEVEL"
+validate_remote_value "RUN_TAG" "$RUN_TAG"
+
 ssh_base=(
   ssh
   -p "$REMOTE_PORT"
