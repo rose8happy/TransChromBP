@@ -21,7 +21,7 @@ graph TD
 从 2026-04-06 起，本项目把“TransChromBP 主仓”和“官方 ChromBPNet 源码”分开管理：
 
 1. **本仓库** 是 TransChromBP 主仓 + 项目档案，不是官方 ChromBPNet 源码主库。
-2. **官方 ChromBPNet 源码**、`setup.py`、`MANIFEST.in` 和根目录的 legacy `egg-info` packaging 入口正在外化到 6000 上的 `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`。
+2. **官方 ChromBPNet 源码**、`setup.py`、`MANIFEST.in` 和根目录的 legacy `egg-info` packaging 入口已经外化到 6000 上的 `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`。
 3. **官方代码查找、官方复现、官方对比** 默认先去 6000 外部仓，不要把当前仓库当作官方来源。
 4. **GitHub** 负责长期备份与版本历史，不是实验运行目录。
 5. **6000 工作区** 是训练/评估与官方源码对照的远端工作区。
@@ -48,7 +48,7 @@ graph TD
 以下内容默认应进入本地仓库并参与 Git 版本管理：
 
 - `scripts/`、`docs/`、`tests/` 等代码与文档目录
-- `chrombpnet/` 如仍需参考，只视为外化期间的兼容路径，不应作为官方源码主档案
+- 官方 ChromBPNet 的参考实现不再回收到本地仓库；如需查源码或跑官方复现，直接使用 6000 外部仓 `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`
 - `vendor/transchrombp/` 中的版本化 TransChromBP snapshot 与辅助脚本
 - `configs/`、launcher、runtime config 模板、实验清单、计划文档
 - `reports/*.tex`
@@ -129,7 +129,7 @@ graph TD
 
 | 目录/文件 | Git 托管? | Deploy 同步? (Local->Remote) | 结果回传? (Remote->Local) | 说明 |
 | :--- | :---: | :---: | :---: | :--- |
-| `chrombpnet/` | ⚠️ 过渡兼容 | ✅ | ❌ | 仅用于外化期间的兼容路径，不是官方源码主档案 |
+| `chrombpnet/` | ❌ 已移除 | ❌ | ❌ | 本地官方 payload 已退役；官方源码只在 6000 外部仓维护 |
 | `scripts/` | ✅ | ✅ | ❌ | 脚本工具 |
 | `docs/` | ✅ | ✅ | ✅（必要时） | 计划、清单、结果说明 |
 | `logs/` | 原始日志 ❌；摘要 ✅ | ❌ (排除) | ✅ (下载) | 原始日志不入 Git，摘要需整理回本地 |
