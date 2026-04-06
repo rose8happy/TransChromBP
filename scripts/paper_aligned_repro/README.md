@@ -9,20 +9,33 @@
 - `run_tutorial_strict_compare_official.sh`
   - 一键起 tutorial `official fidelity` 或 `official controlled`
   - `official controlled` 会内部开启 `--multi-gpu-train`，避免单 fold 时退化成单卡训练
+  - 默认从 `CHROMBPNET_OFFICIAL_ROOT` 解析外置 official root，而不是依赖本仓存在官方 `chrombpnet/`
   - 2026-03-29 起支持 `--run-suffix` / `--shared-peaks` / `--shared-nonpeaks` / `--shared-bigwig`
 - `select_best_epoch.py`
   - 对 `chrombpnet.epoch_*.h5` 逐个做轻量评估，并按外部统一 metric 选 best epoch
   - 默认在 `valid` split 上选 best，避免 test 泄漏
+  - 默认从 `CHROMBPNET_OFFICIAL_ROOT` 调用外置 official `predict.py`
   - 2026-03-30 起支持 `--gpus 0,1` 按 checkpoint 分片；不改指标口径，只减少 wall-clock
+
+本目录的 operator contract 已改为 external official root：
+- 6000 canonical official root：`/data1/zhoujiazhen/bylw_atac/chrombpnet_official`
+- 本主仓不再 vendoring 官方 `ChromBPNet` 源码；official compare / official metrics / GC helper 都走外置官方仓
+- 仍在使用的官方文件族与补丁来历见 [reports/chrombpnet_official_patch_ledger_20260406.md](/home/zhengwei/.config/superpowers/worktrees/chromBPNet/autonomy-20260406-chrombpnet-externalization/reports/chrombpnet_official_patch_ledger_20260406.md)
 
 ## 1. 环境准备（6000）
 
 ```bash
 export CHROMBPNET_ENV=/data1/zhoujiazhen/bylw_atac/.mamba/envs/chrombpnet
+export CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chrombpnet_official
 export PATH="$CHROMBPNET_ENV/bin:$PATH"
 export LD_LIBRARY_PATH="$CHROMBPNET_ENV/lib:$LD_LIBRARY_PATH"
-export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/chromBPNet:$PYTHONPATH
+export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/chromBPNet/vendor/transchrombp:$PYTHONPATH
 ```
+
+说明：
+- `CHROMBPNET_OFFICIAL_ROOT` 是 strict-compare launcher 和 `select_best_epoch.py` 的默认 official root；不显式传 `--official-root` 时，就按这个环境变量解析。
+- `PYTHONPATH` 只指向当前主仓里的 `vendor/transchrombp` snapshot，不再把 `/data1/zhoujiazhen/bylw_atac/chromBPNet` 整仓当成官方 `ChromBPNet` 源码根。
+- 如果你要核对 official `predict.py` / `metrics.py` / GC helper 现在为什么仍然需要，直接看 [reports/chrombpnet_official_patch_ledger_20260406.md](/home/zhengwei/.config/superpowers/worktrees/chromBPNet/autonomy-20260406-chrombpnet-externalization/reports/chrombpnet_official_patch_ledger_20260406.md)。
 
 ## 2. 生成 5-fold 划分
 
@@ -125,6 +138,7 @@ bash scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh \
 说明：
 - 传入 `--shared-nonpeaks` 后，底层脚本会跳过 `chrombpnet prep nonpeaks`
 - 传入 `--shared-bigwig` 后，official 侧评估会复用这份共享 bigWig
+- `run_tutorial_strict_compare_official.sh` 与下游 `run_paper_aligned_fast_1seed.sh` 默认都依赖 `CHROMBPNET_OFFICIAL_ROOT`
 
 ### 用外部规则选 best epoch
 
@@ -146,3 +160,4 @@ python scripts/paper_aligned_repro/select_best_epoch.py \
 说明：
 - 多 checkpoint selector 可以传 `--gpus 0,1` 做分片并行；这不会改变每个 checkpoint 的评估逻辑，只是把不同 checkpoint 分给不同 GPU。
 - 单 checkpoint 的 held-out test 没有天然的双卡收益；这类任务更适合和另一条独立 test/selector 分别占两张卡并行。
+- 不传 `--official-root` 时，`select_best_epoch.py` 默认使用 `CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chrombpnet_official`。
