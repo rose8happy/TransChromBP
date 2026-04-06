@@ -19,7 +19,7 @@
 
 本目录的 operator contract 已改为 external official root：
 - 6000 canonical official root：`/data1/zhoujiazhen/bylw_atac/chrombpnet_official`
-- 本主仓不再 vendoring 官方 `ChromBPNet` 源码；official compare / official metrics / GC helper 都走外置官方仓
+- active workflow 的默认 official root 不再指向本仓里的历史 `chrombpnet/` payload；official compare / official metrics / GC helper 都应走外置官方仓
 - 仍在使用的官方文件族与补丁来历见 [reports/chrombpnet_official_patch_ledger_20260406.md](/home/zhengwei/.config/superpowers/worktrees/chromBPNet/autonomy-20260406-chrombpnet-externalization/reports/chrombpnet_official_patch_ledger_20260406.md)
 
 ## 1. 环境准备（6000）
