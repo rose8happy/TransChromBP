@@ -121,13 +121,24 @@ def main() -> None:
 
     output_prefix = Path(args.o)
     output_prefix.parent.mkdir(parents=True, exist_ok=True)
+    split_metric = {
+        "train": 0.789,
+        "valid": 0.123,
+        "test": 0.456,
+    }.get(args.split or "", 0.654)
+    bigwig_name = Path(args.b).name
+    if args.split:
+        median_jsd = split_metric
+    else:
+        median_jsd = 0.111 if "override" not in bigwig_name else 0.222
+
     payload = {
         "counts_metrics": {
             "peaks": {"pearsonr": 0.91, "spearmanr": 0.81, "mse": 0.19},
             "nonpeaks": {"pearsonr": 0.11},
         },
         "profile_metrics": {
-            "peaks": {"mean_jsd": 0.321, "median_jsd": 0.123, "median_norm_jsd": 0.222},
+            "peaks": {"mean_jsd": 0.321, "median_jsd": median_jsd, "median_norm_jsd": 0.222},
             "nonpeaks": {"median_jsd": 0.456},
         },
         "classification_metrics": {
@@ -137,6 +148,8 @@ def main() -> None:
         },
         "imported_chrombpnet_file": chrombpnet.PACKAGE_FILE,
         "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+        "source_split": args.split or "",
+        "source_bigwig": bigwig_name,
     }
     output_prefix.with_name(f"{output_prefix.name}_metrics.json").write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
@@ -250,7 +263,7 @@ EOF
     --official-root "${fake_official_root_rel}"
 )
 
-python3 - "${tmpdir}/relwork/out/chrombpnet.epoch_1_metrics.json" "${fake_official_root_rel}" <<'PY'
+python3 - "${tmpdir}/relwork/out/chrombpnet.epoch_1_metrics.json" "${fake_official_root_rel}" "valid" 0.123 <<'PY'
 import json
 import pathlib
 import sys
@@ -265,8 +278,39 @@ if cuda_visible_devices != "9":
     raise SystemExit(f"CUDA_VISIBLE_DEVICES was not preserved: {cuda_visible_devices!r}")
 if provenance["official_root"] != sys.argv[2]:
     raise SystemExit(f"selector provenance did not refresh: {provenance}")
-if payload["profile_metrics"]["peaks"]["median_jsd"] != 0.123:
+if provenance["split"] != sys.argv[3]:
+    raise SystemExit(f"selector provenance split mismatch: {provenance}")
+if payload["profile_metrics"]["peaks"]["median_jsd"] != float(sys.argv[4]):
     raise SystemExit(f"selector metrics did not refresh: {payload['profile_metrics']['peaks']['median_jsd']}")
+PY
+
+(
+  cd "${tmpdir}/relwork"
+  PYTHONPATH="${REPO_ROOT}${PYTHONPATH:+:${PYTHONPATH}}" \
+  CUDA_VISIBLE_DEVICES=9 \
+  python3 "${select_best_epoch}" \
+    --model-glob 'models/chrombpnet.epoch_*.h5' \
+    --genome 'data/genome.fa' \
+    --bigwig 'data/bigwig.bw' \
+    --peaks 'data/peaks.bed' \
+    --nonpeaks 'data/nonpeaks.bed' \
+    --fold-json 'data/fold.json' \
+    --output-dir 'out' \
+    --split test \
+    --official-root "${fake_official_root_rel}"
+)
+
+python3 - "${tmpdir}/relwork/out/chrombpnet.epoch_1_metrics.json" "${fake_official_root_rel}" "test" 0.456 <<'PY'
+import json
+import pathlib
+import sys
+
+payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+provenance = payload["_official_predict_provenance"]
+if provenance["split"] != sys.argv[3]:
+    raise SystemExit(f"selector did not refresh provenance after split change: {provenance}")
+if payload["profile_metrics"]["peaks"]["median_jsd"] != float(sys.argv[4]):
+    raise SystemExit(f"selector cache was not refreshed for changed split: {payload['profile_metrics']['peaks']['median_jsd']}")
 PY
 
 fake_official_root_run="${tmpdir}/official_run"
@@ -290,6 +334,9 @@ chr1	20	30
 EOF
 cat > "${tmpdir}/run/data/nonpeaks.bed" <<'EOF'
 chr1	40	50
+EOF
+cat > "${tmpdir}/run/data/override_unstranded.bw" <<'EOF'
+override
 EOF
 cat > "${tmpdir}/run/folds/fold_0.json" <<'EOF'
 {"fold": 0}
@@ -342,7 +389,7 @@ bash "${run_fast_1seed}" \
   --official-root "${fake_official_root_run}" \
   --use-input-peaks-for-eval
 
-python3 - "${tmpdir}/run/work/runs/test_official_externalization/fold_0/seed_7/chrombpnet/evaluation/chrombpnet_metrics.json" "${fake_official_root_run}" <<'PY'
+python3 - "${tmpdir}/run/work/runs/test_official_externalization/fold_0/seed_7/chrombpnet/evaluation/chrombpnet_metrics.json" "${fake_official_root_run}" "0.111" "data_unstranded.bw" <<'PY'
 import json
 import pathlib
 import sys
@@ -353,8 +400,10 @@ if not imported.startswith(sys.argv[2]):
     raise SystemExit(f"run script imported chrombpnet from wrong package: {imported}")
 if payload["_official_predict_provenance"]["official_root"] != sys.argv[2]:
     raise SystemExit(f"run script provenance did not refresh: {payload['_official_predict_provenance']}")
-if payload["profile_metrics"]["peaks"]["median_jsd"] != 0.123:
+if payload["profile_metrics"]["peaks"]["median_jsd"] != float(sys.argv[3]):
     raise SystemExit(f"run script metrics did not refresh: {payload['profile_metrics']['peaks']['median_jsd']}")
+if payload["source_bigwig"] != sys.argv[4]:
+    raise SystemExit(f"run script source bigwig mismatch: {payload['source_bigwig']}")
 PY
 
 python3 - "${tmpdir}/run/work/runs/test_official_externalization/fold_0/seed_7/bias/evaluation/bias_metrics.json" "${fake_official_root_run}" <<'PY'
@@ -367,8 +416,42 @@ if payload["imported_chrombpnet_file"] == "stale":
     raise SystemExit("bias metrics cache was not refreshed")
 if payload["_official_predict_provenance"]["official_root"] != sys.argv[2]:
     raise SystemExit(f"bias metrics provenance did not refresh: {payload['_official_predict_provenance']}")
-if payload["profile_metrics"]["peaks"]["median_jsd"] != 0.123:
+if payload["profile_metrics"]["peaks"]["median_jsd"] != 0.111:
     raise SystemExit(f"bias metrics did not refresh: {payload['profile_metrics']['peaks']['median_jsd']}")
+PY
+
+PATH="${fake_official_root_run}/bin:${PATH}" \
+CHROMBPNET_OFFICIAL_ROOT="${fake_official_root_run}" \
+bash "${run_fast_1seed}" \
+  --name test_official_externalization \
+  --genome "${tmpdir}/run/data/genome.fa" \
+  --chrom-sizes "${tmpdir}/run/data/chrom.sizes" \
+  --bam "${tmpdir}/run/data/merged.bam" \
+  --peaks "${tmpdir}/run/data/peaks.bed" \
+  --blacklist "${tmpdir}/run/data/blacklist.bed" \
+  --fold-dir "${tmpdir}/run/folds" \
+  --work-root "${tmpdir}/run/work" \
+  --seed 7 \
+  --gpus 0 \
+  --max-parallel 1 \
+  --official-root "${fake_official_root_run}" \
+  --eval-bigwig "${tmpdir}/run/data/override_unstranded.bw" \
+  --use-input-peaks-for-eval
+
+python3 - "${tmpdir}/run/work/runs/test_official_externalization/fold_0/seed_7/chrombpnet/evaluation/chrombpnet_metrics.json" "${fake_official_root_run}" "0.222" "${tmpdir}/run/data/override_unstranded.bw" "override_unstranded.bw" <<'PY'
+import json
+import pathlib
+import sys
+
+payload = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+if not payload["imported_chrombpnet_file"].startswith(sys.argv[2]):
+    raise SystemExit(f"run script imported chrombpnet from wrong package after eval_bigwig change: {payload['imported_chrombpnet_file']}")
+if payload["_official_predict_provenance"]["effective_bigwig"] != str(pathlib.Path(sys.argv[4]).resolve()):
+    raise SystemExit(f"run script provenance did not capture changed eval_bigwig: {payload['_official_predict_provenance']}")
+if payload["profile_metrics"]["peaks"]["median_jsd"] != float(sys.argv[3]):
+    raise SystemExit(f"run script cache was not refreshed for changed eval_bigwig: {payload['profile_metrics']['peaks']['median_jsd']}")
+if payload["source_bigwig"] != sys.argv[5]:
+    raise SystemExit(f"run script source bigwig did not change: {payload['source_bigwig']}")
 PY
 
 wrapper_tmp="${tmpdir}/wrapper"

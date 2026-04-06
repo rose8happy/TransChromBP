@@ -129,36 +129,61 @@ def metrics_path_for(model_path: Path, out_dir: Path) -> Path:
     return Path(f"{out_dir / model_path.stem}_metrics.json")
 
 
-def official_provenance_payload(official_root: Path, predict_py: Path) -> dict[str, str]:
+def normalize_signature_path(path_value: str) -> str:
+    if path_value in {"", "None"}:
+        return path_value
+    return str(Path(path_value).expanduser().resolve())
+
+
+def official_provenance_payload(model_path: Path, args: argparse.Namespace, official_root: Path, predict_py: Path) -> dict[str, Any]:
     return {
+        "role": "selector",
         "official_root": str(official_root),
         "predict_py": str(predict_py),
+        "model_h5": str(model_path.resolve()),
+        "genome": normalize_signature_path(args.genome),
+        "bigwig": normalize_signature_path(args.bigwig),
+        "peaks": normalize_signature_path(args.peaks),
+        "nonpeaks": normalize_signature_path(args.nonpeaks),
+        "fold_json": normalize_signature_path(args.fold_json),
+        "split": args.split,
+        "batch_size": args.batch_size,
+        "seed": args.seed,
+        "inputlen": args.inputlen,
+        "outputlen": args.outputlen,
     }
 
 
-def metrics_has_valid_provenance(metrics_path: Path, official_root: Path, predict_py: Path) -> bool:
+def metrics_has_valid_provenance(
+    metrics_path: Path,
+    model_path: Path,
+    args: argparse.Namespace,
+    official_root: Path,
+    predict_py: Path,
+) -> bool:
     try:
         payload = json.loads(metrics_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, TypeError, ValueError):
         return False
-    return payload.get(OFFICIAL_PROVENANCE_KEY) == official_provenance_payload(official_root, predict_py)
+    return payload.get(OFFICIAL_PROVENANCE_KEY) == official_provenance_payload(model_path, args, official_root, predict_py)
 
 
-def annotate_metrics_provenance(metrics_path: Path, official_root: Path, predict_py: Path) -> None:
+def annotate_metrics_provenance(metrics_path: Path, model_path: Path, args: argparse.Namespace, official_root: Path, predict_py: Path) -> None:
     payload = json.loads(metrics_path.read_text(encoding="utf-8"))
-    payload[OFFICIAL_PROVENANCE_KEY] = official_provenance_payload(official_root, predict_py)
+    payload[OFFICIAL_PROVENANCE_KEY] = official_provenance_payload(model_path, args, official_root, predict_py)
     metrics_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def should_recompute_metrics(
     metrics_path: Path,
+    model_path: Path,
     args: argparse.Namespace,
     official_root: Path,
     predict_py: Path,
 ) -> bool:
     if args.force or not metrics_path.exists():
         return True
-    return not metrics_has_valid_provenance(metrics_path, official_root, predict_py)
+    return not metrics_has_valid_provenance(metrics_path, model_path, args, official_root, predict_py)
 
 
 def run_predict_subprocess(
@@ -181,7 +206,7 @@ def run_predict_subprocess(
         check=True,
         env=env,
     )
-    annotate_metrics_provenance(metrics_path_for(model_path, out_dir), official_root, predict_py)
+    annotate_metrics_provenance(metrics_path_for(model_path, out_dir), model_path, args, official_root, predict_py)
 
 
 def evaluate_assigned_models(
@@ -194,7 +219,7 @@ def evaluate_assigned_models(
 ) -> None:
     for model_path in model_paths:
         metrics_path = metrics_path_for(model_path, out_dir)
-        if should_recompute_metrics(metrics_path, args, official_root, predict_py):
+        if should_recompute_metrics(metrics_path, model_path, args, official_root, predict_py):
             run_predict_subprocess(model_path, out_dir, args, gpu, official_root, predict_py)
 
 
@@ -210,7 +235,7 @@ def evaluate_models(
     if len(gpu_list) <= 1:
         for model_path in model_paths:
             metrics_path = metrics_path_for(model_path, out_dir)
-            if should_recompute_metrics(metrics_path, args, official_root, predict_py):
+            if should_recompute_metrics(metrics_path, model_path, args, official_root, predict_py):
                 run_predict_subprocess(model_path, out_dir, args, gpu, official_root, predict_py)
         return
 

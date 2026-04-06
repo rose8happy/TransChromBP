@@ -233,11 +233,51 @@ run_official_predict() {
   fi
 }
 
-official_metrics_provenance_valid() {
+official_metrics_signature_json() {
+  python3 - <<'PY'
+from __future__ import annotations
+
+import json
+import os
+import pathlib
+import sys
+
+def norm(value: str | None) -> str:
+    if value in {"", "None", None}:
+        return value or ""
+    return str(pathlib.Path(value).expanduser().resolve())
+
+signature = {
+    "role": os.environ["OFFICIAL_METRICS_ROLE"],
+    "official_root": norm(os.environ["OFFICIAL_METRICS_OFFICIAL_ROOT"]),
+    "predict_py": norm(os.environ["OFFICIAL_METRICS_PREDICT_PY"]),
+    "model_h5": norm(os.environ["OFFICIAL_METRICS_MODEL_H5"]),
+    "genome": norm(os.environ["OFFICIAL_METRICS_GENOME"]),
+    "bigwig": norm(os.environ["OFFICIAL_METRICS_BIGWIG"]),
+    "peaks": norm(os.environ["OFFICIAL_METRICS_PEAKS"]),
+    "nonpeaks": norm(os.environ["OFFICIAL_METRICS_NONPEAKS"]),
+    "fold_json": norm(os.environ["OFFICIAL_METRICS_FOLD_JSON"]),
+    "batch_size": int(os.environ["OFFICIAL_METRICS_BATCH_SIZE"]),
+    "seed": int(os.environ["OFFICIAL_METRICS_SEED"]),
+    "inputlen": int(os.environ["OFFICIAL_METRICS_INPUTLEN"]),
+    "outputlen": int(os.environ["OFFICIAL_METRICS_OUTPUTLEN"]),
+    "split": os.environ.get("OFFICIAL_METRICS_SPLIT", ""),
+    "eval_bigwig": norm(os.environ.get("OFFICIAL_METRICS_EVAL_BIGWIG", "")),
+    "use_input_peaks_for_eval": os.environ.get("OFFICIAL_METRICS_USE_INPUT_PEAKS_FOR_EVAL", "0") == "1",
+    "external_nonpeaks": norm(os.environ.get("OFFICIAL_METRICS_EXTERNAL_NONPEAKS", "")),
+    "effective_bigwig": norm(os.environ.get("OFFICIAL_METRICS_EFFECTIVE_BIGWIG", os.environ["OFFICIAL_METRICS_BIGWIG"])),
+    "effective_peaks": norm(os.environ.get("OFFICIAL_METRICS_EFFECTIVE_PEAKS", os.environ["OFFICIAL_METRICS_PEAKS"])),
+    "effective_nonpeaks": norm(os.environ.get("OFFICIAL_METRICS_EFFECTIVE_NONPEAKS", os.environ["OFFICIAL_METRICS_NONPEAKS"])),
+}
+print(json.dumps(signature, sort_keys=True, separators=(",", ":")))
+PY
+}
+
+official_metrics_signature_matches() {
   local metrics_path="$1"
-  local expected_root="$2"
-  local expected_predict_py="$3"
-  python3 - "$metrics_path" "$expected_root" "$expected_predict_py" <<'PY'
+  local expected_signature
+  expected_signature="$(official_metrics_signature_json)"
+  python3 - "$metrics_path" "$expected_signature" <<'PY'
 from __future__ import annotations
 
 import json
@@ -245,24 +285,22 @@ import pathlib
 import sys
 
 metrics_path = pathlib.Path(sys.argv[1])
-expected = {
-    "official_root": sys.argv[2],
-    "predict_py": sys.argv[3],
-}
+expected = sys.argv[2]
 try:
     payload = json.loads(metrics_path.read_text(encoding="utf-8"))
 except (OSError, json.JSONDecodeError, TypeError, ValueError):
     raise SystemExit(1)
-if payload.get("_official_predict_provenance") != expected:
+current = payload.get("_official_predict_provenance")
+if json.dumps(current, sort_keys=True, separators=(",", ":")) != expected:
     raise SystemExit(1)
 PY
 }
 
 official_metrics_annotate_provenance() {
   local metrics_path="$1"
-  local expected_root="$2"
-  local expected_predict_py="$3"
-  python3 - "$metrics_path" "$expected_root" "$expected_predict_py" <<'PY'
+  local expected_signature
+  expected_signature="$(official_metrics_signature_json)"
+  python3 - "$metrics_path" "$expected_signature" <<'PY'
 from __future__ import annotations
 
 import json
@@ -270,10 +308,7 @@ import pathlib
 import sys
 
 metrics_path = pathlib.Path(sys.argv[1])
-expected = {
-    "official_root": sys.argv[2],
-    "predict_py": sys.argv[3],
-}
+expected = json.loads(sys.argv[2])
 payload = json.loads(metrics_path.read_text(encoding="utf-8"))
 payload["_official_predict_provenance"] = expected
 metrics_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -336,6 +371,20 @@ run_fold() {
   local bias_metrics="${bias_dir}/evaluation/bias_metrics.json"
   local chrom_model="${chrom_dir}/models/chrombpnet.h5"
   local chrom_metrics="${chrom_dir}/evaluation/chrombpnet_metrics.json"
+  local bias_bigwig="${bias_dir}/auxiliary/data_unstranded.bw"
+  local chrom_bigwig="${chrom_dir}/auxiliary/data_unstranded.bw"
+  local eval_bigwig="${chrom_bigwig}"
+  if [[ -n "${EVAL_BIGWIG}" ]]; then
+    eval_bigwig="${EVAL_BIGWIG}"
+  fi
+  local eval_peaks="${chrom_dir}/auxiliary/filtered.peaks.bed"
+  local eval_nonpeaks="None"
+  if [[ -n "${EXTERNAL_NONPEAKS}" ]]; then
+    eval_nonpeaks="${nonpeaks}"
+  fi
+  if [[ "${USE_INPUT_PEAKS_FOR_EVAL}" == "1" ]]; then
+    eval_peaks="${PEAKS}"
+  fi
 
   if [[ ! -f "${bias_model}" ]]; then
     if [[ -d "${bias_dir}" ]]; then
@@ -361,7 +410,6 @@ run_fold() {
   fi
 
   if [[ ! -f "${bias_metrics}" ]]; then
-    local bias_bigwig="${bias_dir}/auxiliary/data_unstranded.bw"
     if [[ ! -f "${bias_bigwig}" ]]; then
       echo "ERROR: bias bigwig missing: ${bias_bigwig}" >&2
       return 1
@@ -379,9 +427,40 @@ run_fold() {
       -il 2114 \
       -ol 1000 \
       -s "${SEED}"
-    official_metrics_annotate_provenance "${bias_metrics}" "${OFFICIAL_ROOT}" "${OFFICIAL_PREDICT}"
-  elif ! official_metrics_provenance_valid "${bias_metrics}" "${OFFICIAL_ROOT}" "${OFFICIAL_PREDICT}"; then
-    local bias_bigwig="${bias_dir}/auxiliary/data_unstranded.bw"
+    OFFICIAL_METRICS_ROLE="bias" \
+    OFFICIAL_METRICS_OFFICIAL_ROOT="${OFFICIAL_ROOT}" \
+    OFFICIAL_METRICS_PREDICT_PY="${OFFICIAL_PREDICT}" \
+    OFFICIAL_METRICS_MODEL_H5="${bias_model}" \
+    OFFICIAL_METRICS_GENOME="${GENOME}" \
+    OFFICIAL_METRICS_BIGWIG="${bias_bigwig}" \
+    OFFICIAL_METRICS_PEAKS="${PEAKS}" \
+    OFFICIAL_METRICS_NONPEAKS="${nonpeaks}" \
+    OFFICIAL_METRICS_FOLD_JSON="${fold_json}" \
+    OFFICIAL_METRICS_BATCH_SIZE="${PREDICT_BATCH_SIZE}" \
+    OFFICIAL_METRICS_SEED="${SEED}" \
+    OFFICIAL_METRICS_INPUTLEN="2114" \
+    OFFICIAL_METRICS_OUTPUTLEN="1000" \
+    OFFICIAL_METRICS_EFFECTIVE_BIGWIG="${bias_bigwig}" \
+    OFFICIAL_METRICS_EFFECTIVE_PEAKS="${PEAKS}" \
+    OFFICIAL_METRICS_EFFECTIVE_NONPEAKS="${nonpeaks}" \
+    official_metrics_annotate_provenance "${bias_metrics}"
+  elif ! OFFICIAL_METRICS_ROLE="bias" \
+    OFFICIAL_METRICS_OFFICIAL_ROOT="${OFFICIAL_ROOT}" \
+    OFFICIAL_METRICS_PREDICT_PY="${OFFICIAL_PREDICT}" \
+    OFFICIAL_METRICS_MODEL_H5="${bias_model}" \
+    OFFICIAL_METRICS_GENOME="${GENOME}" \
+    OFFICIAL_METRICS_BIGWIG="${bias_bigwig}" \
+    OFFICIAL_METRICS_PEAKS="${PEAKS}" \
+    OFFICIAL_METRICS_NONPEAKS="${nonpeaks}" \
+    OFFICIAL_METRICS_FOLD_JSON="${fold_json}" \
+    OFFICIAL_METRICS_BATCH_SIZE="${PREDICT_BATCH_SIZE}" \
+    OFFICIAL_METRICS_SEED="${SEED}" \
+    OFFICIAL_METRICS_INPUTLEN="2114" \
+    OFFICIAL_METRICS_OUTPUTLEN="1000" \
+    OFFICIAL_METRICS_EFFECTIVE_BIGWIG="${bias_bigwig}" \
+    OFFICIAL_METRICS_EFFECTIVE_PEAKS="${PEAKS}" \
+    OFFICIAL_METRICS_EFFECTIVE_NONPEAKS="${nonpeaks}" \
+    official_metrics_signature_matches "${bias_metrics}"; then
     if [[ ! -f "${bias_bigwig}" ]]; then
       echo "ERROR: bias bigwig missing: ${bias_bigwig}" >&2
       return 1
@@ -399,7 +478,23 @@ run_fold() {
       -il 2114 \
       -ol 1000 \
       -s "${SEED}"
-    official_metrics_annotate_provenance "${bias_metrics}" "${OFFICIAL_ROOT}" "${OFFICIAL_PREDICT}"
+    OFFICIAL_METRICS_ROLE="bias" \
+    OFFICIAL_METRICS_OFFICIAL_ROOT="${OFFICIAL_ROOT}" \
+    OFFICIAL_METRICS_PREDICT_PY="${OFFICIAL_PREDICT}" \
+    OFFICIAL_METRICS_MODEL_H5="${bias_model}" \
+    OFFICIAL_METRICS_GENOME="${GENOME}" \
+    OFFICIAL_METRICS_BIGWIG="${bias_bigwig}" \
+    OFFICIAL_METRICS_PEAKS="${PEAKS}" \
+    OFFICIAL_METRICS_NONPEAKS="${nonpeaks}" \
+    OFFICIAL_METRICS_FOLD_JSON="${fold_json}" \
+    OFFICIAL_METRICS_BATCH_SIZE="${PREDICT_BATCH_SIZE}" \
+    OFFICIAL_METRICS_SEED="${SEED}" \
+    OFFICIAL_METRICS_INPUTLEN="2114" \
+    OFFICIAL_METRICS_OUTPUTLEN="1000" \
+    OFFICIAL_METRICS_EFFECTIVE_BIGWIG="${bias_bigwig}" \
+    OFFICIAL_METRICS_EFFECTIVE_PEAKS="${PEAKS}" \
+    OFFICIAL_METRICS_EFFECTIVE_NONPEAKS="${nonpeaks}" \
+    official_metrics_annotate_provenance "${bias_metrics}"
   else
     echo "[INFO][${fold_key}] bias metrics: skip"
   fi
@@ -434,23 +529,11 @@ run_fold() {
   fi
 
   if [[ ! -f "${chrom_metrics}" ]]; then
-    local chrom_bigwig="${chrom_dir}/auxiliary/data_unstranded.bw"
     if [[ ! -f "${chrom_bigwig}" ]]; then
       echo "ERROR: chrombpnet bigwig missing: ${chrom_bigwig}" >&2
       return 1
     fi
-    local eval_bigwig="${chrom_bigwig}"
-    if [[ -n "${EVAL_BIGWIG}" ]]; then
-      eval_bigwig="${EVAL_BIGWIG}"
-    fi
-    local eval_peaks="${chrom_dir}/auxiliary/filtered.peaks.bed"
-    local eval_nonpeaks="None"
-    if [[ -n "${EXTERNAL_NONPEAKS}" ]]; then
-      eval_nonpeaks="${nonpeaks}"
-    fi
-    if [[ "${USE_INPUT_PEAKS_FOR_EVAL}" == "1" ]]; then
-      eval_peaks="${PEAKS}"
-    elif [[ ! -f "${eval_peaks}" ]]; then
+    if [[ "${USE_INPUT_PEAKS_FOR_EVAL}" != "1" && ! -f "${eval_peaks}" ]]; then
       echo "ERROR: filtered peaks missing: ${eval_peaks}" >&2
       return 1
     fi
@@ -467,25 +550,51 @@ run_fold() {
       -il 2114 \
       -ol 1000 \
       -s "${SEED}"
-    official_metrics_annotate_provenance "${chrom_metrics}" "${OFFICIAL_ROOT}" "${OFFICIAL_PREDICT}"
-  elif ! official_metrics_provenance_valid "${chrom_metrics}" "${OFFICIAL_ROOT}" "${OFFICIAL_PREDICT}"; then
-    local chrom_bigwig="${chrom_dir}/auxiliary/data_unstranded.bw"
+    OFFICIAL_METRICS_ROLE="chrombpnet" \
+    OFFICIAL_METRICS_OFFICIAL_ROOT="${OFFICIAL_ROOT}" \
+    OFFICIAL_METRICS_PREDICT_PY="${OFFICIAL_PREDICT}" \
+    OFFICIAL_METRICS_MODEL_H5="${chrom_model}" \
+    OFFICIAL_METRICS_GENOME="${GENOME}" \
+    OFFICIAL_METRICS_BIGWIG="${chrom_bigwig}" \
+    OFFICIAL_METRICS_PEAKS="${eval_peaks}" \
+    OFFICIAL_METRICS_NONPEAKS="${eval_nonpeaks}" \
+    OFFICIAL_METRICS_FOLD_JSON="${fold_json}" \
+    OFFICIAL_METRICS_BATCH_SIZE="${PREDICT_BATCH_SIZE}" \
+    OFFICIAL_METRICS_SEED="${SEED}" \
+    OFFICIAL_METRICS_INPUTLEN="2114" \
+    OFFICIAL_METRICS_OUTPUTLEN="1000" \
+    OFFICIAL_METRICS_EVAL_BIGWIG="${EVAL_BIGWIG:-}" \
+    OFFICIAL_METRICS_USE_INPUT_PEAKS_FOR_EVAL="${USE_INPUT_PEAKS_FOR_EVAL}" \
+    OFFICIAL_METRICS_EXTERNAL_NONPEAKS="${EXTERNAL_NONPEAKS}" \
+    OFFICIAL_METRICS_EFFECTIVE_BIGWIG="${eval_bigwig}" \
+    OFFICIAL_METRICS_EFFECTIVE_PEAKS="${eval_peaks}" \
+    OFFICIAL_METRICS_EFFECTIVE_NONPEAKS="${eval_nonpeaks}" \
+    official_metrics_annotate_provenance "${chrom_metrics}"
+  elif ! OFFICIAL_METRICS_ROLE="chrombpnet" \
+    OFFICIAL_METRICS_OFFICIAL_ROOT="${OFFICIAL_ROOT}" \
+    OFFICIAL_METRICS_PREDICT_PY="${OFFICIAL_PREDICT}" \
+    OFFICIAL_METRICS_MODEL_H5="${chrom_model}" \
+    OFFICIAL_METRICS_GENOME="${GENOME}" \
+    OFFICIAL_METRICS_BIGWIG="${chrom_bigwig}" \
+    OFFICIAL_METRICS_PEAKS="${eval_peaks}" \
+    OFFICIAL_METRICS_NONPEAKS="${eval_nonpeaks}" \
+    OFFICIAL_METRICS_FOLD_JSON="${fold_json}" \
+    OFFICIAL_METRICS_BATCH_SIZE="${PREDICT_BATCH_SIZE}" \
+    OFFICIAL_METRICS_SEED="${SEED}" \
+    OFFICIAL_METRICS_INPUTLEN="2114" \
+    OFFICIAL_METRICS_OUTPUTLEN="1000" \
+    OFFICIAL_METRICS_EVAL_BIGWIG="${EVAL_BIGWIG:-}" \
+    OFFICIAL_METRICS_USE_INPUT_PEAKS_FOR_EVAL="${USE_INPUT_PEAKS_FOR_EVAL}" \
+    OFFICIAL_METRICS_EXTERNAL_NONPEAKS="${EXTERNAL_NONPEAKS}" \
+    OFFICIAL_METRICS_EFFECTIVE_BIGWIG="${eval_bigwig}" \
+    OFFICIAL_METRICS_EFFECTIVE_PEAKS="${eval_peaks}" \
+    OFFICIAL_METRICS_EFFECTIVE_NONPEAKS="${eval_nonpeaks}" \
+    official_metrics_signature_matches "${chrom_metrics}"; then
     if [[ ! -f "${chrom_bigwig}" ]]; then
       echo "ERROR: chrombpnet bigwig missing: ${chrom_bigwig}" >&2
       return 1
     fi
-    local eval_bigwig="${chrom_bigwig}"
-    if [[ -n "${EVAL_BIGWIG}" ]]; then
-      eval_bigwig="${EVAL_BIGWIG}"
-    fi
-    local eval_peaks="${chrom_dir}/auxiliary/filtered.peaks.bed"
-    local eval_nonpeaks="None"
-    if [[ -n "${EXTERNAL_NONPEAKS}" ]]; then
-      eval_nonpeaks="${nonpeaks}"
-    fi
-    if [[ "${USE_INPUT_PEAKS_FOR_EVAL}" == "1" ]]; then
-      eval_peaks="${PEAKS}"
-    elif [[ ! -f "${eval_peaks}" ]]; then
+    if [[ "${USE_INPUT_PEAKS_FOR_EVAL}" != "1" && ! -f "${eval_peaks}" ]]; then
       echo "ERROR: filtered peaks missing: ${eval_peaks}" >&2
       return 1
     fi
@@ -502,7 +611,26 @@ run_fold() {
       -il 2114 \
       -ol 1000 \
       -s "${SEED}"
-    official_metrics_annotate_provenance "${chrom_metrics}" "${OFFICIAL_ROOT}" "${OFFICIAL_PREDICT}"
+    OFFICIAL_METRICS_ROLE="chrombpnet" \
+    OFFICIAL_METRICS_OFFICIAL_ROOT="${OFFICIAL_ROOT}" \
+    OFFICIAL_METRICS_PREDICT_PY="${OFFICIAL_PREDICT}" \
+    OFFICIAL_METRICS_MODEL_H5="${chrom_model}" \
+    OFFICIAL_METRICS_GENOME="${GENOME}" \
+    OFFICIAL_METRICS_BIGWIG="${chrom_bigwig}" \
+    OFFICIAL_METRICS_PEAKS="${eval_peaks}" \
+    OFFICIAL_METRICS_NONPEAKS="${eval_nonpeaks}" \
+    OFFICIAL_METRICS_FOLD_JSON="${fold_json}" \
+    OFFICIAL_METRICS_BATCH_SIZE="${PREDICT_BATCH_SIZE}" \
+    OFFICIAL_METRICS_SEED="${SEED}" \
+    OFFICIAL_METRICS_INPUTLEN="2114" \
+    OFFICIAL_METRICS_OUTPUTLEN="1000" \
+    OFFICIAL_METRICS_EVAL_BIGWIG="${EVAL_BIGWIG:-}" \
+    OFFICIAL_METRICS_USE_INPUT_PEAKS_FOR_EVAL="${USE_INPUT_PEAKS_FOR_EVAL}" \
+    OFFICIAL_METRICS_EXTERNAL_NONPEAKS="${EXTERNAL_NONPEAKS}" \
+    OFFICIAL_METRICS_EFFECTIVE_BIGWIG="${eval_bigwig}" \
+    OFFICIAL_METRICS_EFFECTIVE_PEAKS="${eval_peaks}" \
+    OFFICIAL_METRICS_EFFECTIVE_NONPEAKS="${eval_nonpeaks}" \
+    official_metrics_annotate_provenance "${chrom_metrics}"
   else
     echo "[INFO][${fold_key}] chrombpnet metrics: skip"
   fi
