@@ -21,7 +21,7 @@
 
 ## Build, Test, and Development Commands
 - `pip install -r requirements.txt` installs shared Python deps for the repo.
-- If you need an editable local view of the vendored TransChromBP snapshot, use `pip install -e vendor/transchrombp` inside the workspace that is actually running the code.
+- If you need local TransChromBP imports, set `PYTHONPATH=vendor/transchrombp:$PYTHONPATH` in the active workspace, or use the relevant remote runtime workspace on 6000/6002.
 - Official ChromBPNet CLI, code lookup, and reproduction should be done in `/data1/zhoujiazhen/bylw_atac/chrombpnet_official` on 6000.
 - `bash workflows/tutorial/step1_download_bams_and_peaks.sh /path/to/data` downloads tutorial inputs.
 - `bash tests/full_workflow.sh 0` executes the full tutorial workflow on GPU 0 (long, GPU-heavy).
@@ -32,7 +32,7 @@
 export CHROMBPNET_ENV=/data1/zhoujiazhen/bylw_atac/.mamba/envs/chrombpnet
 export PATH="$CHROMBPNET_ENV/bin:$PATH"
 export LD_LIBRARY_PATH="$CHROMBPNET_ENV/lib:$LD_LIBRARY_PATH"
-export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/chromBPNet:$PYTHONPATH
+export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/TransChromBP/vendor/transchrombp:$PYTHONPATH
 ```
 
 ## Coding Style & Naming Conventions

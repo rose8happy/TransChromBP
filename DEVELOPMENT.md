@@ -86,7 +86,7 @@ graph TD
 
 ## 3. 常用操作命令
 
-所有操作均通过封装好的脚本 `./scripts/sync_project.sh` 完成。
+常用的本地-远端同步操作通常通过封装好的脚本 `./scripts/sync_project.sh` 完成；下面也保留了直接调用的工作流与测试命令。
 
 ### 场景 A: 常规开发与提交 (Git)
 当你完成了一个功能模块或修复了一个 Bug，并希望永久保存记录时：
@@ -112,6 +112,7 @@ graph TD
     ```
     *   **原理**: 使用 `rsync` 将本地代码直接覆盖到服务器。
     *   **注意**: 不会覆盖服务器上的 `logs/`, `outputs/`, `data/` 等数据目录。
+    *   **默认目标**: 该脚本当前默认写入 `/data1/zhoujiazhen/bylw_atac/chromBPNet`；6000 上的 TransChromBP 运行工作区是 `/data1/zhoujiazhen/bylw_atac/TransChromBP`，两者不要混为一谈。
 
 ### 场景 C: 查看训练结果 (Download Results)
 当服务器上的训练任务完成后，你希望在本地查看日志曲线或 HTML 报告时：
@@ -143,7 +144,8 @@ graph TD
 *   **本地 Git 用户**: `yangmeisuan <345687960@qq.com>`
 *   **服务器 Git 用户**: `yangmeisuan <345687960@qq.com>`
 *   **服务器地址**: `127.0.0.1` (Port 6000)
-*   **部署路径**: `/data1/zhoujiazhen/bylw_atac/TransChromBP`
+*   **脚本默认部署路径**: `/data1/zhoujiazhen/bylw_atac/chromBPNet`
+*   **6000 运行工作区**: `/data1/zhoujiazhen/bylw_atac/TransChromBP`
 
 ### 6000 上的多环境分工
 
