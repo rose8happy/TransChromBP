@@ -20,7 +20,7 @@
 本目录的 operator contract 已改为 external official root：
 - 6000 canonical official root：`/data1/zhoujiazhen/bylw_atac/chrombpnet_official`
 - active workflow 的默认 official root 不再指向本仓里的历史 `chrombpnet/` payload；official compare / official metrics / GC helper 都应走外置官方仓
-- 仍在使用的官方文件族与补丁来历见 [reports/chrombpnet_official_patch_ledger_20260406.md](/home/zhengwei/.config/superpowers/worktrees/chromBPNet/autonomy-20260406-chrombpnet-externalization/reports/chrombpnet_official_patch_ledger_20260406.md)
+- 仍在使用的官方文件族与补丁来历见 [ChromBPNet 官方依赖台账](../../reports/chrombpnet_official_patch_ledger_20260406.md)
 
 ## 1. 环境准备（6000）
 
@@ -34,8 +34,8 @@ export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/TransChromBP/vendor/transchrombp:
 
 说明：
 - `CHROMBPNET_OFFICIAL_ROOT` 是 strict-compare launcher 和 `select_best_epoch.py` 的默认 official root；不显式传 `--official-root` 时，就按这个环境变量解析。
-- `PYTHONPATH` 只指向当前主仓里的 `vendor/transchrombp` snapshot，不再把 `/data1/zhoujiazhen/bylw_atac/chromBPNet` 整仓当成官方 `ChromBPNet` 源码根。
-- 如果你要核对 official `predict.py` / `metrics.py` / GC helper 现在为什么仍然需要，直接看 [reports/chrombpnet_official_patch_ledger_20260406.md](/home/zhengwei/.config/superpowers/worktrees/chromBPNet/autonomy-20260406-chrombpnet-externalization/reports/chrombpnet_official_patch_ledger_20260406.md)。
+- 这里的 `PYTHONPATH` 只是 operator shell 的推荐初始值，用来让当前主仓里的 `vendor/transchrombp` snapshot 可导入；实际 strict-compare launcher 和 selector 运行时还会再 prepend repo root / official root，所以排查 import 优先级时要同时看脚本内部构造的命令。
+- 如果你要核对 official `predict.py` / `metrics.py` / GC helper 现在为什么仍然需要，直接看 [ChromBPNet 官方依赖台账](../../reports/chrombpnet_official_patch_ledger_20260406.md)。
 
 ## 2. 生成 5-fold 划分
 
