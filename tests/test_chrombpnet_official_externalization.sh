@@ -43,13 +43,38 @@ if ! rg -n "CHROMBPNET_OFFICIAL_ROOT" "${run_fast_1seed}" >/dev/null; then
   exit 1
 fi
 
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "${tmpdir}"' EXIT
+
 if ! rg -n "CHROMBPNET_OFFICIAL_ROOT|--official-root" "${REPO_ROOT}/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh" >/dev/null; then
   echo "ERROR: run_tutorial_strict_compare_official.sh does not clearly handle official root" >&2
   exit 1
 fi
 
-tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+missing_root="${tmpdir}/definitely_missing_official_root"
+mkdir -p "${tmpdir}/missing_root_check"
+if bash "${run_fast_1seed}" \
+  --name missing_root_check \
+  --genome "${tmpdir}/missing_root_check/genome.fa" \
+  --chrom-sizes "${tmpdir}/missing_root_check/chrom.sizes" \
+  --bam "${tmpdir}/missing_root_check/merged.bam" \
+  --peaks "${tmpdir}/missing_root_check/peaks.bed" \
+  --blacklist "${tmpdir}/missing_root_check/blacklist.bed" \
+  --fold-dir "${tmpdir}/missing_root_check/folds" \
+  --work-root "${tmpdir}/missing_root_check/work" \
+  --official-root "${missing_root}" \
+  2> "${tmpdir}/missing_root_check/stderr"; then
+  echo "ERROR: run_paper_aligned_fast_1seed.sh unexpectedly succeeded with a missing official root" >&2
+  exit 1
+fi
+if ! grep -q "official ChromBPNet root is not a directory" "${tmpdir}/missing_root_check/stderr"; then
+  echo "ERROR: run_paper_aligned_fast_1seed.sh did not emit the expected directory validation error" >&2
+  exit 1
+fi
+if grep -q "cd: no such file or directory" "${tmpdir}/missing_root_check/stderr"; then
+  echo "ERROR: run_paper_aligned_fast_1seed.sh still emitted a raw cd error for missing official root" >&2
+  exit 1
+fi
 
 write_fake_official_root() {
   local root="$1"

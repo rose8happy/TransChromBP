@@ -139,6 +139,11 @@ if [[ -z "${OFFICIAL_ROOT}" ]]; then
   exit 1
 fi
 
+if [[ ! -d "${OFFICIAL_ROOT}" ]]; then
+  echo "ERROR: official ChromBPNet root is not a directory: ${OFFICIAL_ROOT}" >&2
+  exit 1
+fi
+
 OFFICIAL_ROOT="$(cd "${OFFICIAL_ROOT}" && pwd)"
 OFFICIAL_PREDICT="${OFFICIAL_ROOT}/chrombpnet/training/predict.py"
 if [[ ! -f "${OFFICIAL_PREDICT}" ]]; then
