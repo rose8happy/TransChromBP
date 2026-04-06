@@ -130,6 +130,10 @@ require_file() {
 resolve_gc_helpers() {
   local helper_root=""
 
+  if [[ -n "$OFFICIAL_ROOT" && -n "$GC_HELPER_DIR" ]]; then
+    fail "conflicting GC helper source flags: pass exactly one of --official-root or --gc-helper-dir"
+  fi
+
   if [[ -n "$OFFICIAL_ROOT" ]]; then
     [[ -d "$OFFICIAL_ROOT" ]] || fail "official ChromBPNet root is not a directory: $OFFICIAL_ROOT"
     helper_root="$OFFICIAL_ROOT/chrombpnet/helpers/make_gc_matched_negatives"

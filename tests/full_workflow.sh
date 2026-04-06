@@ -48,7 +48,15 @@ blacklist_region=$data_dir/blacklist.bed.gz
 overlap_peak=$data_dir/overlap.bed.gz
 inputlen=2114
 genomewide_gc=$data_dir/genomewide_gc_hg38_stride_1000_inputlen_2114.bed
-export CHROMBPNET_OFFICIAL_ROOT="${CHROMBPNET_OFFICIAL_ROOT:-/data1/zhoujiazhen/bylw_atac/chrombpnet_official}"
+default_official_root="${CHROMBPNET_OFFICIAL_ROOT_FALLBACK:-/data1/zhoujiazhen/bylw_atac/chrombpnet_official}"
+if [[ -n "${CHROMBPNET_OFFICIAL_ROOT:-}" ]]; then
+	export CHROMBPNET_OFFICIAL_ROOT
+elif [[ -d "${default_official_root}" ]]; then
+	export CHROMBPNET_OFFICIAL_ROOT="${default_official_root}"
+else
+	echo "missing ChromBPNet official root for step 3: set CHROMBPNET_OFFICIAL_ROOT or ensure ${default_official_root} exists" >&2
+	exit 1
+fi
 step3_get_background_regions.sh $reference_fasta $chrom_sizes $blacklist_region $overlap_peak $inputlen $genomewide_gc $output_data $fold
 echo "completed step 3"
 

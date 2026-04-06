@@ -76,10 +76,6 @@ if ! rg -n "CHROMBPNET_OFFICIAL_ROOT" "${tutorial_step3}" >/dev/null; then
   echo "ERROR: step3_get_background_regions.sh does not mention CHROMBPNET_OFFICIAL_ROOT" >&2
   exit 1
 fi
-if ! rg -n 'export CHROMBPNET_OFFICIAL_ROOT="\$\{CHROMBPNET_OFFICIAL_ROOT:-/data1/zhoujiazhen/bylw_atac/chrombpnet_official\}"' "${full_workflow_test}" >/dev/null; then
-  echo "ERROR: tests/full_workflow.sh does not wire the default CHROMBPNET_OFFICIAL_ROOT for step 3" >&2
-  exit 1
-fi
 
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "${tmpdir}"' EXIT
@@ -138,6 +134,145 @@ assert_log_lacks() {
     echo "ERROR: unexpected log entry [${needle}] in ${file}" >&2
     exit 1
   fi
+}
+
+make_fake_full_workflow_tools() {
+  local fakebin="$1"
+  mkdir -p "${fakebin}"
+
+  cat > "${fakebin}/step1_download_bams_and_peaks.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+data_dir="${1:?missing data_dir}"
+mkdir -p "${data_dir}"
+: > "${data_dir}/merged.bam"
+cat > "${data_dir}/hg38.fa" <<'FA'
+>chr1
+ACGT
+FA
+cat > "${data_dir}/hg38.chrom.sizes" <<'EOF_SIZES'
+chr1	1000
+EOF_SIZES
+: > "${data_dir}/blacklist.bed.gz"
+: > "${data_dir}/overlap.bed.gz"
+EOF
+
+  cat > "${fakebin}/step2_make_bigwigs_from_bams.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+: > "${2}_unstranded.bw"
+EOF
+
+  cat > "${fakebin}/chrombpnet_make_splits" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+outdir=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o)
+      outdir="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+mkdir -p "${outdir}"
+cat > "${outdir}/fold_0.json" <<'JSON'
+{"fold": 0}
+JSON
+EOF
+
+  cat > "${fakebin}/chrombpnet_genomewide_gc" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+prefix=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o)
+      prefix="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+: > "${prefix}.bed"
+EOF
+
+  cat > "${fakebin}/step3_get_background_regions.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "${CHROMBPNET_OFFICIAL_ROOT:-}" > "${FAKE_FULL_WORKFLOW_STEP3_ENV_FILE:?missing env capture file}"
+mkdir -p "${7:?missing output dir}"
+cat > "${7}/negatives_with_summit.bed" <<'BED'
+chr1	100	200	.	.	.	.	.	.	1057
+BED
+EOF
+
+  cat > "${fakebin}/step4_train_bias_model.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p "${7:?missing output dir}"
+: > "${7}/bias.h5"
+EOF
+
+  cat > "${fakebin}/bedtools" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:?missing subcommand}" in
+  slop|intersect)
+    printf 'chr1\t0\t10\n'
+    ;;
+  *)
+    printf 'unexpected subcommand: %s\n' "$1" >&2
+    exit 1
+    ;;
+esac
+EOF
+
+  cat > "${fakebin}/shuf" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "-n" ]]; then
+  shift 2
+fi
+cat
+EOF
+
+  cat > "${fakebin}/step5_interpret_bias_model.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exit 0
+EOF
+
+  cat > "${fakebin}/step6_train_chrombpnet_model.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p "${7:?missing output dir}"
+: > "${7}/chrombpnet_wo_bias.h5"
+EOF
+
+  cat > "${fakebin}/step7_interpret_chrombpnet_model.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exit 0
+EOF
+
+  chmod +x \
+    "${fakebin}/step1_download_bams_and_peaks.sh" \
+    "${fakebin}/step2_make_bigwigs_from_bams.sh" \
+    "${fakebin}/chrombpnet_make_splits" \
+    "${fakebin}/chrombpnet_genomewide_gc" \
+    "${fakebin}/step3_get_background_regions.sh" \
+    "${fakebin}/step4_train_bias_model.sh" \
+    "${fakebin}/bedtools" \
+    "${fakebin}/shuf" \
+    "${fakebin}/step5_interpret_bias_model.sh" \
+    "${fakebin}/step6_train_chrombpnet_model.sh" \
+    "${fakebin}/step7_interpret_chrombpnet_model.sh"
 }
 
 if ! rg -n "CHROMBPNET_OFFICIAL_ROOT|--official-root" "${REPO_ROOT}/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh" >/dev/null; then
@@ -210,6 +345,22 @@ if bash "${run_remote_dataset_prep}" \
 fi
 if ! grep -q "official ChromBPNet root is not a directory" "${prep_helper_tmp}/missing_official_root.stderr"; then
   echo "ERROR: run_remote_chrombpnet_dataset_prep.sh did not emit the expected official root validation error" >&2
+  exit 1
+fi
+
+mkdir -p "${prep_helper_tmp}/conflict_official/chrombpnet/helpers/make_gc_matched_negatives/get_genomewide_gc_buckets" \
+  "${prep_helper_tmp}/conflict_gc_helper_dir"
+if bash "${run_remote_dataset_prep}" \
+  --root "${prep_helper_tmp}/root" \
+  --env-dir "${prep_helper_tmp}/env" \
+  --official-root "${prep_helper_tmp}/conflict_official" \
+  --gc-helper-dir "${prep_helper_tmp}/conflict_gc_helper_dir" \
+  2> "${prep_helper_tmp}/conflicting_helper_sources.stderr"; then
+  echo "ERROR: run_remote_chrombpnet_dataset_prep.sh unexpectedly succeeded with conflicting helper source flags" >&2
+  exit 1
+fi
+if ! grep -q "pass exactly one of --official-root or --gc-helper-dir" "${prep_helper_tmp}/conflicting_helper_sources.stderr"; then
+  echo "ERROR: run_remote_chrombpnet_dataset_prep.sh did not emit the expected conflicting helper source error" >&2
   exit 1
 fi
 
@@ -371,6 +522,43 @@ if ! grep -q $'^chr1\t100\t200' "${step3_smoke_tmp}/out/negatives_with_summit.be
 fi
 if ! grep -F -q -- "${step3_smoke_tmp}/overlap.bed ${step3_smoke_tmp}/out/exclude.bed 2114 ${step3_smoke_tmp}/out" "${step3_smoke_tmp}/out/helper_args.txt"; then
   echo "ERROR: step3 smoke test helper was not invoked with the expected arguments" >&2
+  exit 1
+fi
+
+full_workflow_tmp="${tmpdir}/full_workflow_smoke"
+mkdir -p "${full_workflow_tmp}/case_a" "${full_workflow_tmp}/case_b" "${full_workflow_tmp}/fakebin"
+make_fake_full_workflow_tools "${full_workflow_tmp}/fakebin"
+
+(
+  cd "${full_workflow_tmp}/case_a"
+  PATH="${full_workflow_tmp}/fakebin:${PATH}" \
+  CHROMBPNET_OFFICIAL_ROOT="/custom/root" \
+  FAKE_FULL_WORKFLOW_STEP3_ENV_FILE="${full_workflow_tmp}/case_a/step3_env.txt" \
+  bash "${full_workflow_test}" 0 > "${full_workflow_tmp}/case_a/stdout" 2> "${full_workflow_tmp}/case_a/stderr"
+)
+
+if [[ "$(<"${full_workflow_tmp}/case_a/step3_env.txt")" != "/custom/root" ]]; then
+  echo "ERROR: tests/full_workflow.sh did not pass through the pre-set CHROMBPNET_OFFICIAL_ROOT" >&2
+  exit 1
+fi
+
+if (
+  cd "${full_workflow_tmp}/case_b"
+  env -u CHROMBPNET_OFFICIAL_ROOT \
+    PATH="${full_workflow_tmp}/fakebin:${PATH}" \
+    CHROMBPNET_OFFICIAL_ROOT_FALLBACK="${full_workflow_tmp}/missing_default_root" \
+    FAKE_FULL_WORKFLOW_STEP3_ENV_FILE="${full_workflow_tmp}/case_b/step3_env.txt" \
+    bash "${full_workflow_test}" 0 > "${full_workflow_tmp}/case_b/stdout" 2> "${full_workflow_tmp}/case_b/stderr"
+); then
+  echo "ERROR: tests/full_workflow.sh unexpectedly succeeded without CHROMBPNET_OFFICIAL_ROOT and without a fallback root" >&2
+  exit 1
+fi
+if ! grep -q "set CHROMBPNET_OFFICIAL_ROOT" "${full_workflow_tmp}/case_b/stderr"; then
+  echo "ERROR: tests/full_workflow.sh did not emit the expected missing official root guidance" >&2
+  exit 1
+fi
+if [[ -e "${full_workflow_tmp}/case_b/step3_env.txt" ]]; then
+  echo "ERROR: tests/full_workflow.sh reached step 3 despite missing helper root configuration" >&2
   exit 1
 fi
 
