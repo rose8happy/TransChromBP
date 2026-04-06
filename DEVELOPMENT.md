@@ -21,7 +21,7 @@ graph TD
 从 2026-04-06 起，本项目把“TransChromBP 主仓”和“官方 ChromBPNet 源码”分开管理：
 
 1. **本仓库** 是 TransChromBP 主仓 + 项目档案，不是官方 ChromBPNet 源码主库。
-2. **官方 ChromBPNet 源码**、`setup.py`、`MANIFEST.in` 和 `chrombpnet.egg-info` 正在外化到 6000 上的 `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`。
+2. **官方 ChromBPNet 源码**、`setup.py`、`MANIFEST.in` 和根目录的 legacy `egg-info` packaging 入口正在外化到 6000 上的 `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`。
 3. **官方代码查找、官方复现、官方对比** 默认先去 6000 外部仓，不要把当前仓库当作官方来源。
 4. **GitHub** 负责长期备份与版本历史，不是实验运行目录。
 5. **6000 工作区** 是训练/评估与官方源码对照的远端工作区。

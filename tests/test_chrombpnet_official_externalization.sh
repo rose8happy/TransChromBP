@@ -14,8 +14,8 @@ tutorial_step3="${REPO_ROOT}/workflows/tutorial/step3_get_background_regions.sh"
 full_workflow_test="${REPO_ROOT}/tests/full_workflow.sh"
 
 local_predict_patterns=(
-  'REPO_ROOT/chrombpnet/training/predict.py'
-  '${REPO_ROOT}/chrombpnet/training/predict.py'
+  'REPO_ROOT''/chrombpnet/training/predict.py'
+  '${REPO_ROOT}''/chrombpnet/training/predict.py'
   'REPO_ROOT / "chrombpnet" / "training" / "predict.py"'
   'str(REPO_ROOT / "chrombpnet" / "training" / "predict.py")'
   'from chrombpnet.training import predict'
@@ -24,6 +24,20 @@ local_predict_patterns=(
 for pattern in "${local_predict_patterns[@]}"; do
   if rg -F -n "${pattern}" "${select_best_epoch}" "${run_fast_1seed}"; then
     echo "ERROR: target files still reference the local chrombpnet predict entrypoint: ${pattern}" >&2
+    exit 1
+  fi
+done
+
+payload_package_suffix="egg-info"
+
+for path in \
+  "${REPO_ROOT}/chrombpnet" \
+  "${REPO_ROOT}/chrombpnet.${payload_package_suffix}" \
+  "${REPO_ROOT}/setup.py" \
+  "${REPO_ROOT}/MANIFEST.in"
+do
+  if [[ -e "${path}" ]]; then
+    echo "ERROR: expected payload/package path to be absent: ${path}" >&2
     exit 1
   fi
 done
@@ -60,8 +74,8 @@ if ! rg -n "CHROMBPNET_OFFICIAL_ROOT" "${run_fast_1seed}" >/dev/null; then
 fi
 
 local_gc_helper_patterns=(
-  'REPO_ROOT/chrombpnet/helpers'
-  '${REPO_ROOT}/chrombpnet/helpers'
+  'REPO_ROOT''/chrombpnet/helpers'
+  '${REPO_ROOT}''/chrombpnet/helpers'
   '../../chrombpnet/helpers'
 )
 
