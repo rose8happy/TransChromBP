@@ -34,6 +34,14 @@ contains_unsafe_remote_chars() {
   [[ "$value" == *"'"* || "$value" == *'"'* || "$value" == *'$'* || "$value" == *'`'* || "$value" == *'\'* || "$value" == *$' '* || "$value" == *$'\t'* || "$value" == *$'\n'* || "$value" == *$'\r'* ]]
 }
 
+validate_host_value() {
+  local name="$1"
+  local value="$2"
+  if [[ -z "$value" || "$value" == -* || ! "$value" =~ ^[A-Za-z0-9_.@-]+$ ]]; then
+    fail "unsafe value for ${name}: ${value}"
+  fi
+}
+
 validate_remote_value() {
   local name="$1"
   local value="$2"
@@ -42,6 +50,15 @@ validate_remote_value() {
   fi
 }
 
+validate_run_tag() {
+  local value="$1"
+  if [[ -z "$value" || ! "$value" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    fail "unsafe value for RUN_TAG: ${value}"
+  fi
+}
+
+validate_host_value "REMOTE_HOST" "$REMOTE_HOST"
+validate_host_value "SOURCE_HOST" "$SOURCE_HOST"
 validate_remote_value "REMOTE_ROOT" "$REMOTE_ROOT"
 validate_remote_value "REMOTE_ENV" "$REMOTE_ENV"
 validate_remote_value "REMOTE_PYTHON" "$REMOTE_PYTHON"
@@ -49,7 +66,7 @@ validate_remote_value "SOURCE_OFFICIAL_ROOT" "$SOURCE_OFFICIAL_ROOT"
 validate_remote_value "DATASETS" "$DATASETS"
 validate_remote_value "THREADS" "$THREADS"
 validate_remote_value "NICE_LEVEL" "$NICE_LEVEL"
-validate_remote_value "RUN_TAG" "$RUN_TAG"
+validate_run_tag "$RUN_TAG"
 
 ssh_base=(
   ssh

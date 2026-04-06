@@ -711,6 +711,60 @@ assert_log_empty "${launcher_tmp}/scp.log"
 if FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
   FAKE_SCP_LOG="${launcher_tmp}/scp.log" \
   PATH="${launcher_tmp}/fakebin:${PATH}" \
+  REMOTE_HOST="-oProxyCommand=bad" \
+  REMOTE_PORT="6600" \
+  REMOTE_ROOT="/srv/remote6000" \
+  REMOTE_ENV="/envs/chrombpnet" \
+  REMOTE_PYTHON="/envs/chrombpnet/bin/python" \
+  CHROMBPNET_OFFICIAL_ROOT="/official/chrombpnet" \
+  DATASETS="GM12878" \
+  THREADS="8" \
+  NICE_LEVEL="3" \
+  RUN_TAG="unit_unsafe_host_6000" \
+  bash "${start_dataset_prep_6000}" > "${launcher_tmp}/unsafe_host_6000.stdout" 2> "${launcher_tmp}/unsafe_host_6000.stderr"; then
+  echo "ERROR: start_6000 unexpectedly accepted unsafe REMOTE_HOST input" >&2
+  exit 1
+fi
+if ! grep -q "unsafe value for REMOTE_HOST" "${launcher_tmp}/unsafe_host_6000.stderr"; then
+  echo "ERROR: start_6000 did not emit the expected REMOTE_HOST unsafe-value error" >&2
+  exit 1
+fi
+assert_log_empty "${launcher_tmp}/ssh.log"
+assert_log_empty "${launcher_tmp}/scp.log"
+
+: > "${launcher_tmp}/ssh.log"
+: > "${launcher_tmp}/scp.log"
+
+if FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
+  FAKE_SCP_LOG="${launcher_tmp}/scp.log" \
+  PATH="${launcher_tmp}/fakebin:${PATH}" \
+  REMOTE_HOST="remote6000" \
+  REMOTE_PORT="6600" \
+  REMOTE_ROOT="/srv/remote6000" \
+  REMOTE_ENV="/envs/chrombpnet" \
+  REMOTE_PYTHON="/envs/chrombpnet/bin/python" \
+  CHROMBPNET_OFFICIAL_ROOT="/official/chrombpnet" \
+  DATASETS="GM12878" \
+  THREADS="8" \
+  NICE_LEVEL="3" \
+  RUN_TAG="../escaped_path" \
+  bash "${start_dataset_prep_6000}" > "${launcher_tmp}/unsafe_runtag_6000.stdout" 2> "${launcher_tmp}/unsafe_runtag_6000.stderr"; then
+  echo "ERROR: start_6000 unexpectedly accepted path-traversal RUN_TAG input" >&2
+  exit 1
+fi
+if ! grep -q "unsafe value for RUN_TAG" "${launcher_tmp}/unsafe_runtag_6000.stderr"; then
+  echo "ERROR: start_6000 did not emit the expected RUN_TAG unsafe-value error" >&2
+  exit 1
+fi
+assert_log_empty "${launcher_tmp}/ssh.log"
+assert_log_empty "${launcher_tmp}/scp.log"
+
+: > "${launcher_tmp}/ssh.log"
+: > "${launcher_tmp}/scp.log"
+
+if FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
+  FAKE_SCP_LOG="${launcher_tmp}/scp.log" \
+  PATH="${launcher_tmp}/fakebin:${PATH}" \
   REMOTE_HOST="remote6002" \
   REMOTE_PORT="6602" \
   REMOTE_KEY="/tmp/fake_6002_key" \
@@ -730,6 +784,66 @@ if FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
 fi
 if ! grep -q "unsafe value for SOURCE_OFFICIAL_ROOT" "${launcher_tmp}/unsafe6002.stderr"; then
   echo "ERROR: start_6002 did not emit the expected unsafe-value error" >&2
+  exit 1
+fi
+assert_log_empty "${launcher_tmp}/ssh.log"
+assert_log_empty "${launcher_tmp}/scp.log"
+
+: > "${launcher_tmp}/ssh.log"
+: > "${launcher_tmp}/scp.log"
+
+if FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
+  FAKE_SCP_LOG="${launcher_tmp}/scp.log" \
+  PATH="${launcher_tmp}/fakebin:${PATH}" \
+  REMOTE_HOST="remote6002" \
+  REMOTE_PORT="6602" \
+  REMOTE_KEY="/tmp/fake_6002_key" \
+  REMOTE_ROOT="/srv/remote6002" \
+  REMOTE_ENV="/envs/transchrombp" \
+  REMOTE_PYTHON="/envs/transchrombp/bin/python" \
+  SOURCE_HOST="-oProxyCommand=bad" \
+  SOURCE_PORT="6610" \
+  SOURCE_OFFICIAL_ROOT="/official/source_root" \
+  DATASETS="K562" \
+  THREADS="6" \
+  NICE_LEVEL="4" \
+  RUN_TAG="unit_unsafe_host_6002" \
+  bash "${start_dataset_prep_6002}" > "${launcher_tmp}/unsafe_host_6002.stdout" 2> "${launcher_tmp}/unsafe_host_6002.stderr"; then
+  echo "ERROR: start_6002 unexpectedly accepted unsafe SOURCE_HOST input" >&2
+  exit 1
+fi
+if ! grep -q "unsafe value for SOURCE_HOST" "${launcher_tmp}/unsafe_host_6002.stderr"; then
+  echo "ERROR: start_6002 did not emit the expected SOURCE_HOST unsafe-value error" >&2
+  exit 1
+fi
+assert_log_empty "${launcher_tmp}/ssh.log"
+assert_log_empty "${launcher_tmp}/scp.log"
+
+: > "${launcher_tmp}/ssh.log"
+: > "${launcher_tmp}/scp.log"
+
+if FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
+  FAKE_SCP_LOG="${launcher_tmp}/scp.log" \
+  PATH="${launcher_tmp}/fakebin:${PATH}" \
+  REMOTE_HOST="remote6002" \
+  REMOTE_PORT="6602" \
+  REMOTE_KEY="/tmp/fake_6002_key" \
+  REMOTE_ROOT="/srv/remote6002" \
+  REMOTE_ENV="/envs/transchrombp" \
+  REMOTE_PYTHON="/envs/transchrombp/bin/python" \
+  SOURCE_HOST="source6000" \
+  SOURCE_PORT="6610" \
+  SOURCE_OFFICIAL_ROOT="/official/source_root" \
+  DATASETS="K562" \
+  THREADS="6" \
+  NICE_LEVEL="4" \
+  RUN_TAG="../escaped_path_6002" \
+  bash "${start_dataset_prep_6002}" > "${launcher_tmp}/unsafe_runtag_6002.stdout" 2> "${launcher_tmp}/unsafe_runtag_6002.stderr"; then
+  echo "ERROR: start_6002 unexpectedly accepted path-traversal RUN_TAG input" >&2
+  exit 1
+fi
+if ! grep -q "unsafe value for RUN_TAG" "${launcher_tmp}/unsafe_runtag_6002.stderr"; then
+  echo "ERROR: start_6002 did not emit the expected RUN_TAG unsafe-value error" >&2
   exit 1
 fi
 assert_log_empty "${launcher_tmp}/ssh.log"
