@@ -9,7 +9,7 @@
 
 ## Project Structure & Module Organization
 - This repo is the TransChromBP main repository and project archive; official ChromBPNet source lookup and reproduction live in the 6000 external repo at `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`.
-- `chrombpnet/` is retained only as a transitional compatibility path while official ChromBPNet source is externalized; do not treat it as the canonical package root.
+- Local official ChromBPNet payload is retired; official ChromBPNet source lookup and reproduction live only in the 6000 external repo at `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`; do not treat any local `chrombpnet/` tree as the canonical package root.
 - `scripts/` holds utility scripts: `sync_project.sh`, `benchmark/`, data prep launchers, `setup_report_env.sh`.
 - `workflows/` holds end-to-end bash workflows plus `tutorial/` step scripts.
 - `tests/` contains shell-based integration checks.
