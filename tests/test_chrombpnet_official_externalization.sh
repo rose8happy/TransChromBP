@@ -11,6 +11,7 @@ run_remote_dataset_prep="${REPO_ROOT}/scripts/run_remote_chrombpnet_dataset_prep
 start_dataset_prep_6000="${REPO_ROOT}/scripts/start_6000_chrombpnet_dataset_prep.sh"
 start_dataset_prep_6002="${REPO_ROOT}/scripts/start_6002_chrombpnet_dataset_prep.sh"
 tutorial_step3="${REPO_ROOT}/workflows/tutorial/step3_get_background_regions.sh"
+full_workflow_test="${REPO_ROOT}/tests/full_workflow.sh"
 
 local_predict_patterns=(
   'REPO_ROOT/chrombpnet/training/predict.py'
@@ -48,6 +49,10 @@ for flag in --official-root --gc-helper-dir; do
     exit 1
   fi
 done
+if ! bash "${run_remote_dataset_prep}" --help 2>&1 | grep -q "pass exactly one of --official-root or --gc-helper-dir"; then
+  echo "ERROR: run_remote_chrombpnet_dataset_prep.sh --help does not explain the helper source requirement" >&2
+  exit 1
+fi
 
 if ! rg -n "CHROMBPNET_OFFICIAL_ROOT" "${run_fast_1seed}" >/dev/null; then
   echo "ERROR: run_paper_aligned_fast_1seed.sh does not mention CHROMBPNET_OFFICIAL_ROOT" >&2
@@ -71,9 +76,69 @@ if ! rg -n "CHROMBPNET_OFFICIAL_ROOT" "${tutorial_step3}" >/dev/null; then
   echo "ERROR: step3_get_background_regions.sh does not mention CHROMBPNET_OFFICIAL_ROOT" >&2
   exit 1
 fi
+if ! rg -n 'export CHROMBPNET_OFFICIAL_ROOT="\$\{CHROMBPNET_OFFICIAL_ROOT:-/data1/zhoujiazhen/bylw_atac/chrombpnet_official\}"' "${full_workflow_test}" >/dev/null; then
+  echo "ERROR: tests/full_workflow.sh does not wire the default CHROMBPNET_OFFICIAL_ROOT for step 3" >&2
+  exit 1
+fi
 
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "${tmpdir}"' EXIT
+
+make_fake_remote_tools() {
+  local fakebin="$1"
+
+  mkdir -p "${fakebin}"
+
+  cat > "${fakebin}/ssh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+log_file="${FAKE_SSH_LOG:?missing FAKE_SSH_LOG}"
+{
+  printf 'ssh'
+  for arg in "$@"; do
+    printf '\t%s' "$arg"
+  done
+  printf '\n'
+} >> "${log_file}"
+last_arg="${!#}"
+if [[ "${last_arg}" == *'echo $!'* ]]; then
+  printf '%s\n' "${FAKE_SSH_PID:-4242}"
+fi
+EOF
+
+  cat > "${fakebin}/scp" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+log_file="${FAKE_SCP_LOG:?missing FAKE_SCP_LOG}"
+{
+  printf 'scp'
+  for arg in "$@"; do
+    printf '\t%s' "$arg"
+  done
+  printf '\n'
+} >> "${log_file}"
+EOF
+
+  chmod +x "${fakebin}/ssh" "${fakebin}/scp"
+}
+
+assert_log_contains() {
+  local needle="$1"
+  local file="$2"
+  if ! grep -F -q -- "${needle}" "${file}"; then
+    echo "ERROR: missing log entry [${needle}] in ${file}" >&2
+    exit 1
+  fi
+}
+
+assert_log_lacks() {
+  local needle="$1"
+  local file="$2"
+  if grep -F -q -- "${needle}" "${file}"; then
+    echo "ERROR: unexpected log entry [${needle}] in ${file}" >&2
+    exit 1
+  fi
+}
 
 if ! rg -n "CHROMBPNET_OFFICIAL_ROOT|--official-root" "${REPO_ROOT}/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh" >/dev/null; then
   echo "ERROR: run_tutorial_strict_compare_official.sh does not clearly handle official root" >&2
@@ -145,6 +210,167 @@ if bash "${run_remote_dataset_prep}" \
 fi
 if ! grep -q "official ChromBPNet root is not a directory" "${prep_helper_tmp}/missing_official_root.stderr"; then
   echo "ERROR: run_remote_chrombpnet_dataset_prep.sh did not emit the expected official root validation error" >&2
+  exit 1
+fi
+
+launcher_tmp="${tmpdir}/launcher_contracts"
+mkdir -p "${launcher_tmp}/fakebin"
+make_fake_remote_tools "${launcher_tmp}/fakebin"
+
+FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
+FAKE_SCP_LOG="${launcher_tmp}/scp.log" \
+FAKE_SSH_PID=6000 \
+PATH="${launcher_tmp}/fakebin:${PATH}" \
+REMOTE_HOST="remote6000" \
+REMOTE_PORT="6600" \
+REMOTE_ROOT="/srv/remote6000" \
+REMOTE_ENV="/envs/chrombpnet" \
+REMOTE_PYTHON="/envs/chrombpnet/bin/python" \
+CHROMBPNET_OFFICIAL_ROOT="/official/chrombpnet" \
+DATASETS="GM12878" \
+THREADS="8" \
+NICE_LEVEL="3" \
+RUN_TAG="unit_6000" \
+bash "${start_dataset_prep_6000}" > "${launcher_tmp}/start6000.stdout"
+
+assert_log_contains $'scp\t-P\t6600\t'"${REPO_ROOT}/scripts/run_remote_chrombpnet_dataset_prep.sh"$'\tremote6000:/srv/remote6000/.codex_jobs/chrombpnet_dataset_prep/unit_6000/' "${launcher_tmp}/scp.log"
+assert_log_lacks "chrombpnet/helpers" "${launcher_tmp}/scp.log"
+assert_log_contains "get_gc_content.py" "${launcher_tmp}/ssh.log"
+assert_log_contains "get_gc_matched_negatives.py" "${launcher_tmp}/ssh.log"
+assert_log_contains "get_genomewide_gc_bins.py" "${launcher_tmp}/ssh.log"
+assert_log_contains "--official-root '/official/chrombpnet'" "${launcher_tmp}/ssh.log"
+preflight_line="$(grep -n "get_gc_content.py" "${launcher_tmp}/ssh.log" | head -n 1 | cut -d: -f1)"
+nohup_line="$(grep -n "nohup bash '/srv/remote6000/.codex_jobs/chrombpnet_dataset_prep/unit_6000/run_remote_chrombpnet_dataset_prep.sh'" "${launcher_tmp}/ssh.log" | head -n 1 | cut -d: -f1)"
+if [[ -z "${preflight_line}" || -z "${nohup_line}" || "${preflight_line}" -ge "${nohup_line}" ]]; then
+  echo "ERROR: start_6000 preflight did not run before background launch" >&2
+  exit 1
+fi
+
+: > "${launcher_tmp}/ssh.log"
+: > "${launcher_tmp}/scp.log"
+
+FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
+FAKE_SCP_LOG="${launcher_tmp}/scp.log" \
+FAKE_SSH_PID=6002 \
+PATH="${launcher_tmp}/fakebin:${PATH}" \
+REMOTE_HOST="remote6002" \
+REMOTE_PORT="6602" \
+REMOTE_KEY="/tmp/fake_6002_key" \
+REMOTE_ROOT="/srv/remote6002" \
+REMOTE_ENV="/envs/transchrombp" \
+REMOTE_PYTHON="/envs/transchrombp/bin/python" \
+SOURCE_HOST="source6000" \
+SOURCE_PORT="6610" \
+SOURCE_OFFICIAL_ROOT="/official/source_root" \
+DATASETS="K562" \
+THREADS="6" \
+NICE_LEVEL="4" \
+RUN_TAG="unit_6002" \
+bash "${start_dataset_prep_6002}" > "${launcher_tmp}/start6002.stdout"
+
+assert_log_contains $'scp\t-P\t6610\tsource6000:/official/source_root/chrombpnet/helpers/make_gc_matched_negatives/get_gc_content.py' "${launcher_tmp}/scp.log"
+assert_log_contains "source6000:/official/source_root/chrombpnet/helpers/make_gc_matched_negatives/get_gc_matched_negatives.py" "${launcher_tmp}/scp.log"
+assert_log_contains "source6000:/official/source_root/chrombpnet/helpers/make_gc_matched_negatives/get_genomewide_gc_buckets/get_genomewide_gc_bins.py" "${launcher_tmp}/scp.log"
+assert_log_contains $'scp\t-i\t/tmp/fake_6002_key\t-P\t6602\t'"${REPO_ROOT}/scripts/run_remote_chrombpnet_dataset_prep.sh" "${launcher_tmp}/scp.log"
+assert_log_contains "get_gc_content.py" "${launcher_tmp}/scp.log"
+assert_log_contains "get_gc_matched_negatives.py" "${launcher_tmp}/scp.log"
+assert_log_contains "get_genomewide_gc_bins.py" "${launcher_tmp}/scp.log"
+assert_log_contains "remote6002:/srv/remote6002/.codex_jobs/chrombpnet_dataset_prep/unit_6002/" "${launcher_tmp}/scp.log"
+assert_log_contains "--gc-helper-dir '/srv/remote6002/.codex_jobs/chrombpnet_dataset_prep/unit_6002'" "${launcher_tmp}/ssh.log"
+assert_log_lacks "${REPO_ROOT}/chrombpnet/helpers" "${launcher_tmp}/scp.log"
+
+step3_smoke_tmp="${tmpdir}/step3_smoke"
+mkdir -p "${step3_smoke_tmp}/fakebin" "${step3_smoke_tmp}/out"
+cat > "${step3_smoke_tmp}/fakebin/bedtools" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+subcommand="${1:?missing subcommand}"
+shift
+case "${subcommand}" in
+  slop)
+    input=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -i)
+          input="$2"
+          shift 2
+          ;;
+        -g|-b)
+          shift 2
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+    cat "${input}"
+    ;;
+  sort)
+    cat
+    ;;
+  merge)
+    cat
+    ;;
+  *)
+    echo "unexpected bedtools subcommand: ${subcommand}" >&2
+    exit 1
+    ;;
+esac
+EOF
+chmod +x "${step3_smoke_tmp}/fakebin/bedtools"
+
+cat > "${step3_smoke_tmp}/stub_make_gc_matched_negatives.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" > "$4/helper_args.txt"
+cat > "$4/negatives.bed" <<'BED'
+chr1	100	200
+BED
+EOF
+chmod +x "${step3_smoke_tmp}/stub_make_gc_matched_negatives.sh"
+
+cat > "${step3_smoke_tmp}/reference.fa" <<'EOF'
+>chr1
+ACGT
+EOF
+cat > "${step3_smoke_tmp}/chrom.sizes" <<'EOF'
+chr1	1000
+EOF
+cat > "${step3_smoke_tmp}/blacklist.bed" <<'EOF'
+chr1	10	20
+EOF
+cat > "${step3_smoke_tmp}/overlap.bed" <<'EOF'
+chr1	30	40
+EOF
+cat > "${step3_smoke_tmp}/genomewide_gc.bed" <<'EOF'
+chr1	0	100
+EOF
+cat > "${step3_smoke_tmp}/fold.json" <<'EOF'
+{"fold": 0}
+EOF
+
+PATH="${step3_smoke_tmp}/fakebin:${PATH}" \
+MAKE_GC_MATCHED_NEGATIVES_SCRIPT="${step3_smoke_tmp}/stub_make_gc_matched_negatives.sh" \
+bash "${tutorial_step3}" \
+  "${step3_smoke_tmp}/reference.fa" \
+  "${step3_smoke_tmp}/chrom.sizes" \
+  "${step3_smoke_tmp}/blacklist.bed" \
+  "${step3_smoke_tmp}/overlap.bed" \
+  2114 \
+  "${step3_smoke_tmp}/genomewide_gc.bed" \
+  "${step3_smoke_tmp}/out" \
+  "${step3_smoke_tmp}/fold.json"
+
+if [[ ! -s "${step3_smoke_tmp}/out/negatives_with_summit.bed" ]]; then
+  echo "ERROR: step3 smoke test did not produce negatives_with_summit.bed" >&2
+  exit 1
+fi
+if ! grep -q $'^chr1\t100\t200' "${step3_smoke_tmp}/out/negatives_with_summit.bed"; then
+  echo "ERROR: step3 smoke test produced unexpected negatives_with_summit.bed contents" >&2
+  exit 1
+fi
+if ! grep -F -q -- "${step3_smoke_tmp}/overlap.bed ${step3_smoke_tmp}/out/exclude.bed 2114 ${step3_smoke_tmp}/out" "${step3_smoke_tmp}/out/helper_args.txt"; then
+  echo "ERROR: step3 smoke test helper was not invoked with the expected arguments" >&2
   exit 1
 fi
 

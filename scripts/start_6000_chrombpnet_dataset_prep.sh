@@ -31,6 +31,19 @@ scp_base=(
 
 "${ssh_base[@]}" "mkdir -p '$REMOTE_JOB_DIR' '$REMOTE_ROOT/logs' '$REMOTE_ROOT/chrombpnet_refs'"
 
+"${ssh_base[@]}" "bash -lc '
+  for helper in \
+    \"$OFFICIAL_ROOT/chrombpnet/helpers/make_gc_matched_negatives/get_gc_content.py\" \
+    \"$OFFICIAL_ROOT/chrombpnet/helpers/make_gc_matched_negatives/get_gc_matched_negatives.py\" \
+    \"$OFFICIAL_ROOT/chrombpnet/helpers/make_gc_matched_negatives/get_genomewide_gc_buckets/get_genomewide_gc_bins.py\"
+  do
+    if [[ ! -f \"\$helper\" ]]; then
+      echo \"missing official helper: \$helper\" >&2
+      exit 1
+    fi
+  done
+'"
+
 "${scp_base[@]}" \
   "$REPO_ROOT/scripts/run_remote_chrombpnet_dataset_prep.sh" \
   "$REMOTE_HOST:$REMOTE_JOB_DIR/"

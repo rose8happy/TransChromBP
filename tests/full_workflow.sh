@@ -48,6 +48,7 @@ blacklist_region=$data_dir/blacklist.bed.gz
 overlap_peak=$data_dir/overlap.bed.gz
 inputlen=2114
 genomewide_gc=$data_dir/genomewide_gc_hg38_stride_1000_inputlen_2114.bed
+export CHROMBPNET_OFFICIAL_ROOT="${CHROMBPNET_OFFICIAL_ROOT:-/data1/zhoujiazhen/bylw_atac/chrombpnet_official}"
 step3_get_background_regions.sh $reference_fasta $chrom_sizes $blacklist_region $overlap_peak $inputlen $genomewide_gc $output_data $fold
 echo "completed step 3"
 

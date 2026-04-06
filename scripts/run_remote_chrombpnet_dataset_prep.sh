@@ -7,14 +7,15 @@ Usage:
   bash run_remote_chrombpnet_dataset_prep.sh \
     --root /path/to/bylw_atac \
     --env-dir /path/to/env \
-    [--official-root /path/to/chrombpnet_official] \
-    [--gc-helper-dir /path/to/staged_gc_helpers] \
+    [--official-root /path/to/chrombpnet_official | --gc-helper-dir /path/to/staged_gc_helpers] \
     [--python-bin /path/to/python] \
     [--datasets GM12878,K562] \
     [--threads 4] \
     [--nice-level 10] \
     [--inputlen 2114] \
     [--stride 1000]
+
+pass exactly one of --official-root or --gc-helper-dir to choose the GC helper source.
 EOF
 }
 
