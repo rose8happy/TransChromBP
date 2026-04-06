@@ -16,34 +16,39 @@ graph TD
     C -->|Download Results (Rsync)| A
 ```
 
-## 2. 版本管理主从关系
+## 2. 版本管理与官方源码外化
 
-从 2026-03-21 起，本项目对“哪里是档案源”采用更硬的约定：
+从 2026-04-06 起，本项目把“TransChromBP 主仓”和“官方 ChromBPNet 源码”分开管理：
 
-1. **本地仓库** 是唯一的代码与文档主档案。
-2. **GitHub** 负责长期备份与版本历史，不是实验运行目录。
-3. **6000 工作区** 是训练/评估用的远端工作副本，不应被视为最终版本真源。
-4. **6002 工作区** 当前按部署/运行目录管理，默认不作为 Git 档案节点。
+1. **本仓库** 是 TransChromBP 主仓 + 项目档案，不是官方 ChromBPNet 源码主库。
+2. **官方 ChromBPNet 源码**、`setup.py`、`MANIFEST.in` 和 `chrombpnet.egg-info` 正在外化到 6000 上的 `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`。
+3. **官方代码查找、官方复现、官方对比** 默认先去 6000 外部仓，不要把当前仓库当作官方来源。
+4. **GitHub** 负责长期备份与版本历史，不是实验运行目录。
+5. **6000 工作区** 是训练/评估与官方源码对照的远端工作区。
+6. **6002 工作区** 当前按部署/运行目录管理，默认不作为 Git 档案节点。
 
 这意味着：
 
 - 代码、配置、实验计划、launcher、结果摘要，应先落本地仓库，再同步到远端。
 - 远端允许存在运行期临时改动，但必须回收并整理回本地。
 - 模型权重、原始数据、原始训练日志这类大文件，不作为 Git 版本管理对象。
+- 需要核对官方 ChromBPNet 行为时，优先在 `/data1/zhoujiazhen/bylw_atac/chrombpnet_official` 里完成代码查找和复现，再把结论带回本仓库。
 
 ### 2.1 当前三处工作区的角色
 
 | 位置 | 当前角色 | 是否应视为主档案 |
 | :--- | :--- | :---: |
-| 本地 `/home/zhengwei/project/python/chromBPNet` | 主开发仓库、文档与分析汇总中心 | ✅ |
-| 6000 `/data1/zhoujiazhen/bylw_atac/chromBPNet` | 训练机上的 Git 工作副本 | ❌ |
+| 本地 `/home/zhengwei/project/python/chromBPNet` | TransChromBP 主开发仓库、文档与分析汇总中心 | ✅ |
+| 6000 `/data1/zhoujiazhen/bylw_atac/chrombpnet_official` | 官方 ChromBPNet 外部源码仓与复现基准 | ✅（官方源码） |
+| 6000 `/data1/zhoujiazhen/bylw_atac/TransChromBP` | 训练机上的项目工作副本 | ❌ |
 | 6002 `/home/zhengwei/bylw_atac/TransChromBP` | 运行/部署目录 | ❌ |
 
 ### 2.2 哪些内容必须回收到本地版本管理
 
 以下内容默认应进入本地仓库并参与 Git 版本管理：
 
-- `chrombpnet/`、`scripts/`、`docs/`、`tests/` 等代码与文档目录
+- `scripts/`、`docs/`、`tests/` 等代码与文档目录
+- `chrombpnet/` 如仍需参考，只视为外化期间的兼容路径，不应作为官方源码主档案
 - `vendor/transchrombp/` 中的版本化 TransChromBP snapshot 与辅助脚本
 - `configs/`、launcher、runtime config 模板、实验清单、计划文档
 - `reports/*.tex`
@@ -123,7 +128,7 @@ graph TD
 
 | 目录/文件 | Git 托管? | Deploy 同步? (Local->Remote) | 结果回传? (Remote->Local) | 说明 |
 | :--- | :---: | :---: | :---: | :--- |
-| `chrombpnet/` | ✅ | ✅ | ❌ | 核心代码库 |
+| `chrombpnet/` | ⚠️ 过渡兼容 | ✅ | ❌ | 仅用于外化期间的兼容路径，不是官方源码主档案 |
 | `scripts/` | ✅ | ✅ | ❌ | 脚本工具 |
 | `docs/` | ✅ | ✅ | ✅（必要时） | 计划、清单、结果说明 |
 | `logs/` | 原始日志 ❌；摘要 ✅ | ❌ (排除) | ✅ (下载) | 原始日志不入 Git，摘要需整理回本地 |
@@ -138,7 +143,7 @@ graph TD
 *   **本地 Git 用户**: `yangmeisuan <345687960@qq.com>`
 *   **服务器 Git 用户**: `yangmeisuan <345687960@qq.com>`
 *   **服务器地址**: `127.0.0.1` (Port 6000)
-*   **部署路径**: `/data1/zhoujiazhen/bylw_atac/chromBPNet`
+*   **部署路径**: `/data1/zhoujiazhen/bylw_atac/TransChromBP`
 
 ### 6000 上的多环境分工
 
