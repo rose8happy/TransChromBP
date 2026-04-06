@@ -28,8 +28,16 @@ inputlen=${5?param missing - inputlen}
 genomewide_gc=${6?param missing - genomewide_gc}
 output_dir=${7?param missing - output_dir} 
 fold=${8?param missing - fold}
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-make_gc_matched_negatives_script="${script_dir}/../../chrombpnet/helpers/make_gc_matched_negatives/make_gc_matched_negatives.sh"
+make_gc_matched_negatives_script="${MAKE_GC_MATCHED_NEGATIVES_SCRIPT:-}"
+
+if [[ -z "${make_gc_matched_negatives_script}" && -n "${CHROMBPNET_OFFICIAL_ROOT:-}" ]]; then
+    make_gc_matched_negatives_script="${CHROMBPNET_OFFICIAL_ROOT}/chrombpnet/helpers/make_gc_matched_negatives/make_gc_matched_negatives.sh"
+fi
+
+if [[ -z "${make_gc_matched_negatives_script}" ]]; then
+    echo "missing helper script: set MAKE_GC_MATCHED_NEGATIVES_SCRIPT or CHROMBPNET_OFFICIAL_ROOT" >&2
+    exit 1
+fi
 
 if [[ ! -x "${make_gc_matched_negatives_script}" ]]; then
     echo "missing helper script: ${make_gc_matched_negatives_script}" >&2

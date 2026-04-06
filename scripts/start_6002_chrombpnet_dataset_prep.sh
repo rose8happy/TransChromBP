@@ -10,13 +10,19 @@ REMOTE_KEY="${REMOTE_KEY:-/home/zhengwei/.ssh/codex_6002_ed25519}"
 REMOTE_ROOT="${REMOTE_ROOT:-/home/zhengwei/bylw_atac}"
 REMOTE_ENV="${REMOTE_ENV:-/home/zhengwei/bylw_atac/.mamba/envs/transchrombp}"
 REMOTE_PYTHON="${REMOTE_PYTHON:-$REMOTE_ENV/bin/python}"
+SOURCE_HOST="${SOURCE_HOST:-zhoujiazhen@127.0.0.1}"
+SOURCE_PORT="${SOURCE_PORT:-6000}"
+SOURCE_OFFICIAL_ROOT="${CHROMBPNET_OFFICIAL_ROOT:-/data1/zhoujiazhen/bylw_atac/chrombpnet_official}"
 DATASETS="${DATASETS:-GM12878,K562}"
 THREADS="${THREADS:-4}"
 NICE_LEVEL="${NICE_LEVEL:-10}"
 RUN_TAG="${RUN_TAG:-chrombpnet_dataset_prep_6002_$(date +%Y%m%d_%H%M%S)}"
+LOCAL_STAGE_DIR="$(mktemp -d)"
 
 REMOTE_JOB_DIR="$REMOTE_ROOT/.codex_jobs/chrombpnet_dataset_prep/$RUN_TAG"
 REMOTE_LOG="$REMOTE_ROOT/logs/${RUN_TAG}.log"
+
+trap 'rm -rf "${LOCAL_STAGE_DIR}"' EXIT
 
 ssh_base=(
   ssh
@@ -31,13 +37,24 @@ scp_base=(
   -P "$REMOTE_PORT"
 )
 
+source_scp_base=(
+  scp
+  -P "$SOURCE_PORT"
+)
+
 "${ssh_base[@]}" "mkdir -p '$REMOTE_JOB_DIR' '$REMOTE_ROOT/logs' '$REMOTE_ROOT/chrombpnet_refs'"
+
+"${source_scp_base[@]}" \
+  "$SOURCE_HOST:$SOURCE_OFFICIAL_ROOT/chrombpnet/helpers/make_gc_matched_negatives/get_gc_content.py" \
+  "$SOURCE_HOST:$SOURCE_OFFICIAL_ROOT/chrombpnet/helpers/make_gc_matched_negatives/get_gc_matched_negatives.py" \
+  "$SOURCE_HOST:$SOURCE_OFFICIAL_ROOT/chrombpnet/helpers/make_gc_matched_negatives/get_genomewide_gc_buckets/get_genomewide_gc_bins.py" \
+  "$LOCAL_STAGE_DIR/"
 
 "${scp_base[@]}" \
   "$REPO_ROOT/scripts/run_remote_chrombpnet_dataset_prep.sh" \
-  "$REPO_ROOT/chrombpnet/helpers/make_gc_matched_negatives/get_gc_content.py" \
-  "$REPO_ROOT/chrombpnet/helpers/make_gc_matched_negatives/get_gc_matched_negatives.py" \
-  "$REPO_ROOT/chrombpnet/helpers/make_gc_matched_negatives/get_genomewide_gc_buckets/get_genomewide_gc_bins.py" \
+  "$LOCAL_STAGE_DIR/get_gc_content.py" \
+  "$LOCAL_STAGE_DIR/get_gc_matched_negatives.py" \
+  "$LOCAL_STAGE_DIR/get_genomewide_gc_bins.py" \
   "$REMOTE_HOST:$REMOTE_JOB_DIR/"
 
 "${ssh_base[@]}" "chmod +x '$REMOTE_JOB_DIR/run_remote_chrombpnet_dataset_prep.sh'"
@@ -47,6 +64,7 @@ pid="$("${ssh_base[@]}" \
     --root '$REMOTE_ROOT' \
     --env-dir '$REMOTE_ENV' \
     --python-bin '$REMOTE_PYTHON' \
+    --gc-helper-dir '$REMOTE_JOB_DIR' \
     --datasets '$DATASETS' \
     --threads '$THREADS' \
     --nice-level '$NICE_LEVEL' \

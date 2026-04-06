@@ -7,6 +7,10 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 select_best_epoch="${REPO_ROOT}/scripts/paper_aligned_repro/select_best_epoch.py"
 run_fast_1seed="${REPO_ROOT}/scripts/paper_aligned_repro/run_paper_aligned_fast_1seed.sh"
+run_remote_dataset_prep="${REPO_ROOT}/scripts/run_remote_chrombpnet_dataset_prep.sh"
+start_dataset_prep_6000="${REPO_ROOT}/scripts/start_6000_chrombpnet_dataset_prep.sh"
+start_dataset_prep_6002="${REPO_ROOT}/scripts/start_6002_chrombpnet_dataset_prep.sh"
+tutorial_step3="${REPO_ROOT}/workflows/tutorial/step3_get_background_regions.sh"
 
 local_predict_patterns=(
   'REPO_ROOT/chrombpnet/training/predict.py'
@@ -38,8 +42,33 @@ if ! bash "${REPO_ROOT}/scripts/paper_aligned_repro/run_tutorial_strict_compare_
   exit 1
 fi
 
+for flag in --official-root --gc-helper-dir; do
+  if ! bash "${run_remote_dataset_prep}" --help 2>&1 | grep -q -- "${flag}"; then
+    echo "ERROR: run_remote_chrombpnet_dataset_prep.sh --help does not expose ${flag}" >&2
+    exit 1
+  fi
+done
+
 if ! rg -n "CHROMBPNET_OFFICIAL_ROOT" "${run_fast_1seed}" >/dev/null; then
   echo "ERROR: run_paper_aligned_fast_1seed.sh does not mention CHROMBPNET_OFFICIAL_ROOT" >&2
+  exit 1
+fi
+
+local_gc_helper_patterns=(
+  'REPO_ROOT/chrombpnet/helpers'
+  '${REPO_ROOT}/chrombpnet/helpers'
+  '../../chrombpnet/helpers'
+)
+
+for pattern in "${local_gc_helper_patterns[@]}"; do
+  if rg -F -n "${pattern}" "${start_dataset_prep_6000}" "${start_dataset_prep_6002}" "${tutorial_step3}"; then
+    echo "ERROR: Task 2 targets still reference local GC helpers: ${pattern}" >&2
+    exit 1
+  fi
+done
+
+if ! rg -n "CHROMBPNET_OFFICIAL_ROOT" "${tutorial_step3}" >/dev/null; then
+  echo "ERROR: step3_get_background_regions.sh does not mention CHROMBPNET_OFFICIAL_ROOT" >&2
   exit 1
 fi
 
@@ -73,6 +102,49 @@ if ! grep -q "official ChromBPNet root is not a directory" "${tmpdir}/missing_ro
 fi
 if grep -q "cd: no such file or directory" "${tmpdir}/missing_root_check/stderr"; then
   echo "ERROR: run_paper_aligned_fast_1seed.sh still emitted a raw cd error for missing official root" >&2
+  exit 1
+fi
+
+prep_helper_tmp="${tmpdir}/dataset_prep_helper_checks"
+mkdir -p "${prep_helper_tmp}/root" "${prep_helper_tmp}/env"
+
+if bash "${run_remote_dataset_prep}" \
+  --root "${prep_helper_tmp}/root" \
+  --env-dir "${prep_helper_tmp}/env" \
+  2> "${prep_helper_tmp}/missing_helper_source.stderr"; then
+  echo "ERROR: run_remote_chrombpnet_dataset_prep.sh unexpectedly succeeded without helper source flags" >&2
+  exit 1
+fi
+if ! grep -q "pass --official-root or --gc-helper-dir" "${prep_helper_tmp}/missing_helper_source.stderr"; then
+  echo "ERROR: run_remote_chrombpnet_dataset_prep.sh did not emit the expected missing helper source error" >&2
+  exit 1
+fi
+
+missing_gc_helper_dir="${prep_helper_tmp}/missing_gc_helper_dir"
+if bash "${run_remote_dataset_prep}" \
+  --root "${prep_helper_tmp}/root" \
+  --env-dir "${prep_helper_tmp}/env" \
+  --gc-helper-dir "${missing_gc_helper_dir}" \
+  2> "${prep_helper_tmp}/missing_gc_helper_dir.stderr"; then
+  echo "ERROR: run_remote_chrombpnet_dataset_prep.sh unexpectedly succeeded with a missing gc helper dir" >&2
+  exit 1
+fi
+if ! grep -q "gc helper dir is not a directory" "${prep_helper_tmp}/missing_gc_helper_dir.stderr"; then
+  echo "ERROR: run_remote_chrombpnet_dataset_prep.sh did not emit the expected gc helper dir validation error" >&2
+  exit 1
+fi
+
+missing_official_helper_root="${prep_helper_tmp}/missing_official_root"
+if bash "${run_remote_dataset_prep}" \
+  --root "${prep_helper_tmp}/root" \
+  --env-dir "${prep_helper_tmp}/env" \
+  --official-root "${missing_official_helper_root}" \
+  2> "${prep_helper_tmp}/missing_official_root.stderr"; then
+  echo "ERROR: run_remote_chrombpnet_dataset_prep.sh unexpectedly succeeded with a missing official root" >&2
+  exit 1
+fi
+if ! grep -q "official ChromBPNet root is not a directory" "${prep_helper_tmp}/missing_official_root.stderr"; then
+  echo "ERROR: run_remote_chrombpnet_dataset_prep.sh did not emit the expected official root validation error" >&2
   exit 1
 fi
 

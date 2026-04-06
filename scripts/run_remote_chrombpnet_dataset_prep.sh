@@ -7,6 +7,8 @@ Usage:
   bash run_remote_chrombpnet_dataset_prep.sh \
     --root /path/to/bylw_atac \
     --env-dir /path/to/env \
+    [--official-root /path/to/chrombpnet_official] \
+    [--gc-helper-dir /path/to/staged_gc_helpers] \
     [--python-bin /path/to/python] \
     [--datasets GM12878,K562] \
     [--threads 4] \
@@ -19,6 +21,8 @@ EOF
 ROOT=""
 ENV_DIR=""
 PYTHON_BIN=""
+OFFICIAL_ROOT=""
+GC_HELPER_DIR=""
 DATASETS="GM12878,K562"
 THREADS="${THREADS:-4}"
 NICE_LEVEL="${NICE_LEVEL:-10}"
@@ -33,6 +37,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --env-dir)
       ENV_DIR="$2"
+      shift 2
+      ;;
+    --official-root)
+      OFFICIAL_ROOT="$2"
+      shift 2
+      ;;
+    --gc-helper-dir)
+      GC_HELPER_DIR="$2"
       shift 2
       ;;
     --python-bin)
@@ -75,10 +87,9 @@ ROOT="${ROOT:?missing --root}"
 ENV_DIR="${ENV_DIR:?missing --env-dir}"
 PYTHON_BIN="${PYTHON_BIN:-$ENV_DIR/bin/python}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GC_BINS_PY="$SCRIPT_DIR/get_genomewide_gc_bins.py"
-GC_CONTENT_PY="$SCRIPT_DIR/get_gc_content.py"
-GC_MATCH_PY="$SCRIPT_DIR/get_gc_matched_negatives.py"
+GC_BINS_PY=""
+GC_CONTENT_PY=""
+GC_MATCH_PY=""
 
 DATA_ROOT="$ROOT/chrombpnet_datasets"
 TUTORIAL_DATA_DIR="${TUTORIAL_DATA_DIR:-$ROOT/chrombpnet_tutorial/data}"
@@ -101,7 +112,7 @@ log() {
 }
 
 fail() {
-  log "ERROR: $*"
+  printf '[%s] ERROR: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&2
   exit 1
 }
 
@@ -113,6 +124,31 @@ require_cmd() {
 require_file() {
   local path="$1"
   [[ -f "$path" ]] || fail "missing file: $path"
+}
+
+resolve_gc_helpers() {
+  local helper_root=""
+
+  if [[ -n "$OFFICIAL_ROOT" ]]; then
+    [[ -d "$OFFICIAL_ROOT" ]] || fail "official ChromBPNet root is not a directory: $OFFICIAL_ROOT"
+    helper_root="$OFFICIAL_ROOT/chrombpnet/helpers/make_gc_matched_negatives"
+    GC_CONTENT_PY="$helper_root/get_gc_content.py"
+    GC_MATCH_PY="$helper_root/get_gc_matched_negatives.py"
+    GC_BINS_PY="$helper_root/get_genomewide_gc_buckets/get_genomewide_gc_bins.py"
+    log "using GC helpers from official root: $OFFICIAL_ROOT"
+    return 0
+  fi
+
+  if [[ -n "$GC_HELPER_DIR" ]]; then
+    [[ -d "$GC_HELPER_DIR" ]] || fail "gc helper dir is not a directory: $GC_HELPER_DIR"
+    GC_CONTENT_PY="$GC_HELPER_DIR/get_gc_content.py"
+    GC_MATCH_PY="$GC_HELPER_DIR/get_gc_matched_negatives.py"
+    GC_BINS_PY="$GC_HELPER_DIR/get_genomewide_gc_bins.py"
+    log "using staged GC helpers from: $GC_HELPER_DIR"
+    return 0
+  fi
+
+  fail "missing GC helper source: pass --official-root or --gc-helper-dir"
 }
 
 run_low() {
@@ -386,6 +422,7 @@ main() {
   local dataset
   local dataset_list=()
 
+  resolve_gc_helpers
   prepare_references
 
   dataset_spec="${DATASETS// /,}"
