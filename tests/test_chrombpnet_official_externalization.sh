@@ -765,6 +765,33 @@ assert_log_empty "${launcher_tmp}/scp.log"
 if FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
   FAKE_SCP_LOG="${launcher_tmp}/scp.log" \
   PATH="${launcher_tmp}/fakebin:${PATH}" \
+  REMOTE_HOST="remote6000" \
+  REMOTE_PORT="6600" \
+  REMOTE_ROOT="/srv/remote6000" \
+  REMOTE_ENV="/envs/chrombpnet" \
+  REMOTE_PYTHON="/envs/chrombpnet/bin/python" \
+  CHROMBPNET_OFFICIAL_ROOT="/official/chrombpnet" \
+  DATASETS="GM12878" \
+  THREADS="8" \
+  NICE_LEVEL="3" \
+  RUN_TAG="." \
+  bash "${start_dataset_prep_6000}" > "${launcher_tmp}/unsafe_runtag_dot_6000.stdout" 2> "${launcher_tmp}/unsafe_runtag_dot_6000.stderr"; then
+  echo "ERROR: start_6000 unexpectedly accepted dot RUN_TAG input" >&2
+  exit 1
+fi
+if ! grep -q "unsafe value for RUN_TAG" "${launcher_tmp}/unsafe_runtag_dot_6000.stderr"; then
+  echo "ERROR: start_6000 did not reject dot RUN_TAG input as expected" >&2
+  exit 1
+fi
+assert_log_empty "${launcher_tmp}/ssh.log"
+assert_log_empty "${launcher_tmp}/scp.log"
+
+: > "${launcher_tmp}/ssh.log"
+: > "${launcher_tmp}/scp.log"
+
+if FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
+  FAKE_SCP_LOG="${launcher_tmp}/scp.log" \
+  PATH="${launcher_tmp}/fakebin:${PATH}" \
   REMOTE_HOST="remote6002" \
   REMOTE_PORT="6602" \
   REMOTE_KEY="/tmp/fake_6002_key" \
@@ -844,6 +871,36 @@ if FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
 fi
 if ! grep -q "unsafe value for RUN_TAG" "${launcher_tmp}/unsafe_runtag_6002.stderr"; then
   echo "ERROR: start_6002 did not emit the expected RUN_TAG unsafe-value error" >&2
+  exit 1
+fi
+assert_log_empty "${launcher_tmp}/ssh.log"
+assert_log_empty "${launcher_tmp}/scp.log"
+
+: > "${launcher_tmp}/ssh.log"
+: > "${launcher_tmp}/scp.log"
+
+if FAKE_SSH_LOG="${launcher_tmp}/ssh.log" \
+  FAKE_SCP_LOG="${launcher_tmp}/scp.log" \
+  PATH="${launcher_tmp}/fakebin:${PATH}" \
+  REMOTE_HOST="remote6002" \
+  REMOTE_PORT="6602" \
+  REMOTE_KEY="/tmp/fake_6002_key" \
+  REMOTE_ROOT="/srv/remote6002" \
+  REMOTE_ENV="/envs/transchrombp" \
+  REMOTE_PYTHON="/envs/transchrombp/bin/python" \
+  SOURCE_HOST="source6000" \
+  SOURCE_PORT="6610" \
+  SOURCE_OFFICIAL_ROOT="/official/source_root" \
+  DATASETS="K562" \
+  THREADS="6" \
+  NICE_LEVEL="4" \
+  RUN_TAG=".." \
+  bash "${start_dataset_prep_6002}" > "${launcher_tmp}/unsafe_runtag_dotdot_6002.stdout" 2> "${launcher_tmp}/unsafe_runtag_dotdot_6002.stderr"; then
+  echo "ERROR: start_6002 unexpectedly accepted dotdot RUN_TAG input" >&2
+  exit 1
+fi
+if ! grep -q "unsafe value for RUN_TAG" "${launcher_tmp}/unsafe_runtag_dotdot_6002.stderr"; then
+  echo "ERROR: start_6002 did not reject dotdot RUN_TAG input as expected" >&2
   exit 1
 fi
 assert_log_empty "${launcher_tmp}/ssh.log"

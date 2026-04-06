@@ -52,7 +52,7 @@ validate_remote_value() {
 
 validate_run_tag() {
   local value="$1"
-  if [[ -z "$value" || ! "$value" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  if [[ -z "$value" || "$value" == "." || "$value" == ".." || ! "$value" =~ ^[A-Za-z0-9._-]+$ ]]; then
     fail "unsafe value for RUN_TAG: ${value}"
   fi
 }
