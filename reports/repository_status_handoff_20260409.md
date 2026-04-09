@@ -1,12 +1,14 @@
-# 仓库现况总览（2026-04-09 21:30 CST）
+# 仓库现况总览（2026-04-09 22:11 CST）
+
+> 双机实验规则源统一看 `docs/plan/2026-04-09_dual_machine_experiment_charter.md`；本文只负责快照，不负责裁决默认下一步。
 
 ## 一句话结论
 
-截至 `2026-04-09 21:30-22:10 CST`，本地档案仓的真实状态已经不再是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”，而是：
+截至 `2026-04-09 22:11 CST`，本地档案仓的真实状态已经不再是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”，而是：
 
 - 本地 canonical git 档案仓仍是 `/home/zhengwei/project/python/chromBPNet`，且本轮已完成 worktree cleanup
 - 当前活跃实验只剩 `6000 / A6000x2` 上的 `NT v2 teacher-distill short10`
-- `6002 / RTX 3080` 当前空闲，`U-Net-lite` 方案只完成到本地 worktree 级别，还未在远端实际起跑
+- `6002 / RTX 3080` 当前空闲，但 `U-Net-lite` 已经在远端实际跑过 `r1/r2/r3`，当前缺的是正式 verdict，不是“起跑”
 
 ---
 
@@ -129,53 +131,61 @@
   - `nvidia-smi` 显示两张 A6000 均有活跃 python 进程
   - 进程 PID：`862231`、`862232`
   - 命令行直接指向 `transchrombp.training.train_ddp` + `transchrombp_teacher_v2_center_pool_ntv2_distill.yaml`
-  - 日志 `/data1/zhoujiazhen/bylw_atac/TransChromBP/logs/ntv2_teacher_distill_short10_s42_6000_20260409_r2.log` 在 `2026-04-09 21:30 CST` 已推进到 `epoch=1 step=3380/11809`
+  - 日志 `/data1/zhoujiazhen/bylw_atac/TransChromBP/logs/ntv2_teacher_distill_short10_s42_6000_20260409_r2.log` 在 `2026-04-09 22:11 CST` 已推进到 `epoch=4 step=1220/11809`
 - 配置事实：
   - 本地 `dual-track-20260409` worktree 的 `train_tutorial_teacher_v2_ntv2_distill_short10.yaml` 明确写的是 `max_epochs: 10`
 - 粗略估计：
-  - 以当前 step 速度估算，训练部分大致还有 `~2` 小时量级
-  - 若不早停，预计结束时间窗约为 `2026-04-09 23:45` 到 `2026-04-10 00:15 CST`
+  - 以当前 broad window 估算，训练部分仍大致还有 `~1.5-2` 小时量级
+  - 若不早停，预计结束时间窗约为 `2026-04-09 23:40` 到 `2026-04-10 00:20 CST`
 
-### 3.3 尚未真正起跑的线
+### 3.3 已完成 cheap-screen、待正式判读的线
 
 #### 6002：`U-Net-lite readout`
 
-- 代码、配置、launcher 已存在于 `dual-track-20260409` worktree
-- 但截至 `2026-04-09 21:31 CST`：
+- 实际日志：
+  - `/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r1.log`
+  - `/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r2.log`
+  - `/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r3.log`
+- 截至 `2026-04-09 22:11 CST`：
   - `6002` 的 3080 已空闲
   - `ps -ef | grep transchrombp.training.train_ddp` 没有活跃训练进程
+  - `r3` 日志里的 best 出现在 `epoch=2`，峰区 `profile_target_jsd_full_mean=0.45525`
+  - 日志末尾已打印 `U-Net-lite decoder probe completed.`
 - 结论：
-  - 这条线目前仍停留在“本地已实现、远端未起跑”的状态
+  - 这条线不是“尚未起跑”，而是“cheap-screen 已完成，待正式 verdict”
 
 ---
 
 ## 4. 当前仍需注意的不一致
 
-- `TRACKING.md` 已在本轮改成指向本报告，但旧的 `reports/session_handoff_multiscale_and_next_tasks_20260409.md` 仍保留着“`msdec_v1_s2` / `skipprobe_wide` 是 active run”的旧快照
+- `TRACKING.md` 现在应把规则源改指向 `docs/plan/2026-04-09_dual_machine_experiment_charter.md`，而不是让 handoff 自己承担优先级裁决
+- 旧的 `reports/session_handoff_multiscale_and_next_tasks_20260409.md` 仍保留着“`msdec_v1_s2` / `skipprobe_wide` 是 active run”的旧快照
 - 真实现场已经切到：
   - `6000` 正在跑 `teacher-distill`
-  - `6002` 当前空闲
+  - `6002` 当前空闲，但 `U-Net-lite r1/r2/r3` 已经跑完
 - `dual-track-20260409` 的计划与 pivot 记录已经以 `wip` 提交固定在对应 worktree，但尚未合回 `master`
 
 ---
 
 ## 5. 当前最值得做的事
 
-1. 继续把 `TRACKING.md` 视为 live 入口，而把本报告当成当前仓库 / worktree / 双机状态的统一快照。
+1. 先把 `docs/plan/2026-04-09_dual_machine_experiment_charter.md` 视为双机实验规则源，把 `TRACKING.md` 视为 live 入口，而把本报告当成仓库 / worktree / 双机状态快照。
 2. 等 `ntv2_teacher_distill_short10_s42_6000_20260409_r2` 收口后，立即刷新本报告与 `TRACKING.md`，完成一次 closeout：
    - short10 gate 是否通过
    - 是否值得升 full
-   - `6002` 是否真的要起 `U-Net-lite`
-3. 在实验结论稳定后，决定 `dual-track-20260409`、`autonomy/20260406-structure`、`autonomy/20260406-chrombpnet-externalization` 这些 `wip` 提交哪些该合回主档案仓，哪些继续保持本地支线。
+   - 若 short10 判负，是否继续 `6002` 的下一个 dense decoder / readout 变体
+3. 先把 `6002 U-Net-lite r1/r2/r3` 收成正式 verdict，而不是继续把它写成“尚未起跑”。
 
 ---
 
 ## 6. 建议的阅读顺序
 
-1. 本文件：回答“现在真实在发生什么”
-2. `reports/project_plan_code_review_20260405.md`：回答“最近代码为什么会改成这样”
-3. `reports/session_handoff_multiscale_and_next_tasks_20260409.md`：保留为旧双机排程快照
-4. `dual-track-20260409` worktree 下两份文件：
+1. `docs/plan/2026-04-09_dual_machine_experiment_charter.md`：回答“当前什么实验合法、什么优先、什么时候才允许切回论文”
+2. `TRACKING.md`：回答“当前 live 进度和下一步是什么”
+3. 本文件：回答“现在真实在发生什么”
+4. `reports/project_plan_code_review_20260405.md`：回答“最近代码为什么会改成这样”
+5. `reports/session_handoff_multiscale_and_next_tasks_20260409.md`：保留为旧双机排程快照
+6. `dual-track-20260409` worktree 下两份文件：
    - `docs/plan/dual_track_ntv2_distill_unet_lite_20260409.md`
    - `reports/dual_track_experiment_pivot_20260409.md`
    用来回答“为什么从 `msdec/skipprobe` 切到 `teacher-distill + U-Net-lite`”

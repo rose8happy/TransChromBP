@@ -1,5 +1,7 @@
 # TransChromBP 项目长远规划（2026-03-30 起）
 
+> 更新（`2026-04-09 22:11 CST`）：本文档是论文 / 项目的长周期路线图，不负责当前 `6000/6002` 双机实验调度；只要 `docs/plan/2026-04-09_dual_machine_experiment_charter.md` 的白名单队列未收口，就不能引用本文把默认动作切回“先写论文”。
+
 ## Context
 
 TransChromBP 项目已进入论文收口阶段。核心证据基本齐备（clean matrix、TF ablation、readout design、cross-dataset），论文叙事已从"Transformer-specific shortcut"成功转向"bias-safe Transformer framework + dual-metric diagnostics"。当前瓶颈不是缺实验，而是：
