@@ -29,21 +29,50 @@ else
 fi
 export PYTHONPATH="${PACKAGE_IMPORT_ROOT}:${PYTHONPATH:-}"
 
+require_file() {
+    local path="$1"
+    local label="$2"
+    if [ ! -f "${path}" ]; then
+        echo "[error] Missing ${label}: ${path}" >&2
+        exit 1
+    fi
+}
+
+GPU_IDS_CLEAN="${TRAIN_GPU_IDS//[[:space:]]/}"
+IFS=',' read -r -a GPU_ID_LIST <<< "${GPU_IDS_CLEAN}"
+if [ "${#GPU_ID_LIST[@]}" -lt "${NPROC_PER_NODE}" ]; then
+    echo "[error] TRAIN_GPU_IDS (${TRAIN_GPU_IDS}) has fewer GPUs than NPROC_PER_NODE (${NPROC_PER_NODE})" >&2
+    exit 1
+fi
+
+require_file "${TRAIN_CONFIG}" "train config"
+require_file "${DATA_CONFIG}" "data config"
+require_file "${MODEL_CONFIG}" "model config"
+
+if [[ "${DRY_RUN}" != "1" ]] && [ "${NPROC_PER_NODE}" -gt 1 ]; then
+    if ! command -v torchrun >/dev/null 2>&1; then
+        echo "[error] torchrun not found in PATH" >&2
+        exit 1
+    fi
+fi
+
 RUNTIME_DIR="${OUTPUT_BASE}/runtime/msdls_v2_gate"
 mkdir -p "${RUNTIME_DIR}"
 RUNTIME_TRAIN="${RUNTIME_DIR}/train_${RUN_NAME}.yaml"
 
-"${PYTHON_BIN}" - "${TRAIN_CONFIG}" "${RUNTIME_TRAIN}" "${SEED}" "${RUN_NAME}" "${BATCH_SIZE_PER_GPU}" "${NUM_WORKERS}" <<'PY'
+"${PYTHON_BIN}" - "${TRAIN_CONFIG}" "${RUNTIME_TRAIN}" "${SEED}" "${RUN_NAME}" "${BATCH_SIZE_PER_GPU}" "${NUM_WORKERS}" "${DATA_CONFIG}" "${OUTPUT_BASE}" <<'PY'
 import sys
 from pathlib import Path
 import yaml
 
-src, dst, seed, run_name, batch_size, num_workers = sys.argv[1:7]
+src, dst, seed, run_name, batch_size, num_workers, data_config, output_base = sys.argv[1:9]
 cfg = yaml.safe_load(Path(src).read_text(encoding="utf-8"))
 cfg["seed"] = int(seed)
 cfg.setdefault("data", {})["batch_size_per_gpu"] = int(batch_size)
 cfg["data"]["num_workers"] = int(num_workers)
+cfg["data"]["config_path"] = data_config
 cfg.setdefault("logging", {})["run_name"] = run_name
+cfg["logging"]["output_dir"] = output_base
 Path(dst).write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
 PY
 
