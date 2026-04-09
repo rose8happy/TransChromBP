@@ -36,8 +36,9 @@
 
 - 默认承担 full-budget、正式 gate、长任务，或明显受益于更高吞吐的实验
 - foundation 与 non-foundation 都可以在这里跑，是否 foundation 不是硬门
-- 当前默认动作是不等 `6002`，而是启动自己的独立高价值任务
-- 当前首选 backlog 是 `AlphaGenome matched raw-track slice`
+- 当前默认动作仍是不等 `6002`，而是维护自己的独立高价值队列
+- `AlphaGenome matched raw-track slice v1` 已在 `2026-04-10 00:22:55 CST` 完成 technical/alignment gate closeout 并通过
+- 若继续 AlphaGenome 这条线，唯一允许下一步是扩到约 `12-20 loci` 的稍大 matched panel；它仍是窄 external coordinate，不是大 benchmark
 
 ### 3.2 `6002 / RTX 3080`
 
@@ -67,22 +68,25 @@
 
 ### 5.1 `6000 / A6000 x2`
 
-截至 `2026-04-09 23:13:59 CST`，`teacher-distill tutorial` 线已正式停表；当前不再为这条线分配后续 `6000` run。当前事实如下：
+截至 `2026-04-10 00:22:55 CST`，`teacher-distill tutorial` 线已停表，而 `6000` 上的 `AlphaGenome matched raw-track slice v1` 已完成 closeout 并通过 technical/alignment gate。当前事实如下：
 
-- `ntv2_teacher_distill_short10_s42_6000_20260409_r2`
-- `best_epoch=2`
-- `best peak.profile_target_jsd_full_mean=0.34532`
-- `early-stop at epoch=5`
-- formal gate verdict: `fail`
-- 当前 `6000` 的默认动作不是等 `6002`，而是启动自己的独立高价值任务，首选 backlog 为 `AlphaGenome matched raw-track slice`
+- `teacher-distill` 历史 formal gate verdict 仍为 `fail`
+- `alphagenome_matched_raw_track_slice_v1_20260410`
+- start time：`2026-04-10 00:22:40 CST`
+- end time：`2026-04-10 00:22:55 CST`
+- hard verdict：`pass`
+- 4 个固定 loci 全部成功，且每个位点都保留 `1` 条可比较的 `ATAC` track
+- 已成功产出 `summary.csv`、`region_metadata.jsonl`、`profiles/*.npz`、`run_meta.json`、`merged_locus_totals.csv`
+- 详细证据与边界结论见 `reports/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md`
 
 规则如下：
 
 - `teacher-distill tutorial` 线已停表，不再为这条线分配后续 `6000` run
-- 现在 `6000` 的默认动作是推进自己的独立高价值 backlog，不等待 `6002`
+- `6000` 继续独立维护自己的高价值 backlog，不等待 `6002`
 - 明确禁止为了同步去复制 `6002` 的确认性 rerun 或镜像 `6002` 的 cheap-screen
 - 后续若补充 `6000` 候选，必须是独立高价值任务，而不是旧 tutorial 线的续跑
-- `AlphaGenome matched raw-track slice` 是 `6000` 的独立 backlog，属于窄 external coordinate / pilot，不是大 benchmark；它的 gate 与 stop-rule 见第 6 节
+- `AlphaGenome matched raw-track slice v1` 已经完成，不再按“待启动 / active run”口径描述
+- 若继续 AlphaGenome 线，唯一允许下一步是 `12-20 loci` 的小幅扩面；禁止把这次 `pass` 改写成模型质量胜利或直接扩成大 benchmark
 
 ### 5.2 `6002 / RTX 3080`
 
@@ -123,7 +127,7 @@
 
 - 这是一条 `6000` 独立 backlog 的窄 external coordinate / pilot，不是大 benchmark
 - 过 gate 的最小条件：在固定 matched loci 面板上成功产出可用的 AlphaGenome raw-track 输出；“可用”指所有选定位点都生成 summary / metadata / profile 结果，ontology / filter 后仍保留至少一条可比较的 ATAC track，且没有因为 API / track matching 失败让大部分位点失效
-- 过 gate 后唯一下一步：扩大到稍大一批 matched loci
+- 过 gate 后唯一下一步：扩大到约 `12-20 loci` 的稍大 matched panel
 - 不过 gate 后：这条 pilot 停表，不扩成大 benchmark，`6000` 转去下一个 genuinely new high-value family
 
 `6002 U-Net-lite v1` 的最小规则如下：
@@ -170,6 +174,6 @@
 
 当前阶段的默认读法固定为：
 
-1. `6000` 不再等待 `6002`，而是独立推进自己的高价值 backlog，首选 `AlphaGenome matched raw-track slice`，并按第 6 节 gate 执行
+1. `6000` 已完成 `alphagenome_matched_raw_track_slice_v1_20260410` 并以 technical/alignment gate `pass` 收口；若继续 AlphaGenome 线，唯一允许下一步是 `12-20 loci` 的小幅扩面，而不是大 benchmark
 2. `6002` 继续把当前 `U-Net-lite r4` 跑完，并完成 rigor closeout；若 `r4` 明显改善，则只允许先走一次确认性 cheap rerun
 3. 双机并行推进，不互相卡住；一台机器的负结果不自动改写另一台机器的默认下一步
