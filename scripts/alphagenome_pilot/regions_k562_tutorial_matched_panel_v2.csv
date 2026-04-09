@@ -1,0 +1,17 @@
+label,source,quantile,chrom,center,observed_total,notes
+peak_q05,peak,0.05,chr1,235998980,304.000000,peak quantile anchor at q=0.05 for 1000bp observed-total window
+peak_q20,peak,0.20,chr1,200163407,462.000000,peak quantile anchor at q=0.20 for 1000bp observed-total window
+peak_q35,peak,0.35,chr1,160187350,648.000000,peak quantile anchor at q=0.35 for 1000bp observed-total window
+peak_q50,peak,0.50,chr1,202546545,953.000000,peak quantile anchor at q=0.50 for 1000bp observed-total window
+peak_q65,peak,0.65,chr1,6343618,1530.000000,peak quantile anchor at q=0.65 for 1000bp observed-total window
+peak_q80,peak,0.80,chr1,65480081,2904.000000,peak quantile anchor at q=0.80 for 1000bp observed-total window
+peak_q90,peak,0.90,chr1,9129623,5346.000000,peak quantile anchor at q=0.90 for 1000bp observed-total window
+peak_q98,peak,0.98,chr1,245988713,10842.000000,peak quantile anchor at q=0.98 for 1000bp observed-total window
+nonpeak_q05,nonpeak,0.05,chr1,12821057,15.000000,nonpeak quantile anchor at q=0.05 for 1000bp observed-total window
+nonpeak_q20,nonpeak,0.20,chr1,88172057,71.000000,nonpeak quantile anchor at q=0.20 for 1000bp observed-total window
+nonpeak_q35,nonpeak,0.35,chr1,213851057,109.000000,nonpeak quantile anchor at q=0.35 for 1000bp observed-total window
+nonpeak_q50,nonpeak,0.50,chr1,44373057,150.000000,nonpeak quantile anchor at q=0.50 for 1000bp observed-total window
+nonpeak_q65,nonpeak,0.65,chr1,172658057,196.000000,nonpeak quantile anchor at q=0.65 for 1000bp observed-total window
+nonpeak_q80,nonpeak,0.80,chr1,22618057,261.000000,nonpeak quantile anchor at q=0.80 for 1000bp observed-total window
+nonpeak_q90,nonpeak,0.90,chr1,2401057,345.000000,nonpeak quantile anchor at q=0.90 for 1000bp observed-total window
+nonpeak_q98,nonpeak,0.98,chr1,228064057,560.000000,nonpeak quantile anchor at q=0.98 for 1000bp observed-total window
