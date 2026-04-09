@@ -6,6 +6,8 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
+from .bias_branch import center_crop_1d
+
 
 class FoundationCrossAttentionAdapter(nn.Module):
     """Residual gated cross-attention from local tokens to external foundation tokens."""
@@ -79,22 +81,41 @@ class FoundationResidualHead(nn.Module):
         hidden_size: int = 256,
         profile_bin_count: int = 16,
         output_len: int = 1000,
+        alignment_mode: str = "summary",
+        aligned_token_count: int = 0,
     ) -> None:
         super().__init__()
         if d_model <= 0 or foundation_hidden_size <= 0 or hidden_size <= 0:
             raise ValueError("All hidden sizes must be positive")
         if profile_bin_count <= 0 or output_len <= 0:
             raise ValueError("profile_bin_count and output_len must be positive")
+        alignment_mode = str(alignment_mode).strip().lower()
+        if alignment_mode not in {"summary", "center_token_bins"}:
+            raise ValueError(
+                "alignment_mode must be one of {'summary', 'center_token_bins'}, got "
+                f"{alignment_mode!r}"
+            )
+        if alignment_mode == "center_token_bins" and aligned_token_count <= 0:
+            raise ValueError("center_token_bins alignment requires aligned_token_count > 0")
 
         self.output_len = int(output_len)
         self.profile_bin_count = int(profile_bin_count)
+        self.alignment_mode = alignment_mode
+        self.aligned_token_count = int(aligned_token_count)
+        self.profile_bins_per_token = 0
+        if self.alignment_mode == "center_token_bins":
+            self.profile_bins_per_token = max(
+                1,
+                (self.profile_bin_count + self.aligned_token_count - 1) // self.aligned_token_count,
+            )
 
         self.encoded_norm = nn.LayerNorm(d_model)
         self.foundation_norm = nn.LayerNorm(foundation_hidden_size)
         self.encoded_proj = nn.Linear(d_model, hidden_size)
         self.foundation_proj = nn.Linear(foundation_hidden_size, hidden_size)
         self.fuse = nn.Linear(hidden_size * 2, hidden_size)
-        self.profile_out = nn.Linear(hidden_size, profile_bin_count)
+        profile_out_dim = self.profile_bins_per_token if self.profile_bins_per_token > 0 else profile_bin_count
+        self.profile_out = nn.Linear(hidden_size, profile_out_dim)
         self.count_out = nn.Linear(hidden_size, 1)
 
         nn.init.zeros_(self.profile_out.weight)
@@ -111,28 +132,57 @@ class FoundationResidualHead(nn.Module):
     ) -> tuple[Tensor, Tensor]:
         if encoded.dim() != 3:
             raise ValueError(f"Expected encoded shape [B, L, D], got {tuple(encoded.shape)}")
-        if foundation_summary is None:
+
+        if self.alignment_mode == "center_token_bins":
             if foundation_tokens is None:
-                raise ValueError("FoundationResidualHead requires foundation_summary or foundation_tokens")
+                raise ValueError("center_token_bins residual requires foundation_tokens")
             if foundation_tokens.dim() != 3:
                 raise ValueError(f"Expected foundation_tokens [B, M, H], got {tuple(foundation_tokens.shape)}")
-            foundation_summary = foundation_tokens.mean(dim=1)
-        elif foundation_summary.dim() != 2:
-            raise ValueError(f"Expected foundation_summary [B, H], got {tuple(foundation_summary.shape)}")
+            if foundation_tokens.size(1) != self.aligned_token_count:
+                raise ValueError(
+                    "center_token_bins residual expects foundation_tokens with "
+                    f"{self.aligned_token_count} bins, got {foundation_tokens.size(1)}"
+                )
 
-        encoded_summary = self.encoded_norm(encoded).mean(dim=1)
-        foundation_summary = self.foundation_norm(foundation_summary)
-        fused = torch.cat(
-            [
-                self.encoded_proj(encoded_summary),
-                self.foundation_proj(foundation_summary),
-            ],
-            dim=-1,
-        )
-        fused = F.gelu(self.fuse(fused))
+            encoded_bins = self.encoded_norm(encoded).transpose(1, 2)
+            encoded_bins = center_crop_1d(encoded_bins, self.output_len)
+            encoded_bins = F.adaptive_avg_pool1d(encoded_bins, output_size=self.aligned_token_count).transpose(1, 2)
+            foundation_tokens = self.foundation_norm(foundation_tokens)
 
-        profile_bins = self.profile_out(fused)
-        count_delta = self.count_out(fused)
+            fused_tokens = torch.cat(
+                [
+                    self.encoded_proj(encoded_bins),
+                    self.foundation_proj(foundation_tokens),
+                ],
+                dim=-1,
+            )
+            fused_tokens = F.gelu(self.fuse(fused_tokens))
+            profile_bins = self.profile_out(fused_tokens).reshape(encoded.size(0), -1)
+            profile_bins = profile_bins[:, : self.profile_bin_count]
+            count_delta = self.count_out(fused_tokens.mean(dim=1))
+        else:
+            if foundation_summary is None:
+                if foundation_tokens is None:
+                    raise ValueError("FoundationResidualHead requires foundation_summary or foundation_tokens")
+                if foundation_tokens.dim() != 3:
+                    raise ValueError(f"Expected foundation_tokens [B, M, H], got {tuple(foundation_tokens.shape)}")
+                foundation_summary = foundation_tokens.mean(dim=1)
+            elif foundation_summary.dim() != 2:
+                raise ValueError(f"Expected foundation_summary [B, H], got {tuple(foundation_summary.shape)}")
+
+            encoded_summary = self.encoded_norm(encoded).mean(dim=1)
+            foundation_summary = self.foundation_norm(foundation_summary)
+            fused = torch.cat(
+                [
+                    self.encoded_proj(encoded_summary),
+                    self.foundation_proj(foundation_summary),
+                ],
+                dim=-1,
+            )
+            fused = F.gelu(self.fuse(fused))
+            profile_bins = self.profile_out(fused)
+            count_delta = self.count_out(fused)
+
         profile_delta = F.interpolate(
             profile_bins.unsqueeze(1),
             size=self.output_len,

@@ -20,6 +20,7 @@ from .bias_branch import ChromBPNetBiasBranch, ResidualDilatedConvBlock, center_
 from .caduceus_adapter import CaduceusTokenAdapter
 from .foundation_adapter import FoundationCrossAttentionAdapter, FoundationResidualHead
 from .genos_adapter import GenosCountProj, GenosGatedAdapter, GenosSummaryFiLM
+from .profile_decoder import LocalSkipProfileProbe, MultiScaleProfileDecoder
 from .transformer_encoder import SequenceTransformerEncoder
 
 
@@ -133,6 +134,13 @@ def _validate_heads_config(heads_cfg: Dict[str, Any]) -> None:
         )
 
 
+def _resolve_profile_readout_mode(config: Dict[str, Any]) -> str:
+    decoder_cfg = config.get("profile_decoder", {})
+    if bool(decoder_cfg.get("enabled", False)):
+        return str(decoder_cfg.get("mode", "multiscale_decoder_v1")).lower()
+    return str(config.get("profile_readout_mode", "linear")).lower()
+
+
 def _load_checkpoint(path: Path) -> Dict[str, Any]:
     try:
         return torch.load(path, map_location="cpu", weights_only=False)
@@ -195,6 +203,9 @@ class TransChromBP(nn.Module):
         profile_bias_stop_gradient: bool = False,
         bias_profile_pool_factor: int = 0,
         count_pool_mode: str = "full",
+        profile_readout_mode: str = "linear",
+        profile_decoder_hidden_channels: int = 0,
+        profile_decoder_num_scales: int = 3,
     ) -> None:
         super().__init__()
         self.output_len = output_len
@@ -213,6 +224,12 @@ class TransChromBP(nn.Module):
             raise ValueError(
                 f"Unsupported count_pool_mode={count_pool_mode!r}; "
                 "expected 'full', 'center', or 'attention'"
+            )
+        self.profile_readout_mode = str(profile_readout_mode).lower()
+        if self.profile_readout_mode not in {"linear", "multiscale_decoder_v1", "skip_probe_v1"}:
+            raise ValueError(
+                "Unsupported profile_readout_mode="
+                f"{profile_readout_mode!r}; expected 'linear', 'multiscale_decoder_v1', or 'skip_probe_v1'"
             )
         self.profile_bias_stop_gradient = bool(profile_bias_stop_gradient)
 
@@ -248,7 +265,32 @@ class TransChromBP(nn.Module):
         else:
             self.transformer = nn.Identity()
 
-        self.profile_signal_head = nn.Linear(d_model, 1)
+        self.profile_signal_head: Optional[nn.Linear]
+        self.profile_decoder: Optional[nn.Module]
+        if self.profile_readout_mode == "linear":
+            self.profile_signal_head = nn.Linear(d_model, 1)
+            self.profile_decoder = None
+        elif self.profile_readout_mode == "multiscale_decoder_v1":
+            decoder_hidden = int(profile_decoder_hidden_channels or d_model)
+            self.profile_signal_head = None
+            self.profile_decoder = MultiScaleProfileDecoder(
+                d_model=d_model,
+                output_len=output_len,
+                hidden_channels=decoder_hidden,
+                num_scales=int(profile_decoder_num_scales),
+                dropout=dropout,
+            )
+        elif self.profile_readout_mode == "skip_probe_v1":
+            decoder_hidden = int(profile_decoder_hidden_channels or d_model)
+            self.profile_signal_head = None
+            self.profile_decoder = LocalSkipProfileProbe(
+                d_model=d_model,
+                output_len=output_len,
+                hidden_channels=decoder_hidden,
+                dropout=dropout,
+            )
+        else:
+            raise RuntimeError(f"Unhandled profile_readout_mode={self.profile_readout_mode!r}")
         self.count_signal_head = nn.Sequential(
             nn.LayerNorm(d_model),
             nn.Linear(d_model, d_model // 2),
@@ -381,6 +423,20 @@ class TransChromBP(nn.Module):
 
         raise RuntimeError(f"Unhandled count_pool_mode={self.count_pool_mode!r}")
 
+    def _compute_profile_signal(self, encoded: Tensor, local_feat: Tensor) -> Tensor:
+        if self.profile_readout_mode == "linear":
+            if self.profile_signal_head is None:
+                raise RuntimeError("profile_signal_head is not initialized for linear readout")
+            profile_signal = self.profile_signal_head(encoded).squeeze(-1)
+            return center_crop_1d(profile_signal, self.output_len)
+
+        if self.profile_readout_mode in {"multiscale_decoder_v1", "skip_probe_v1"}:
+            if self.profile_decoder is None:
+                raise RuntimeError("profile_decoder is not initialized for decoder readout")
+            return self.profile_decoder(encoded, local_feat)
+
+        raise RuntimeError(f"Unhandled profile_readout_mode={self.profile_readout_mode!r}")
+
     def forward(
         self,
         seq_onehot: Tensor,
@@ -423,8 +479,7 @@ class TransChromBP(nn.Module):
         if genos_summary is not None and self.genos_film is not None:
             encoded = self.genos_film(encoded, genos_summary)
 
-        profile_signal = self.profile_signal_head(encoded).squeeze(-1)  # [B, L]
-        profile_signal = center_crop_1d(profile_signal, self.output_len)
+        profile_signal = self._compute_profile_signal(encoded, local_feat)
 
         pooled = self._pool_for_count(encoded)
 
@@ -543,6 +598,7 @@ def build_transchrombp_from_config(config: Dict[str, Any]) -> TransChromBP:
     genos_cfg = config.get("genos_branch", {})
     caduceus_cfg = config.get("caduceus_branch", {})
     foundation_cfg = config.get("foundation_model", {})
+    profile_decoder_cfg = config.get("profile_decoder", {})
 
     model = TransChromBP(
         input_channels=int(config.get("input_channels", 4)),
@@ -578,6 +634,9 @@ def build_transchrombp_from_config(config: Dict[str, Any]) -> TransChromBP:
         profile_bias_stop_gradient=bool(fusion_cfg.get("profile_bias_stop_gradient", False)),
         bias_profile_pool_factor=int(bias_cfg.get("profile_pool_factor", 0)),
         count_pool_mode=str(heads_cfg.get("count_pool_mode", "full")),
+        profile_readout_mode=_resolve_profile_readout_mode(config),
+        profile_decoder_hidden_channels=int(profile_decoder_cfg.get("hidden_channels", seq_cfg.get("d_model", 256))),
+        profile_decoder_num_scales=int(profile_decoder_cfg.get("num_scales", 3)),
     )
 
     # ── Attach optional Genos gated adapter (online mode) ──
@@ -658,6 +717,8 @@ def build_transchrombp_from_config(config: Dict[str, Any]) -> TransChromBP:
                 hidden_size=int(foundation_cfg.get("residual_hidden_size", d_model)),
                 profile_bin_count=int(foundation_cfg.get("profile_bin_count", 16)),
                 output_len=int(heads_cfg.get("profile_output_len", 1000)),
+                alignment_mode=str(foundation_cfg.get("alignment_mode", "summary")),
+                aligned_token_count=int(foundation_cfg.get("aligned_token_count", foundation_cfg.get("feature_tokens", 0))),
             )
         elif mode == "distill_only":
             pass

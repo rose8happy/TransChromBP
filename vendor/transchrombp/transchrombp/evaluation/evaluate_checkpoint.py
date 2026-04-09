@@ -11,7 +11,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from transchrombp.data import ChromBPNetBigWigDataset
+from transchrombp.data import ChromBPNetBigWigDataset, resolve_dataset_seed
 from transchrombp.training.train_ddp import (
     BIAS_DIAGNOSTIC_KEYS,
     LOSS_METRIC_KEYS,
@@ -273,7 +273,7 @@ def build_eval_dataset(
         max_jitter=0,
         peak_max_jitter=0,
         nonpeak_max_jitter=0,
-        seed=int(train_cfg.get("seed", 1234)) + 20_000,
+        seed=resolve_dataset_seed(int(train_cfg.get("seed", 1234)), split),
         nonpeak_ratio=nonpeak_ratio,
         max_records=max_records,
         region_source=region_source,

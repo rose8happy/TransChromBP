@@ -1512,6 +1512,33 @@ def apply_foundation_freeze_policy(model: nn.Module, model_cfg: Dict[str, Any], 
         )
 
 
+def resolve_ddp_find_unused_parameters(
+    model_cfg: Dict[str, Any],
+    trainer_cfg: Dict[str, Any],
+    rank: int,
+) -> bool:
+    configured = bool(trainer_cfg.get("find_unused_parameters", False))
+    if configured:
+        return True
+
+    foundation_cfg = model_cfg.get("foundation_model", {})
+    foundation_enabled = bool(foundation_cfg.get("enabled", False))
+    foundation_mode = str(foundation_cfg.get("mode", "")).strip().lower()
+    freeze_until = int(foundation_cfg.get("freeze_backbone_until_epoch", 0))
+
+    if foundation_enabled and foundation_mode == "residual_head" and freeze_until > 0:
+        trainer_cfg["find_unused_parameters"] = True
+        if is_main_process(rank):
+            print(
+                "[ddp] Overriding trainer.find_unused_parameters=false -> true because "
+                "foundation residual_head uses dynamic freeze/unfreeze "
+                f"(freeze_backbone_until_epoch={freeze_until})."
+            )
+        return True
+
+    return False
+
+
 def resolve_amp_dtype(dtype_name: str) -> torch.dtype:
     name = dtype_name.lower()
     if name == "bf16":
@@ -1694,6 +1721,7 @@ def run_validation(
     model: nn.Module,
     val_loader: DataLoader,
     dist_env: DistEnv,
+    model_cfg: Dict[str, Any],
     loss_cfg: Dict[str, Any],
     use_amp: bool,
     amp_dtype: torch.dtype,
@@ -1953,6 +1981,8 @@ def main() -> None:
                         f"{missing_targets!r}"
                     )
 
+        ddp_find_unused_parameters = resolve_ddp_find_unused_parameters(model_cfg, trainer_cfg, dist_env.rank)
+
         # Build optimizer before DDP wrapping so parameter grouping sees raw module types.
         optimizer = build_optimizer(model, train_cfg, dist_env.rank)
 
@@ -1964,10 +1994,10 @@ def main() -> None:
                     model,
                     device_ids=[dist_env.local_rank],
                     output_device=dist_env.local_rank,
-                    find_unused_parameters=bool(trainer_cfg.get("find_unused_parameters", False)),
+                    find_unused_parameters=ddp_find_unused_parameters,
                 )
             else:
-                model = DDP(model, find_unused_parameters=bool(trainer_cfg.get("find_unused_parameters", False)))
+                model = DDP(model, find_unused_parameters=ddp_find_unused_parameters)
 
         train_loader, val_loader, train_sampler = build_dataloaders(train_cfg, dist_env, data_source_cfg)
         scheduler = build_scheduler(optimizer, train_cfg, steps_per_epoch=len(train_loader))
@@ -2004,7 +2034,8 @@ def main() -> None:
             print(
                 f"[setup] device={dist_env.device} world_size={dist_env.world_size} "
                 f"precision={precision} use_amp={use_amp} global_batch={global_batch} lr={current_lr:.3e} "
-                f"early_stop_patience={early_stop_patience} early_stop_min_delta={early_stop_min_delta:.3g}"
+                f"early_stop_patience={early_stop_patience} early_stop_min_delta={early_stop_min_delta:.3g} "
+                f"find_unused_parameters={ddp_find_unused_parameters}"
             )
 
         global_step = 0
@@ -2217,6 +2248,7 @@ def main() -> None:
                     model=model,
                     val_loader=val_loader,
                     dist_env=dist_env,
+                    model_cfg=model_cfg,
                     loss_cfg=train_cfg.get("loss", {}),
                     use_amp=use_amp,
                     amp_dtype=amp_dtype,

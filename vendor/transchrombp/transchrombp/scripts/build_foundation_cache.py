@@ -71,23 +71,62 @@ def resolve_data_value(train_data_cfg: dict[str, Any], data_source_cfg: dict[str
     return default
 
 
+def normalize_split_name(split: str) -> str:
+    normalized = str(split).strip().lower()
+    return "valid" if normalized == "val" else normalized
+
+
+def resolve_split_region_source(data_cfg: dict[str, Any], split: str) -> str:
+    default_region_source = str(data_cfg.get("region_source", "both"))
+    normalized = normalize_split_name(split)
+    if normalized == "train":
+        return str(data_cfg.get("train_region_source", default_region_source))
+    if normalized == "valid":
+        return str(
+            data_cfg.get(
+                "valid_region_source",
+                data_cfg.get("val_region_source", default_region_source),
+            )
+        )
+    return str(
+        data_cfg.get(
+            f"{normalized}_region_source",
+            data_cfg.get("val_region_source", default_region_source),
+        )
+    )
+
+
+def resolve_split_max_records(data_cfg: dict[str, Any], split: str) -> int:
+    normalized = normalize_split_name(split)
+    candidate_keys: list[str]
+    if normalized == "train":
+        candidate_keys = ["max_train_regions"]
+    elif normalized == "valid":
+        candidate_keys = ["max_valid_regions", "max_val_regions"]
+    else:
+        candidate_keys = [f"max_{normalized}_regions"]
+    candidate_keys.append("max_records")
+
+    for key in candidate_keys:
+        value = data_cfg.get(key, None)
+        if value not in (None, ""):
+            return int(value)
+    return 0
+
+
 def build_dataset_for_cache(split: str, train_config: dict[str, Any], data_source_config: dict[str, Any]):
-    from transchrombp.data import ChromBPNetBigWigDataset
+    from transchrombp.data import ChromBPNetBigWigDataset, resolve_dataset_seed
 
     data_cfg = train_config.get("data", {})
     seed = int(train_config.get("seed", 1234))
+    normalized_split = normalize_split_name(split)
 
     input_len = int(data_cfg.get("input_len", 2114))
     supervised_bp = int(data_cfg.get("supervised_bp", 1000))
     profile_bin_size = int(data_cfg.get("profile_bin_size", 1))
-    max_records = int(data_cfg.get("max_records", 0))
+    max_records = resolve_split_max_records(data_cfg, normalized_split)
     nonpeak_ratio = float(resolve_data_value(data_cfg, data_source_config, "nonpeak_ratio", 1.0))
-    region_source = str(data_cfg.get("region_source", "both"))
-
-    if split == "train":
-        region_source = str(data_cfg.get("train_region_source", region_source))
-    else:
-        region_source = str(data_cfg.get("val_region_source", region_source))
+    region_source = resolve_split_region_source(data_cfg, normalized_split)
 
     ds = ChromBPNetBigWigDataset(
         genome_fasta=str(resolve_data_value(data_cfg, data_source_config, "genome_fasta", "")),
@@ -95,14 +134,14 @@ def build_dataset_for_cache(split: str, train_config: dict[str, Any], data_sourc
         peaks_bed=str(resolve_data_value(data_cfg, data_source_config, "peaks_bed", "")),
         nonpeaks_bed=str(resolve_data_value(data_cfg, data_source_config, "nonpeaks_bed", "")),
         folds_json=str(resolve_data_value(data_cfg, data_source_config, "folds_json", "")),
-        split=split if split != "val" else "valid",
+        split=normalized_split,
         input_len=input_len,
         supervised_bp=supervised_bp,
         profile_bin_size=profile_bin_size,
         max_jitter=0,
         peak_max_jitter=0,
         nonpeak_max_jitter=0,
-        seed=seed if split == "train" else seed + 10_000,
+        seed=resolve_dataset_seed(seed, normalized_split),
         nonpeak_ratio=nonpeak_ratio,
         max_records=max_records,
         region_source=region_source,
@@ -554,9 +593,13 @@ def main() -> None:
                     "data_config_path": os.path.abspath(args.data_config),
                     "train_config_path": os.path.abspath(args.train_config),
                     "split": split,
+                    "dataset_split": normalize_split_name(split),
                     "input_len": int(ds.input_len),
                     "supervised_bp": int(ds.supervised_bp),
                     "n_records": n_records,
+                    "max_records": int(getattr(ds, "max_records", 0)),
+                    "nonpeak_ratio": float(getattr(ds, "nonpeak_ratio", 0.0)),
+                    "region_source": str(getattr(ds, "region_source", "")),
                     "model_dir": str(Path(args.model_dir).resolve()),
                     "layers": layers,
                     "record_sha1": record_sha1,
