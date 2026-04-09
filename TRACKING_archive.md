@@ -2,7 +2,15 @@
 
 > 从 `TRACKING.md` 第一节"在做事情清单"中迁出的 `已完成` / `已合并` 条目。
 > 首次归档时间：2026-03-18
-> 最近一次追加归档：2026-04-08
+> 最近一次追加归档：2026-04-10
+
+---
+
+## 2026-04-10 第十轮归档（AlphaGenome matched raw-track slice closeout）
+
+| 事项 | 关键结论 | 关键路径 |
+|---|---|---|
+| `6000 AlphaGenome matched raw-track slice` | `alphagenome_matched_raw_track_slice_v1_20260410` 已完成 closeout，并通过 technical/alignment gate `pass`；4 个固定 loci 全部成功，`summary / metadata / profiles / run_meta / merged` 产物齐全。后续若再推进，只允许扩到 `12-20 loci` 的 matched panel，不进入大 benchmark。 | `reports/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md`、`docs/superpowers/specs/2026-04-10-a6000-alphagenome-matched-slice-v1-design.md` |
 
 ---
 
