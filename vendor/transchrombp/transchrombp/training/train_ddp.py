@@ -40,6 +40,11 @@ from transchrombp.models import (
     build_bias_branch_from_config,
     build_transchrombp_from_config,
 )
+from transchrombp.utils.foundation_contract import (
+    foundation_batch_key,
+    resolve_foundation_contract,
+    validate_foundation_cache_config,
+)
 
 
 NORM_LAYER_TYPES: Tuple[type, ...] = (
@@ -1342,19 +1347,11 @@ def extract_foundation_feature_kwargs(
     model_cfg: Dict[str, Any],
     device: torch.device,
 ) -> Dict[str, Tensor]:
-    foundation_cfg = model_cfg.get("foundation_model", {})
-    if not bool(foundation_cfg.get("enabled", False)):
+    contract = resolve_foundation_contract(model_cfg)
+    if contract is None:
         return {}
 
-    mode = str(foundation_cfg.get("mode", "distill_only")).strip().lower()
-    if mode == "distill_only":
-        return {}
-
-    feature_name = str(foundation_cfg.get("feature_name", "")).strip()
-    if not feature_name:
-        raise ValueError("foundation_model.enabled=true requires foundation_model.feature_name")
-
-    key = f"foundation_{feature_name}"
+    key = foundation_batch_key(contract.feature_name)
     if key not in batch:
         raise RuntimeError(
             f"Foundation mode requires batch field {key!r}; check data.foundation_cache_dir / "
@@ -1362,35 +1359,25 @@ def extract_foundation_feature_kwargs(
         )
 
     feat = batch[key].to(device, non_blocking=True)
-    layout = str(foundation_cfg.get("feature_layout", "summary")).strip().lower()
-    hidden_size = int(foundation_cfg.get("hidden_size", foundation_cfg.get("feature_hidden_size", 0)))
     kwargs: Dict[str, Tensor] = {}
 
-    if layout == "summary":
+    if contract.feature_layout == "summary":
         kwargs["foundation_summary"] = feat
         return kwargs
-    if layout != "token":
-        raise ValueError(f"Unsupported foundation_model.feature_layout={layout!r}")
 
     if feat.dim() == 3:
         foundation_tokens = feat
     else:
-        n_tokens = int(foundation_cfg.get("feature_tokens", 0))
-        if n_tokens <= 0 or hidden_size <= 0:
-            raise ValueError(
-                "Token foundation features require foundation_model.feature_tokens > 0 and "
-                "foundation_model.hidden_size > 0"
-            )
-        expected_dim = n_tokens * hidden_size
+        expected_dim = contract.feature_tokens * contract.hidden_size
         if feat.dim() != 2 or int(feat.shape[1]) != expected_dim:
             raise ValueError(
-                f"Foundation token feature {feature_name!r} has shape {tuple(feat.shape)}, expected "
-                f"[B, {expected_dim}] for {n_tokens} tokens x hidden_size {hidden_size}"
+                f"Foundation token feature {contract.feature_name!r} has shape {tuple(feat.shape)}, expected "
+                f"[B, {expected_dim}] for {contract.feature_tokens} tokens x hidden_size {contract.hidden_size}"
             )
-        foundation_tokens = feat.view(feat.size(0), n_tokens, hidden_size)
+        foundation_tokens = feat.view(feat.size(0), contract.feature_tokens, contract.hidden_size)
 
     kwargs["foundation_tokens"] = foundation_tokens
-    if mode == "residual_head":
+    if contract.mode == "residual_head":
         kwargs["foundation_summary"] = foundation_tokens.mean(dim=1)
     return kwargs
 
@@ -1880,7 +1867,6 @@ def main() -> None:
                 "Disable genos_branch.enabled / caduceus_branch.enabled when using cached summaries."
             )
         required_cache_features: list[str] = []
-        required_foundation_features: list[str] = []
         required_teacher_targets: list[str] = []
         if uses_cached_genos:
             data_cfg = train_cfg.setdefault("data", {})
@@ -1906,30 +1892,7 @@ def main() -> None:
                 )
         if uses_foundation_model:
             data_cfg = train_cfg.setdefault("data", {})
-            foundation_mode = str(foundation_cfg.get("mode", "distill_only")).strip().lower()
-            if foundation_mode in {"cross_attention", "residual_head"}:
-                feature_name = str(foundation_cfg.get("feature_name", "")).strip()
-                if not feature_name:
-                    raise ValueError(
-                        "foundation_model.enabled=true requires foundation_model.feature_name for "
-                        f"mode={foundation_mode!r}"
-                    )
-                required_foundation_features.append(feature_name)
-                cache_dir = str(data_cfg.get("foundation_cache_dir", "")).strip()
-                configured_features = [str(x) for x in data_cfg.get("foundation_cache_features", [])]
-                if not cache_dir:
-                    raise ValueError(
-                        "foundation_model.enabled=true requires data.foundation_cache_dir or "
-                        "--foundation-cache-dir"
-                    )
-                missing_foundation = [
-                    feat for feat in required_foundation_features if feat not in configured_features
-                ]
-                if missing_foundation:
-                    raise ValueError(
-                        "foundation_model requires data.foundation_cache_features to include "
-                        f"{missing_foundation!r}"
-                    )
+            validate_foundation_cache_config(model_cfg, data_cfg)
             if float(train_cfg.get("loss", {}).get("distill_profile_weight", 0.0)) > 0:
                 required_teacher_targets.append("profile16")
             if float(train_cfg.get("loss", {}).get("distill_count_weight", 0.0)) > 0:

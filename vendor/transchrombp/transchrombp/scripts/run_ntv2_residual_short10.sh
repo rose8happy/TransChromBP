@@ -139,6 +139,76 @@ cfg.setdefault("trainer", {})["find_unused_parameters"] = str(find_unused).lower
 Path(dst).write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
 PY
 
+mapfile -t CACHE_REQUEST_LINES < <("${PYTHON_BIN}" - "${MODEL_CONFIG}" "${CACHE_LAYERS:-}" "${CACHE_FEATURE_TYPES:-}" <<'PY'
+import sys
+import yaml
+
+from transchrombp.utils.foundation_contract import (
+    infer_foundation_cache_build_request,
+    validate_foundation_cache_build_request,
+)
+
+
+def parse_csv(value: str):
+    return tuple(part.strip() for part in str(value).split(",") if part.strip())
+
+
+model_config_path, layers_override, feature_types_override = sys.argv[1:4]
+with open(model_config_path, "r", encoding="utf-8") as handle:
+    model_cfg = yaml.safe_load(handle) or {}
+
+default_layers, default_feature_types = infer_foundation_cache_build_request(model_cfg)
+requested_layers = tuple(int(x) for x in parse_csv(layers_override)) if parse_csv(layers_override) else default_layers
+requested_feature_types = parse_csv(feature_types_override) or default_feature_types
+validate_foundation_cache_build_request(
+    model_cfg,
+    requested_layers=requested_layers,
+    requested_feature_types=requested_feature_types,
+)
+print(",".join(str(x) for x in requested_layers))
+print(",".join(str(x) for x in requested_feature_types))
+PY
+)
+CACHE_LAYERS="${CACHE_REQUEST_LINES[0]}"
+CACHE_FEATURE_TYPES="${CACHE_REQUEST_LINES[1]}"
+IFS=',' read -r -a CACHE_FEATURE_TYPE_ARGS <<<"${CACHE_FEATURE_TYPES}"
+
+cache_manifests_are_reusable() {
+    "${PYTHON_BIN}" - "${FOUNDATION_CACHE_DIR}" "${MODEL_CONFIG}" "${EFFECTIVE_TRAIN_CONFIG}" <<'PY'
+import json
+import sys
+from pathlib import Path
+import yaml
+
+from transchrombp.utils.foundation_contract import validate_foundation_cache_manifest
+
+cache_dir = Path(sys.argv[1])
+model_config_path = Path(sys.argv[2])
+train_config_path = Path(sys.argv[3])
+
+with model_config_path.open("r", encoding="utf-8") as handle:
+    model_cfg = yaml.safe_load(handle) or {}
+with train_config_path.open("r", encoding="utf-8") as handle:
+    train_cfg = yaml.safe_load(handle) or {}
+
+data_cfg = train_cfg.get("data", {})
+base_seed = int(train_cfg.get("seed", 1234))
+for split in ("train", "valid"):
+    manifest_path = cache_dir / f"manifest_{split}.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"Missing manifest: {manifest_path}")
+    with manifest_path.open("r", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    validate_foundation_cache_manifest(
+        manifest,
+        model_cfg=model_cfg,
+        data_cfg=data_cfg,
+        split=split,
+        base_seed=base_seed,
+    )
+PY
+}
+
 echo "=============================================="
 echo "NT v2 Residual Short10"
 echo "ROOT_DIR: ${ROOT_DIR}"
@@ -153,13 +223,24 @@ echo "NT model dir: ${NT_MODEL_DIR}"
 echo "Train config: ${TRAIN_CONFIG}"
 echo "Effective train config: ${EFFECTIVE_TRAIN_CONFIG}"
 echo "Model config: ${MODEL_CONFIG}"
+echo "Cache layers: ${CACHE_LAYERS}"
+echo "Cache feature types: ${CACHE_FEATURE_TYPES}"
 echo "Data config: ${DATA_CONFIG}"
 echo "BATCH_SIZE_PER_GPU: ${BATCH_SIZE_PER_GPU}"
 echo "NUM_WORKERS: ${NUM_WORKERS}"
 echo "GLOBAL_BATCH: $((BATCH_SIZE_PER_GPU * NPROC_PER_NODE))"
 echo "=============================================="
 
-if [ ! -f "${FOUNDATION_CACHE_DIR}/manifest_train.json" ] || [ ! -f "${FOUNDATION_CACHE_DIR}/manifest_valid.json" ]; then
+CACHE_REUSABLE=false
+if [ -f "${FOUNDATION_CACHE_DIR}/manifest_train.json" ] && [ -f "${FOUNDATION_CACHE_DIR}/manifest_valid.json" ]; then
+    if cache_manifests_are_reusable; then
+        CACHE_REUSABLE=true
+    else
+        echo "[Step 0] Existing cache manifests do not match current model/train semantics; rebuilding."
+    fi
+fi
+
+if [ "${CACHE_REUSABLE}" != "true" ]; then
     echo ""
     if [ "${CACHE_NPROC_PER_NODE}" -gt 1 ]; then
         echo "[Step 0] Building dataset-aligned NT v2 cache on CACHE_GPU_IDS=${CACHE_GPU_IDS} with ${CACHE_NPROC_PER_NODE} workers..."
@@ -172,12 +253,13 @@ if [ ! -f "${FOUNDATION_CACHE_DIR}/manifest_train.json" ] || [ ! -f "${FOUNDATIO
             "${ROOT_DIR}/scripts/build_foundation_cache.py" \
             --data_config "${DATA_CONFIG}" \
             --train_config "${EFFECTIVE_TRAIN_CONFIG}" \
+            --model_config "${MODEL_CONFIG}" \
             --output_dir "${FOUNDATION_CACHE_DIR}" \
             --backend nt_v2 \
             --model_dir "${NT_MODEL_DIR}" \
             --splits train valid \
-            --layers 7,14 \
-            --feature_types global_mean bins4_mean \
+            --layers "${CACHE_LAYERS}" \
+            --feature_types "${CACHE_FEATURE_TYPE_ARGS[@]}" \
             --record_splits valid \
             --batch_size 8 \
             --dtype float16
@@ -186,18 +268,19 @@ if [ ! -f "${FOUNDATION_CACHE_DIR}/manifest_train.json" ] || [ ! -f "${FOUNDATIO
         CUDA_VISIBLE_DEVICES="${CACHE_GPU_ID}" "${PYTHON_BIN}" "${ROOT_DIR}/scripts/build_foundation_cache.py" \
             --data_config "${DATA_CONFIG}" \
             --train_config "${EFFECTIVE_TRAIN_CONFIG}" \
+            --model_config "${MODEL_CONFIG}" \
             --output_dir "${FOUNDATION_CACHE_DIR}" \
             --backend nt_v2 \
             --model_dir "${NT_MODEL_DIR}" \
             --splits train valid \
-            --layers 7,14 \
-            --feature_types global_mean bins4_mean \
+            --layers "${CACHE_LAYERS}" \
+            --feature_types "${CACHE_FEATURE_TYPE_ARGS[@]}" \
             --record_splits valid \
             --batch_size 8 \
             --dtype float16
     fi
 else
-    echo "[Step 0] Cache already exists, skipping."
+    echo "[Step 0] Cache manifests match current contract, skipping build."
 fi
 
 if [ -n "${BASELINE_CHECKPOINT}" ] && [ -f "${BASELINE_CHECKPOINT}" ] && [ -f "${FOUNDATION_CACHE_DIR}/records_valid.jsonl" ]; then

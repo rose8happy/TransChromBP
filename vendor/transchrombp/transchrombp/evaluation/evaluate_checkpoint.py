@@ -32,6 +32,13 @@ from transchrombp.training.train_ddp import (
     slice_outputs,
     validate_model_config,
 )
+from transchrombp.utils.foundation_contract import (
+    normalize_cache_split_name,
+    resolve_cache_split_max_records,
+    resolve_cache_split_region_source,
+    resolve_cache_split_seed,
+    validate_foundation_cache_config,
+)
 
 
 SCOPE_KEYS: tuple[str, ...] = ("overall",) + VALIDATION_REGION_KEYS
@@ -237,6 +244,7 @@ def build_eval_dataset(
     nonpeak_ratio_override: float = -1.0,
 ) -> ChromBPNetBigWigDataset:
     data_cfg = train_cfg.get("data", {})
+    normalized_split = normalize_cache_split_name(split)
     input_len = int(data_cfg.get("input_len", 2114))
     output_len = int(data_cfg.get("output_len", 1000))
     supervised_bp = int(data_cfg.get("supervised_bp", output_len))
@@ -246,10 +254,7 @@ def build_eval_dataset(
         if nonpeak_ratio_override >= 0.0
         else float(data_cfg.get("nonpeak_ratio", 1.0))
     )
-    region_source = str(
-        region_source_override
-        or data_cfg.get(f"{split}_region_source", data_cfg.get("val_region_source", data_cfg.get("region_source", "both")))
-    )
+    region_source = str(region_source_override or resolve_cache_split_region_source(data_cfg, normalized_split))
     track_total_count_target = float(data_cfg.get("track_total_count_target", 0.0))
     genos_cache_dir = str(data_cfg.get("genos_cache_dir", ""))
     genos_cache_features = list(data_cfg.get("genos_cache_features", []))
@@ -258,7 +263,10 @@ def build_eval_dataset(
     teacher_cache_dir = str(data_cfg.get("teacher_cache_dir", ""))
     teacher_target_names = list(data_cfg.get("teacher_target_names", []))
 
-    max_records = int(max_regions_override) if max_regions_override > 0 else int(data_cfg.get(f"max_{split}_regions", 0))
+    max_records = int(max_regions_override) if max_regions_override > 0 else resolve_cache_split_max_records(
+        data_cfg,
+        normalized_split,
+    )
 
     return ChromBPNetBigWigDataset(
         genome_fasta=str(data_source_cfg["genome_fasta"]),
@@ -266,14 +274,14 @@ def build_eval_dataset(
         peaks_bed=str(data_source_cfg["input"]["peaks_bed"]),
         nonpeaks_bed=str(data_source_cfg["input"]["nonpeaks_bed"]),
         folds_json=str(data_source_cfg["folds_json"]),
-        split=split,
+        split=normalized_split,
         input_len=input_len,
         supervised_bp=supervised_bp,
         profile_bin_size=profile_bin_size,
         max_jitter=0,
         peak_max_jitter=0,
         nonpeak_max_jitter=0,
-        seed=int(train_cfg.get("seed", 1234)) + 20_000,
+        seed=resolve_cache_split_seed(int(train_cfg.get("seed", 1234)), normalized_split),
         nonpeak_ratio=nonpeak_ratio,
         max_records=max_records,
         region_source=region_source,
@@ -325,6 +333,7 @@ def main() -> None:
     uses_cached_genos = bool(model_cfg.get("genos_cached", {}).get("enabled", False))
 
     data_cfg = train_cfg.get("data", {})
+    validate_foundation_cache_config(model_cfg, data_cfg)
     batch_size = int(args.batch_size) if args.batch_size > 0 else int(data_cfg.get("batch_size_per_gpu", 16))
     num_workers = int(args.num_workers) if args.num_workers >= 0 else int(data_cfg.get("num_workers", 2))
     pin_memory = bool(data_cfg.get("pin_memory", True)) and (device.type == "cuda")

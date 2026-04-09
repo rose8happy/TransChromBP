@@ -26,6 +26,13 @@ from typing import Any
 import numpy as np
 import torch
 import yaml
+from transchrombp.utils.foundation_contract import (
+    normalize_cache_split_name,
+    resolve_cache_split_max_records,
+    resolve_cache_split_region_source,
+    resolve_cache_split_seed,
+    validate_foundation_cache_build_request,
+)
 
 
 _HERE = Path(__file__).resolve()
@@ -76,18 +83,14 @@ def build_dataset_for_cache(split: str, train_config: dict[str, Any], data_sourc
 
     data_cfg = train_config.get("data", {})
     seed = int(train_config.get("seed", 1234))
+    normalized_split = normalize_cache_split_name(split)
 
     input_len = int(data_cfg.get("input_len", 2114))
     supervised_bp = int(data_cfg.get("supervised_bp", 1000))
     profile_bin_size = int(data_cfg.get("profile_bin_size", 1))
-    max_records = int(data_cfg.get("max_records", 0))
+    max_records = resolve_cache_split_max_records(data_cfg, normalized_split)
     nonpeak_ratio = float(resolve_data_value(data_cfg, data_source_config, "nonpeak_ratio", 1.0))
-    region_source = str(data_cfg.get("region_source", "both"))
-
-    if split == "train":
-        region_source = str(data_cfg.get("train_region_source", region_source))
-    else:
-        region_source = str(data_cfg.get("val_region_source", region_source))
+    region_source = resolve_cache_split_region_source(data_cfg, normalized_split)
 
     ds = ChromBPNetBigWigDataset(
         genome_fasta=str(resolve_data_value(data_cfg, data_source_config, "genome_fasta", "")),
@@ -95,14 +98,14 @@ def build_dataset_for_cache(split: str, train_config: dict[str, Any], data_sourc
         peaks_bed=str(resolve_data_value(data_cfg, data_source_config, "peaks_bed", "")),
         nonpeaks_bed=str(resolve_data_value(data_cfg, data_source_config, "nonpeaks_bed", "")),
         folds_json=str(resolve_data_value(data_cfg, data_source_config, "folds_json", "")),
-        split=split if split != "val" else "valid",
+        split=normalized_split,
         input_len=input_len,
         supervised_bp=supervised_bp,
         profile_bin_size=profile_bin_size,
         max_jitter=0,
         peak_max_jitter=0,
         nonpeak_max_jitter=0,
-        seed=seed if split == "train" else seed + 10_000,
+        seed=resolve_cache_split_seed(seed, normalized_split),
         nonpeak_ratio=nonpeak_ratio,
         max_records=max_records,
         region_source=region_source,
@@ -341,6 +344,7 @@ def main() -> None:
     parser.add_argument("--data_config", required=True)
     parser.add_argument("--train_config", required=True)
     parser.add_argument("--output_dir", required=True)
+    parser.add_argument("--model_config", default="")
     parser.add_argument("--splits", nargs="+", default=["train", "valid"])
     parser.add_argument("--backend", default="nt_v2", choices=["nt_v2"])
     parser.add_argument("--model_dir", required=True)
@@ -361,6 +365,7 @@ def main() -> None:
 
     train_config = load_yaml(args.train_config)
     data_source_config = load_yaml(args.data_config)
+    model_config = load_yaml(args.model_config) if args.model_config else {}
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -379,16 +384,24 @@ def main() -> None:
                 f"num_hidden_layers={num_hidden_layers}, hidden_size={hidden_size}"
             )
         layers = resolve_layers(args.layers, num_hidden_layers)
+        if model_config:
+            validate_foundation_cache_build_request(
+                model_config,
+                requested_layers=layers,
+                requested_feature_types=feature_types,
+            )
         dtype = np.float16 if args.dtype == "float16" else np.float32
         suffix = "f16" if args.dtype == "float16" else "f32"
 
         for split in args.splits:
+            normalized_split = normalize_cache_split_name(split)
             if rank == 0:
                 print(f"\n{'=' * 60}")
                 print(f"Processing split: {split}")
                 print(f"{'=' * 60}")
 
             ds = build_dataset_for_cache(split, train_config, data_source_config)
+            data_cfg = train_config.get("data", {})
             n_records = len(ds)
             if getattr(ds, "supports_epoch_resampling", False):
                 epoch_regions = int(getattr(ds, "peak_record_count", 0)) + min(
@@ -553,13 +566,16 @@ def main() -> None:
                     "backend": args.backend,
                     "data_config_path": os.path.abspath(args.data_config),
                     "train_config_path": os.path.abspath(args.train_config),
-                    "split": split,
+                    "split": normalized_split,
                     "input_len": int(ds.input_len),
                     "supervised_bp": int(ds.supervised_bp),
                     "n_records": n_records,
                     "model_dir": str(Path(args.model_dir).resolve()),
                     "layers": layers,
                     "record_sha1": record_sha1,
+                    "region_source": resolve_cache_split_region_source(data_cfg, normalized_split),
+                    "max_records": resolve_cache_split_max_records(data_cfg, normalized_split),
+                    "split_seed": resolve_cache_split_seed(int(train_config.get("seed", 1234)), normalized_split),
                 }
                 if split == "train":
                     manifest_base["train_epoch_regions"] = epoch_regions
