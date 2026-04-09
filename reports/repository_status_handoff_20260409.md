@@ -1,13 +1,13 @@
-# 仓库现况总览（2026-04-09 22:41 CST）
+# 仓库现况总览（2026-04-09 22:43 CST）
 
 > 双机实验规则源统一看 `docs/plan/2026-04-09_dual_machine_experiment_charter.md`；本文只负责快照，不负责裁决默认下一步。
 
 ## 一句话结论
 
-截至 `2026-04-09 22:41 CST`，本地档案仓的真实状态已经不再是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”，而是：
+截至 `2026-04-09 22:43 CST`，本地档案仓的真实状态已经不再是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”，而是：
 
 - 本地 canonical git 档案仓仍是 `/home/zhengwei/project/python/chromBPNet`，且本轮已完成 worktree cleanup
-- 当前活跃实验只剩 `6000 / A6000x2` 上的 `NT v2 teacher-distill short10`
+- `6000 / A6000x2` 上的 `NT v2 teacher-distill short10` 已完成并等待 gate 判读
 - `6002 / RTX 3080` 已重新起跑 `U-Net-lite v1` 的确认性 cheap rerun `r4`，用来确认 `r3` 的 `provisional no-go` 是否稳定
 
 ---
@@ -127,16 +127,20 @@
 
 - run：`ntv2_teacher_distill_short10_s42_6000_20260409_r2`
 - 机器：`6000 / A6000 x2`
-- 证据：
-  - `nvidia-smi` 显示两张 A6000 均有活跃 python 进程
-  - 进程 PID：`862231`、`862232`
-  - 命令行直接指向 `transchrombp.training.train_ddp` + `transchrombp_teacher_v2_center_pool_ntv2_distill.yaml`
-  - 日志 `/data1/zhoujiazhen/bylw_atac/TransChromBP/logs/ntv2_teacher_distill_short10_s42_6000_20260409_r2.log` 在 `2026-04-09 22:11 CST` 已推进到 `epoch=4 step=1220/11809`
-- 配置事实：
-  - 本地 `dual-track-20260409` worktree 的 `train_tutorial_teacher_v2_ntv2_distill_short10.yaml` 明确写的是 `max_epochs: 10`
-- 粗略估计：
-  - 以当前 broad window 估算，训练部分仍大致还有 `~1.5-2` 小时量级
-  - 若不早停，预计结束时间窗约为 `2026-04-09 23:40` 到 `2026-04-10 00:20 CST`
+- 截至 `2026-04-09 22:43 CST` 的证据：
+  - `nvidia-smi` 显示两张 A6000 都已回到 `13 MiB / 0% util`
+  - `ps` 中已无该 run 的活跃训练进程
+  - 日志 `/data1/zhoujiazhen/bylw_atac/TransChromBP/logs/ntv2_teacher_distill_short10_s42_6000_20260409_r2.log` 尾部明确写出 `[early-stop] epoch=5` 与 `NT v2 teacher distill completed.`
+  - `run_meta.json` 已写出：
+    - `best_epoch=2`
+    - `best_metric_value=0.345324...`
+    - `stopped_early=true`
+  - log 中 `epoch=2` 对应的 `val:peak` 为：
+    - `profile_target_jsd_full_mean=0.3453`
+    - `count_pearson_full=0.5781`
+- 结论：
+  - run 已收口
+  - 当前状态应从“active run”改成“待 gate 判读”
 
 ### 3.3 已完成 cheap-screen、待正式判读的线
 
@@ -163,7 +167,7 @@
 - `TRACKING.md` 现在应把规则源改指向 `docs/plan/2026-04-09_dual_machine_experiment_charter.md`，而不是让 handoff 自己承担优先级裁决
 - 旧的 `reports/session_handoff_multiscale_and_next_tasks_20260409.md` 仍保留着“`msdec_v1_s2` / `skipprobe_wide` 是 active run”的旧快照
 - 真实现场已经切到：
-  - `6000` 正在跑 `teacher-distill`
+  - `6000 teacher-distill r2` 已结束并等待 gate 判读
   - `6002` 正在跑 `U-Net-lite r4` 确认性 cheap rerun
 - `dual-track-20260409` 的计划与 pivot 记录已经以 `wip` 提交固定在对应 worktree，但尚未合回 `master`
 
@@ -172,9 +176,8 @@
 ## 5. 当前最值得做的事
 
 1. 先把 `docs/plan/2026-04-09_dual_machine_experiment_charter.md` 视为双机实验规则源，把 `TRACKING.md` 视为 live 入口，而把本报告当成仓库 / worktree / 双机状态快照。
-2. 等 `ntv2_teacher_distill_short10_s42_6000_20260409_r2` 与 `teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4` 收口后，立即刷新本报告与 `TRACKING.md`，完成一次 closeout：
-   - short10 gate 是否通过
-   - 是否值得升 full
+2. 先对 `ntv2_teacher_distill_short10_s42_6000_20260409_r2` 做正式 gate 判读，再等 `teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4` 收口后补齐第二个 closeout：
+   - `teacher-distill short10` 是否通过 gate、是否值得升 full
    - `U-Net-lite v1` 在 `r4` 后能否正式停表
 3. 先按 [reports/unet_lite_v1_rigor_review_20260409.md](reports/unet_lite_v1_rigor_review_20260409.md) 的口径收紧 `6002 U-Net-lite`：当前已从 `single-run provisional no-go` 进入确认性 cheap rerun 阶段，不能再把 `r1/r2/r3` 直接当成三次负向重复。
 

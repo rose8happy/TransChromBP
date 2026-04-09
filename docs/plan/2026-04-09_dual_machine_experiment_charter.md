@@ -66,9 +66,12 @@
 
 ### 5.1 `6000 / A6000 x2`
 
-截至 `2026-04-09 22:11 CST`，当前唯一合法 active run 是：
+截至 `2026-04-09 22:43 CST`，当前这条 formal-gate run 已收口：
 
 - `ntv2_teacher_distill_short10_s42_6000_20260409_r2`
+- `best_epoch=2`
+- `best peak.profile_target_jsd_full_mean=0.34532`
+- `early-stop at epoch=5`
 
 规则如下：
 
@@ -144,6 +147,6 @@
 
 当前阶段的默认读法固定为：
 
-1. 先等 `6000 teacher-distill short10` 收口并正式判 gate
+1. 先把已收口的 `6000 teacher-distill short10 r2` 做正式 gate 判读
 2. 先把 `6002 U-Net-lite r4` 这条确认性 cheap rerun 收口，再决定 `v1` 是正式停表还是仅记为 single-run no-go
 3. 即便 `6000` 判负，只要 `6002` 白名单队列还在，就继续实验，不默认切回“先写论文”
