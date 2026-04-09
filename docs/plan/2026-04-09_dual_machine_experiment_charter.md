@@ -68,7 +68,7 @@
 
 ### 5.1 `6000 / A6000 x2`
 
-截至 `2026-04-10 02:48:42 CST`，`teacher-distill tutorial` 线已停表，而 `6000` 已切到一条独立的双轨执行面：一条 A6000 formal gate + 一条 AlphaGenome sidecar。当前事实如下：
+截至 `2026-04-10 03:03:02 CST`，`teacher-distill tutorial` 线已停表，而 `6000` 的双轨执行面已经分化成“仍在跑的 A6000 formal gate + 已完成的 AlphaGenome sidecar”。当前事实如下：
 
 - `teacher-distill` 历史 formal gate verdict 仍为 `fail`
 - `teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1`
@@ -78,18 +78,18 @@
 - hard compare target：只和历史 `corrected B` 比；不和 `6002`、不和旧 `msdec/skipprobe` 小变体链比
 - log：`/data1/zhoujiazhen/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1.log`
 - monitoring：`tail -f /data1/zhoujiazhen/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1.log`
-- completion check：`grep -i "Finished" /data1/zhoujiazhen/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1.log`
+- completion check：`test -f /data1/zhoujiazhen/bylw_atac/TransChromBP/outputs/logs/teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1/run_meta.json && tail -n 20 /data1/zhoujiazhen/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1.log`
 - initial ETA window：`2026-04-10 07:48:42 CST` 到 `2026-04-10 10:48:42 CST`
-- fresh launch evidence：发车后日志已进入真实 training step，`nvidia-smi` 已看到双 A6000 `96% util / 3664 MiB`
+- fresh active evidence：训练进程仍在跑，日志已推进到 `epoch=1 step=9200/9841`，A6000 双卡仍有活跃 compute worker
 - `alphagenome_matched_raw_track_slice_v2_20260410`
 - launch time：`2026-04-10 02:48:42 CST`
 - machine / env：`6000 / alphagenome env`
 - purpose：把已通过 v1 technical/alignment gate 的 AlphaGenome matched slice 扩到约 `12-20 loci` 的稍大 matched panel
 - role：仍是窄 external coordinate / pilot，不是大 benchmark，也不作为 A6000 formal gate 的等待前置
 - log：`/data1/zhoujiazhen/bylw_atac/TransChromBP/logs/alphagenome_matched_raw_track_slice_v2_20260410.log`
-- monitoring：`tail -f /data1/zhoujiazhen/bylw_atac/TransChromBP/logs/alphagenome_matched_raw_track_slice_v2_20260410.log`
-- completion check：`grep -i "Finished" /data1/zhoujiazhen/bylw_atac/TransChromBP/logs/alphagenome_matched_raw_track_slice_v2_20260410.log`
-- fresh launch evidence：后台 PID 与 `run_alphagenome_pilot.py` 子进程已存在，输出目录已开始写入 `profiles/*.npz` 与 `region_metadata.jsonl`
+- monitoring：`tail -n 20 /data1/zhoujiazhen/bylw_atac/TransChromBP/logs/alphagenome_matched_raw_track_slice_v2_20260410.log`
+- completion check：`grep -E "Wrote summary|Wrote merged comparison" /data1/zhoujiazhen/bylw_atac/TransChromBP/logs/alphagenome_matched_raw_track_slice_v2_20260410.log && ls -l /data1/zhoujiazhen/bylw_atac/TransChromBP/outputs/alphagenome_pilot/alphagenome_matched_raw_track_slice_v2_20260410/{summary.csv,merged_locus_totals.csv}`
+- fresh completion evidence：日志末尾已出现 `Wrote summary`、`Wrote metadata`、`Wrote merged comparison`，且 `summary.csv`、`merged_locus_totals.csv`、`run_meta.json`、`region_metadata.jsonl` 已落盘
 - `alphagenome_matched_raw_track_slice_v1_20260410`
 - start time：`2026-04-10 00:22:40 CST`
 - end time：`2026-04-10 00:22:55 CST`
@@ -103,12 +103,12 @@
 - `teacher-distill tutorial` 线已停表，不再为这条线分配后续 `6000` run
 - `6000` 继续独立维护自己的高价值 backlog，不等待 `6002`
 - 当前 `6000` 的 active GPU run 是 `teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1`
-- 当前 `6000` 的 active sidecar 是 `alphagenome_matched_raw_track_slice_v2_20260410`
-- 两条线互不等待；AlphaGenome sidecar 不构成 A6000 formal gate 的共享前置物
+- 当前 `6000` 的 AlphaGenome sidecar `alphagenome_matched_raw_track_slice_v2_20260410` 已完成，不再占 active 槽位
+- 两条线在 launch 之后互不等待；AlphaGenome sidecar 也不构成 A6000 formal gate 的共享前置物
 - A6000 formal gate 只和历史 `corrected B` 比，不和 `6002` 或旧 `msdec` 小变体链比较
 - 明确禁止为了同步去复制 `6002` 的确认性 rerun 或镜像 `6002` 的 cheap-screen
 - 后续若补充 `6000` 候选，必须是独立高价值任务，而不是旧 tutorial 线的续跑
-- `AlphaGenome matched raw-track slice v1` 已经完成并作为已通过的 technical/alignment gate 基线保留；当前 active 的是 `v2` 扩面 sidecar
+- `AlphaGenome matched raw-track slice v1` 已经完成并作为已通过的 technical/alignment gate 基线保留；`v2` 扩面 sidecar 也已完成，后续只在 Task 5 closeout 中统一判读
 - 若继续 AlphaGenome 线，唯一允许下一步是当前这次 `12-20 loci` 的小幅扩面；禁止把这次 `pass` 或 `v2` 扩面改写成模型质量胜利或直接扩成大 benchmark
 
 ### 5.2 `6002 / RTX 3080`
@@ -198,5 +198,5 @@
 当前阶段的默认读法固定为：
 
 1. `6000` 当前 active GPU run 是 `teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1`；它是双卡 A6000 formal gate，只和历史 `corrected B` 比，不等待 `6002`
-2. `6000` 当前 active sidecar 是 `alphagenome_matched_raw_track_slice_v2_20260410`；它是基于 `v1 pass` 的 `12-20 loci` 小幅扩面，仍只算窄 external coordinate，不升级成大 benchmark，也不和 A6000 gate 互相等待
+2. `6000` 的 `alphagenome_matched_raw_track_slice_v2_20260410` sidecar 已经完成并落盘；它仍只算窄 external coordinate，不升级成大 benchmark，也不反向卡住 A6000 formal gate
 3. `6002` 继续按自己的 `U-Net-lite r4` rigor closeout 线收口；一台机器的正负结果都不能自动改写另一台机器当前已发车项的默认下一步
