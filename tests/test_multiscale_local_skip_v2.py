@@ -4,7 +4,10 @@ from copy import deepcopy
 
 import pytest
 import torch
+from torch import nn
 
+from transchrombp.models.bias_branch import center_crop_1d
+from transchrombp.models.profile_decoder import MultiScaleLocalSkipDecoderV2
 from transchrombp.models.transchrombp import build_transchrombp_from_config
 
 
@@ -84,3 +87,39 @@ def test_unknown_profile_decoder_mode_raises():
     cfg["profile_decoder"]["mode"] = "does_not_exist"
     with pytest.raises(ValueError, match="profile_decoder.mode"):
         build_transchrombp_from_config(cfg)
+
+
+class _IdentityRefine(nn.Module):
+    def forward(self, x: torch.Tensor, skip: torch.Tensor) -> torch.Tensor:
+        return x
+
+
+class _FirstChannelHead(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x[:, :1, :]
+
+
+def test_multiscale_local_skip_v2_decodes_on_full_sequence_grid_before_crop():
+    seq_len = 2114
+    output_len = 1000
+    decoder = MultiScaleLocalSkipDecoderV2(
+        encoded_channels=4,
+        local_channels=4,
+        output_len=output_len,
+        hidden_channels=4,
+        decoder_channels=[4],
+        dropout=0.0,
+        upsample_mode="linear",
+    )
+    decoder.input_proj = nn.Identity()
+    decoder.refine_blocks = nn.ModuleList([_IdentityRefine()])
+    decoder.profile_head = _FirstChannelHead()
+
+    encoded = torch.zeros(1, seq_len, 4)
+    encoded[0, :, 0] = torch.arange(seq_len, dtype=torch.float32)
+    local_feat = torch.zeros(1, 4, seq_len)
+
+    profile_logits = decoder(encoded, local_feat)
+
+    expected = center_crop_1d(torch.arange(seq_len, dtype=torch.float32).unsqueeze(0), output_len)
+    assert torch.equal(profile_logits, expected)

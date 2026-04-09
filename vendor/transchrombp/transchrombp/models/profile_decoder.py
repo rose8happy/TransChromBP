@@ -86,10 +86,7 @@ class MultiScaleLocalSkipDecoderV2(nn.Module):
         self.output_len = output_len
         self.upsample_mode = mode
         self.input_proj = nn.Conv1d(encoded_channels, hidden_channels, kernel_size=1)
-        self.stage_lengths = [
-            int(math.ceil(output_len / (2 ** (len(stage_channels) - index - 1))))
-            for index in range(len(stage_channels))
-        ]
+        self.num_stages = len(stage_channels)
         self.refine_blocks = nn.ModuleList()
 
         in_channels = hidden_channels
@@ -119,17 +116,30 @@ class MultiScaleLocalSkipDecoderV2(nn.Module):
             return F.interpolate(x, size=target_len, mode="linear", align_corners=False)
         return F.interpolate(x, size=target_len, mode=self.upsample_mode)
 
+    def _stage_lengths(self, full_len: int) -> list[int]:
+        return [
+            int(math.ceil(full_len / (2 ** (self.num_stages - index - 1))))
+            for index in range(self.num_stages)
+        ]
+
     def forward(self, encoded: Tensor, local_feat: Tensor) -> Tensor:
         if encoded.dim() != 3:
             raise ValueError(f"Expected encoded shape [B, L, D], got {tuple(encoded.shape)}")
         if local_feat.dim() != 3:
             raise ValueError(f"Expected local_feat shape [B, D, L], got {tuple(local_feat.shape)}")
+        if encoded.size(1) != local_feat.size(-1):
+            raise ValueError(
+                "MultiScaleLocalSkipDecoderV2 requires encoded/local_feat to share sequence length, "
+                f"got {encoded.size(1)} and {local_feat.size(-1)}"
+            )
 
+        full_len = encoded.size(1)
         current = self.input_proj(encoded.transpose(1, 2))
-        for target_len, block in zip(self.stage_lengths, self.refine_blocks):
+        for target_len, block in zip(self._stage_lengths(full_len), self.refine_blocks):
             current = self._resize(current, target_len)
             local_stage = self._resize(local_feat, target_len)
             current = block(current, local_stage)
 
+        current = self._resize(current, full_len)
         profile_logits = self.profile_head(current).squeeze(1)
         return center_crop_1d(profile_logits, self.output_len)
