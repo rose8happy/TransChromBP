@@ -1,14 +1,14 @@
-# 仓库现况总览（2026-04-09 22:46 CST）
+# 仓库现况总览（2026-04-09 23:16 CST）
 
-> 双机实验规则源统一看 `docs/plan/2026-04-09_dual_machine_experiment_charter.md`；本文只负责快照，不负责裁决默认下一步。
+> 新 charter 和 `TRACKING.md` 已经改成解耦规则源 / 并列 live 入口；本文只负责快照，不再承担排程裁决角色。
 
 ## 一句话结论
 
-截至 `2026-04-09 22:46 CST`，本地档案仓的真实状态已经不再是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”，而是：
+截至 `2026-04-09 23:16 CST`，本地档案仓的真实状态已经切换成并列快照，而不是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”那套旧口径：
 
-- 本地 canonical git 档案仓仍是 `/home/zhengwei/project/python/chromBPNet`，且本轮已完成 worktree cleanup
-- `6000 / A6000x2` 上的 `NT v2 teacher-distill short10` 已完成，并已正式判负
-- `6002 / RTX 3080` 已重新起跑 `U-Net-lite v1` 的确认性 cheap rerun `r4`，用来确认 `r3` 的 `provisional no-go` 是否稳定
+- `6000` 已结束 `teacher-distill`，当前按新调度规则独立维护自己的 backlog，处于 `idle`
+- `6002` 继续自己的 `U-Net-lite r4 / cheap-screen` 队列，`r4` 仍在跑
+- 本报告只记录现场快照，不再给出“双机必须串行推进”的默认动作
 
 ---
 
@@ -155,13 +155,13 @@
   - `/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r1.log`
   - `/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r2.log`
   - `/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r3.log`
-- 截至 `2026-04-09 22:41 CST`：
-  - `6002` 的 3080 已重新被 `r4` 占用
-  - 活跃训练进程已指向 `teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4`
+- 截至 `2026-04-09 23:16:50 CST`：
+  - `6002` 的 3080 仍被 `r4` 占用，`teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4` 继续运行
   - `r1` 是 loader/config contract 失败，`r2` 是 bigWig 路径 remap 失败
   - 当前真正有效的只有 `r3`
   - `r3` 日志里的 best 出现在 `epoch=2`，峰区 `profile_target_jsd_full_mean=0.45525`
   - 日志末尾已打印 `U-Net-lite decoder probe completed.`
+  - 按 `r3` 节奏粗估，现场 ETA 窗口约为 `2026-04-10 00:50 CST` 到 `2026-04-10 01:30 CST`
 - 结论：
   - 这条线不是“尚未起跑”，而是“已有一个有效 cheap-screen run，当前正在用 `r4` 做确认性补强”
 
@@ -169,7 +169,7 @@
 
 ## 4. 当前仍需注意的不一致
 
-- `TRACKING.md` 现在应把规则源改指向 `docs/plan/2026-04-09_dual_machine_experiment_charter.md`，而不是让 handoff 自己承担优先级裁决
+- `TRACKING.md` 已把规则源指向 `docs/plan/2026-04-09_dual_machine_experiment_charter.md`，并把它作为 live 入口，而不是让 handoff 自己承担优先级裁决
 - 旧的 `reports/session_handoff_multiscale_and_next_tasks_20260409.md` 仍保留着“`msdec_v1_s2` / `skipprobe_wide` 是 active run”的旧快照
 - 真实现场已经切到：
   - `6000 teacher-distill r2` 已结束，并已正式判负
@@ -178,12 +178,11 @@
 
 ---
 
-## 5. 当前最值得做的事
+## 5. 按当前 live 文档读取
 
-1. 先把 `docs/plan/2026-04-09_dual_machine_experiment_charter.md` 视为双机实验规则源，把 `TRACKING.md` 视为 live 入口，而把本报告当成仓库 / worktree / 双机状态快照。
-2. 等 `teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4` 收口后补齐第二个 closeout：
-   - `U-Net-lite v1` 在 `r4` 后能否正式停表
-3. 先按 [reports/unet_lite_v1_rigor_review_20260409.md](reports/unet_lite_v1_rigor_review_20260409.md) 的口径收紧 `6002 U-Net-lite`：当前已从 `single-run provisional no-go` 进入确认性 cheap rerun 阶段，不能再把 `r1/r2/r3` 直接当成三次负向重复。
+1. `6000` 当前处于 `idle`，独立 backlog 的首选仍是 `AlphaGenome matched raw-track slice`。
+2. `6002` 当前仍在跑 `U-Net-lite r4`，队列只保留本次 cheap rerun 收口与 rigor closeout。
+3. 若要改默认下一步，以 charter / `TRACKING.md` 为准，本报告不裁决。
 
 ---
 
