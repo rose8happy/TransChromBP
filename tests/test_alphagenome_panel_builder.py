@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import builtins
 import json
+import sys
+import types
 
 import pyBigWig
 import pytest
@@ -12,12 +14,12 @@ from scripts.alphagenome_pilot.build_matched_panel_v2 import (
 )
 
 
-def test_import_real_data_helpers_falls_back_without_vendor_data(tmp_path, monkeypatch):
+def test_import_real_data_helpers_falls_back_without_transchrombp_module(tmp_path, monkeypatch):
     original_import = builtins.__import__
 
     def controlled_import(name, globals=None, locals=None, fromlist=(), level=0):
         if name == "transchrombp.data.real_data":
-            raise ModuleNotFoundError("No module named 'transchrombp.data'", name="transchrombp.data")
+            raise ModuleNotFoundError("No module named 'transchrombp'", name="transchrombp")
         return original_import(name, globals, locals, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", controlled_import)
@@ -53,6 +55,58 @@ def test_import_real_data_helpers_falls_back_without_vendor_data(tmp_path, monke
         writer.close()
 
     assert load_bigwig_chrom_sizes(str(bigwig_path)) == {"chr1": 100}
+
+
+def test_import_real_data_helpers_prefers_real_module_when_available(monkeypatch):
+    package = types.ModuleType("transchrombp")
+    data_package = types.ModuleType("transchrombp.data")
+    real_module = types.ModuleType("transchrombp.data.real_data")
+
+    def real_load_fold_chroms(*args, **kwargs):
+        return ["real-folds"]
+
+    def real_load_regions_from_bed(*args, **kwargs):
+        return ["real-regions"]
+
+    def real_load_bigwig_chrom_sizes(*args, **kwargs):
+        return {"chrReal": 123}
+
+    def real_filter_records_by_chroms(*args, **kwargs):
+        return ["real-filtered"]
+
+    real_module.load_fold_chroms = real_load_fold_chroms
+    real_module.load_regions_from_bed = real_load_regions_from_bed
+    real_module.load_bigwig_chrom_sizes = real_load_bigwig_chrom_sizes
+    real_module.filter_records_by_chroms = real_filter_records_by_chroms
+    data_package.real_data = real_module
+    package.data = data_package
+
+    monkeypatch.setitem(sys.modules, "transchrombp", package)
+    monkeypatch.setitem(sys.modules, "transchrombp.data", data_package)
+    monkeypatch.setitem(sys.modules, "transchrombp.data.real_data", real_module)
+
+    helpers = _import_real_data_helpers()
+
+    assert helpers == (
+        real_load_fold_chroms,
+        real_load_regions_from_bed,
+        real_load_bigwig_chrom_sizes,
+        real_filter_records_by_chroms,
+    )
+
+
+def test_import_real_data_helpers_reraises_unrelated_missing_dependency(monkeypatch):
+    original_import = builtins.__import__
+
+    def controlled_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "transchrombp.data.real_data":
+            raise ModuleNotFoundError("No module named 'numpy'", name="numpy")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", controlled_import)
+
+    with pytest.raises(ModuleNotFoundError, match="No module named 'numpy'"):
+        _import_real_data_helpers()
 
 
 def test_choose_panel_rows_returns_unique_quantile_anchors():

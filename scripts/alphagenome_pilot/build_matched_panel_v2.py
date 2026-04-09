@@ -53,7 +53,7 @@ def _import_real_data_helpers() -> tuple[Any, Any, Any, Any]:
             load_regions_from_bed,
         )
     except ModuleNotFoundError as exc:
-        if exc.name not in {"transchrombp.data", "transchrombp.data.real_data"}:
+        if exc.name not in {"transchrombp", "transchrombp.data", "transchrombp.data.real_data"}:
             raise
         return (
             _fallback_load_fold_chroms,
