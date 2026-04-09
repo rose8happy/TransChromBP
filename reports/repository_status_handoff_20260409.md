@@ -2,9 +2,9 @@
 
 ## 一句话结论
 
-截至 `2026-04-09 21:30-21:31 CST`，本地档案仓的真实状态已经不再是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”，而是：
+截至 `2026-04-09 21:30-22:10 CST`，本地档案仓的真实状态已经不再是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”，而是：
 
-- 本地 canonical git 档案仓仍是 `/home/zhengwei/project/python/chromBPNet`
+- 本地 canonical git 档案仓仍是 `/home/zhengwei/project/python/chromBPNet`，且本轮已完成 worktree cleanup
 - 当前活跃实验只剩 `6000 / A6000x2` 上的 `NT v2 teacher-distill short10`
 - `6002 / RTX 3080` 当前空闲，`U-Net-lite` 方案只完成到本地 worktree 级别，还未在远端实际起跑
 
@@ -15,9 +15,8 @@
 ### 1.1 本地仓库
 
 - 本地仓库 `master` 是当前唯一有完整 git 历史的 canonical 档案仓。
-- 当前状态：`upstream/master` 之上 **ahead 20 commits**，且工作树仍是明显脏状态：
-  - tracked 修改 `23` 个文件
-  - untracked 文件 `31` 个
+- 当前状态：`upstream/master` 之上 **ahead 21 commits**，`HEAD=d9772d0`，工作树已 clean。
+- 本轮新增的 `master` 提交 `d9772d0 (docs: snapshot repository handoff and archive updates)` 已把原先混在主仓里的 docs / handoff / archive 内容收口进 canonical 档案仓。
 - 已提交历史的主轴不是最近双机实验本身，而是：
   - `official chrombpnet` 外置化
   - 仓库档案结构收口
@@ -41,37 +40,26 @@
 
 | 分支 / worktree | 基线 | 当前状态 | 主要职责 |
 |---|---|---|---|
-| `master` | `4c62096` | 脏工作树；docs / paper / foundation / multiscale / externalization 混在一起 | 主档案仓，当前也是默认汇总入口 |
-| `dual-track-20260409` | `4c62096` | tracked 修改 `7`、untracked `26` | 最新实验 pivot：`teacher-distill + U-Net-lite` |
+| `master` | `d9772d0` | clean | 主档案仓，承载 canonical docs / tracking / paper / reports |
+| `dual-track-20260409` | `4ffc6e7` | clean | 最新实验 pivot：`teacher-distill + U-Net-lite` |
 | `multiscale-decoder-probe-20260407` | `4c62096` | clean | `msdec/skipprobe` 旧 readout probe 的干净切片 |
-| `autonomy/20260406-chrombpnet-externalization` | `909ebef` | untracked `1` | `official chrombpnet` 外置化收尾文档 |
-| `autonomy/20260406-structure` | `12c7c8c` | tracked 修改 `4`、untracked `3` | `foundation cache contract` 抽象层重构 |
+| `autonomy/20260406-chrombpnet-externalization` | `4aadffa` | clean | `official chrombpnet` 外置化收尾与工具链 bridge |
+| `autonomy/20260406-structure` | `764b8c0` | clean | `foundation cache contract` 抽象层重构 |
 
-### 2.1 `master` 当前混合了哪些改动簇
+### 2.1 `master` 当前保留什么
 
-- docs / tracking / paper：
+- 现在 `master` 已不再混着实验性代码与工具链 WIP。
+- 本轮保留在 `master` 的内容只有 canonical docs / archive：
   - `TRACKING.md`
-  - `docs/plan/project_roadmap_20260330.md`
-  - `reports/paper_claim_evidence_matrix_20260326.md`
-  - `reports/transchrombp_paper_{cn,draft}_v1.tex`
-- official ChromBPNet 外置化：
-  - `tests/test_chrombpnet_official_externalization.sh`
-  - `workflows/tutorial/step3_get_background_regions.sh`
-  - `scripts/start_6000_chrombpnet_dataset_prep.sh`
-- foundation / training contract：
-  - `vendor/transchrombp/transchrombp/training/train_ddp.py`
-  - `vendor/transchrombp/transchrombp/evaluation/evaluate_checkpoint.py`
-  - `vendor/transchrombp/transchrombp/scripts/build_foundation_cache.py`
-  - `vendor/transchrombp/transchrombp/models/foundation_adapter.py`
-- readout probe：
-  - `vendor/transchrombp/transchrombp/models/transchrombp.py`
-  - `vendor/transchrombp/transchrombp/models/profile_decoder.py`
-  - `vendor/transchrombp/transchrombp/scripts/run_multiscale_decoder_probe.sh`
-  - `vendor/transchrombp/transchrombp/scripts/run_short10_no_foundation_control.sh`
+  - `reports/repository_status_handoff_20260409.md`
+  - `docs/plan/*.md`
+  - `reports/*.md`
+  - `reports/*.tex`
+  - `docs/superpowers/` 下的设计 / 执行文档
 
 ### 2.2 `dual-track-20260409` 持有的新增代码
 
-这条 worktree 才是当前活跃实验路线的真正代码入口，核心内容包括：
+这条 worktree 已在本轮整理后落成 clean 提交 `4ffc6e7 (wip: snapshot dual track pivot)`，是当前活跃实验路线的真正代码入口，核心内容包括：
 
 - `NT v2 teacher-distill`
   - `teacher_cache_export.py`
@@ -89,12 +77,15 @@
 
 ### 2.3 `autonomy/20260406-structure` 的定位
 
-这条 worktree 不是当前 live experiment 主线，而是基础设施整理线。它的主要价值在于把 foundation cache 相关的重复合同层抽成共享 helper：
+这条 worktree 不是当前 live experiment 主线，而是基础设施整理线。本轮整理后，它已经形成两条本地提交：
+
+- `24649aa (wip: snapshot foundation cache contract)`
+- `764b8c0 (wip: add foundation cache alignment regression)`
+
+它的主要价值在于把 foundation cache 相关的重复合同层抽成共享 helper：
 
 - `vendor/transchrombp/transchrombp/utils/foundation_contract.py`
 - `tests/test_foundation_contract.py`
-
-当前这条线还没有并入 `master`。
 
 ---
 
@@ -164,10 +155,7 @@
 - 真实现场已经切到：
   - `6000` 正在跑 `teacher-distill`
   - `6002` 当前空闲
-- `dual-track-20260409` 的计划与 pivot 记录还没有完整回流到主档案仓，因此“最新实验路线”实际分散在：
-  - 远端日志
-  - worktree 内部文件
-  - 主仓库旧 handoff 文档
+- `dual-track-20260409` 的计划与 pivot 记录已经以 `wip` 提交固定在对应 worktree，但尚未合回 `master`
 
 ---
 
@@ -178,7 +166,7 @@
    - short10 gate 是否通过
    - 是否值得升 full
    - `6002` 是否真的要起 `U-Net-lite`
-3. 在实验结论稳定后，决定 `dual-track-20260409` 是否要回流到主档案仓；否则主仓库会继续处于“旧实验已归档、新实验只存在于 worktree”的半分叉状态。
+3. 在实验结论稳定后，决定 `dual-track-20260409`、`autonomy/20260406-structure`、`autonomy/20260406-chrombpnet-externalization` 这些 `wip` 提交哪些该合回主档案仓，哪些继续保持本地支线。
 
 ---
 
