@@ -93,10 +93,12 @@ best `val:peak`：
 
 - `6000` 当前不再有合法的 `teacher-distill tutorial` 后续
 - 但这**不等于**默认切回“先写论文”
-- 因为 `6002` 的白名单队列仍在跑 `U-Net-lite r4` 确认性 cheap rerun
+- 这份 closeout 只裁决 `teacher-distill tutorial` 线本身；当前双机默认动作以 charter / TRACKING 为准
+- `6000` 不再因为这份 closeout 而等待 `6002`
+- 若要提 `6002 r4`，只能把它当作当时并行存在的现场事实，不能当默认串行下一步
 
 因此当前默认下一步变成：
 
-1. 等 `6002 r4` 收口
+1. 先按 charter / TRACKING 继续当前双机各自的 live 队列
 2. 完成 `U-Net-lite v1` 的正式判读
-3. 若 `6002` 也不给正结果，再按 charter 讨论下一个 genuinely new dense decoder / readout 变体，或转 `AlphaGenome matched raw-track slice`
+3. 若后续要重新排 `6002` 的 `r4` 或其他分支，再按当时现场事实单独判断，不要从这份 closeout 里倒推出默认串行等待链

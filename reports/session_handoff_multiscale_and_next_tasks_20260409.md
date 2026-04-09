@@ -1,5 +1,13 @@
 # 当前工作接续说明：双机实验排程快照（2026-04-09）
 
+> **Superseded / 历史快照**
+>
+> 这份文档记录的是 `2026-04-09` 较早时点的一次双机排程快照，**不能再作为当前调度入口**。
+> 当前规则源和 live 入口请以以下文件为准：
+> - [docs/plan/2026-04-09_dual_machine_experiment_charter.md](../docs/plan/2026-04-09_dual_machine_experiment_charter.md)
+> - [TRACKING.md](../TRACKING.md)
+> - [reports/repository_status_handoff_20260409.md](./repository_status_handoff_20260409.md)
+
 ## 目的
 
 这份快照用于替代仍以 `20260407` 命名、但内容已被多次追加更新的旧 handoff 文档，给 `2026-04-09` 当前时点一个更直观的双机排程入口。
@@ -138,4 +146,4 @@
 - `20260407` 命名的两份文档仍保留作为历史上下文与结构细节来源：
   - `docs/plan/multiscale_decoder_probe_20260407.md`
   - `reports/session_handoff_multiscale_and_next_tasks_20260407.md`
-- `TRACKING.md` 从本轮起应优先引用本文件作为双机实验 live 入口
+- `TRACKING.md` 现在应把本文件视为历史快照，不再把它当作双机实验 live 入口
