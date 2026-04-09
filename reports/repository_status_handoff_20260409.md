@@ -1,14 +1,14 @@
-# 仓库现况总览（2026-04-09 22:40 CST）
+# 仓库现况总览（2026-04-09 22:41 CST）
 
 > 双机实验规则源统一看 `docs/plan/2026-04-09_dual_machine_experiment_charter.md`；本文只负责快照，不负责裁决默认下一步。
 
 ## 一句话结论
 
-截至 `2026-04-09 22:40 CST`，本地档案仓的真实状态已经不再是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”，而是：
+截至 `2026-04-09 22:41 CST`，本地档案仓的真实状态已经不再是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”，而是：
 
 - 本地 canonical git 档案仓仍是 `/home/zhengwei/project/python/chromBPNet`，且本轮已完成 worktree cleanup
 - 当前活跃实验只剩 `6000 / A6000x2` 上的 `NT v2 teacher-distill short10`
-- `6002 / RTX 3080` 当前空闲，但 `U-Net-lite` 已经在远端实际跑过 `r1/r2/r3`；其中只有 `r3` 是有效 run，因此当前缺的是严谨 closeout，不是“起跑”
+- `6002 / RTX 3080` 已重新起跑 `U-Net-lite v1` 的确认性 cheap rerun `r4`，用来确认 `r3` 的 `provisional no-go` 是否稳定
 
 ---
 
@@ -146,15 +146,15 @@
   - `/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r1.log`
   - `/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r2.log`
   - `/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r3.log`
-- 截至 `2026-04-09 22:11 CST`：
-  - `6002` 的 3080 已空闲
-  - `ps -ef | grep transchrombp.training.train_ddp` 没有活跃训练进程
+- 截至 `2026-04-09 22:41 CST`：
+  - `6002` 的 3080 已重新被 `r4` 占用
+  - 活跃训练进程已指向 `teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4`
   - `r1` 是 loader/config contract 失败，`r2` 是 bigWig 路径 remap 失败
   - 当前真正有效的只有 `r3`
   - `r3` 日志里的 best 出现在 `epoch=2`，峰区 `profile_target_jsd_full_mean=0.45525`
   - 日志末尾已打印 `U-Net-lite decoder probe completed.`
 - 结论：
-  - 这条线不是“尚未起跑”，而是“已有一个有效 cheap-screen run，但 formal verdict 还需按严谨性复核收紧”
+  - 这条线不是“尚未起跑”，而是“已有一个有效 cheap-screen run，当前正在用 `r4` 做确认性补强”
 
 ---
 
@@ -164,7 +164,7 @@
 - 旧的 `reports/session_handoff_multiscale_and_next_tasks_20260409.md` 仍保留着“`msdec_v1_s2` / `skipprobe_wide` 是 active run”的旧快照
 - 真实现场已经切到：
   - `6000` 正在跑 `teacher-distill`
-  - `6002` 当前空闲，但 `U-Net-lite r1/r2/r3` 已经跑完
+  - `6002` 正在跑 `U-Net-lite r4` 确认性 cheap rerun
 - `dual-track-20260409` 的计划与 pivot 记录已经以 `wip` 提交固定在对应 worktree，但尚未合回 `master`
 
 ---
@@ -172,11 +172,11 @@
 ## 5. 当前最值得做的事
 
 1. 先把 `docs/plan/2026-04-09_dual_machine_experiment_charter.md` 视为双机实验规则源，把 `TRACKING.md` 视为 live 入口，而把本报告当成仓库 / worktree / 双机状态快照。
-2. 等 `ntv2_teacher_distill_short10_s42_6000_20260409_r2` 收口后，立即刷新本报告与 `TRACKING.md`，完成一次 closeout：
+2. 等 `ntv2_teacher_distill_short10_s42_6000_20260409_r2` 与 `teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4` 收口后，立即刷新本报告与 `TRACKING.md`，完成一次 closeout：
    - short10 gate 是否通过
    - 是否值得升 full
-   - 若 short10 判负，是否继续 `6002` 的下一个 dense decoder / readout 变体
-3. 先按 [reports/unet_lite_v1_rigor_review_20260409.md](reports/unet_lite_v1_rigor_review_20260409.md) 的口径收紧 `6002 U-Net-lite`：当前只能写成 `single-run provisional no-go`，还不能把 `r1/r2/r3` 直接当成三次负向重复。
+   - `U-Net-lite v1` 在 `r4` 后能否正式停表
+3. 先按 [reports/unet_lite_v1_rigor_review_20260409.md](reports/unet_lite_v1_rigor_review_20260409.md) 的口径收紧 `6002 U-Net-lite`：当前已从 `single-run provisional no-go` 进入确认性 cheap rerun 阶段，不能再把 `r1/r2/r3` 直接当成三次负向重复。
 
 ---
 
