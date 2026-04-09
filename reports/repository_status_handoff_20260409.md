@@ -15,8 +15,8 @@
 ### 1.1 本地仓库
 
 - 本地仓库 `master` 是当前唯一有完整 git 历史的 canonical 档案仓。
-- 当前状态：`upstream/master` 之上 **ahead 21 commits**，`HEAD=d9772d0`，工作树已 clean。
-- 本轮新增的 `master` 提交 `d9772d0 (docs: snapshot repository handoff and archive updates)` 已把原先混在主仓里的 docs / handoff / archive 内容收口进 canonical 档案仓。
+- 当前状态：`master` 已重新回到 clean 状态，并保持为相对 `upstream/master` 的本地领先档案分支。
+- 本轮已经用连续两条 docs 提交把原先混在主仓里的 docs / handoff / archive 内容收口进 canonical 档案仓。
 - 已提交历史的主轴不是最近双机实验本身，而是：
   - `official chrombpnet` 外置化
   - 仓库档案结构收口
@@ -40,7 +40,7 @@
 
 | 分支 / worktree | 基线 | 当前状态 | 主要职责 |
 |---|---|---|---|
-| `master` | `d9772d0` | clean | 主档案仓，承载 canonical docs / tracking / paper / reports |
+| `master` | 本轮 docs closeout 后的最新状态 | clean | 主档案仓，承载 canonical docs / tracking / paper / reports |
 | `dual-track-20260409` | `4ffc6e7` | clean | 最新实验 pivot：`teacher-distill + U-Net-lite` |
 | `multiscale-decoder-probe-20260407` | `4c62096` | clean | `msdec/skipprobe` 旧 readout probe 的干净切片 |
 | `autonomy/20260406-chrombpnet-externalization` | `4aadffa` | clean | `official chrombpnet` 外置化收尾与工具链 bridge |
