@@ -11,6 +11,7 @@
 | 事项 | 关键结论 | 关键路径 |
 |---|---|---|
 | `6000 AlphaGenome matched raw-track slice` | `alphagenome_matched_raw_track_slice_v1_20260410` 已完成 closeout，并通过 technical/alignment gate `pass`；4 个固定 loci 全部成功，`summary / metadata / profiles / run_meta / merged` 产物齐全。后续若再推进，只允许扩到 `12-20 loci` 的 matched panel，不进入大 benchmark。 | `reports/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md`、`docs/superpowers/specs/2026-04-10-a6000-alphagenome-matched-slice-v1-design.md` |
+| `6000 AlphaGenome matched raw-track slice v2` | `alphagenome_matched_raw_track_slice_v2_20260410` 已完成 technical / external-coordinate sidecar closeout，并判定 `pass`；`16` 个 loci 全部成功落盘、每个 locus 都保留 `1` 条可用 `ATAC` track，且 `merged_locus_totals.csv` 已干净形成。该结果只作为 external coordinate 保留，不升级成 benchmark，也不改写 A6000 formal gate 语义。 | `reports/alphagenome_matched_raw_track_slice_v2_closeout_20260410.md` |
 
 ---
 
