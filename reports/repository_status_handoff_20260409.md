@@ -1,14 +1,14 @@
-# 仓库现况总览（2026-04-09 22:11 CST）
+# 仓库现况总览（2026-04-09 22:40 CST）
 
 > 双机实验规则源统一看 `docs/plan/2026-04-09_dual_machine_experiment_charter.md`；本文只负责快照，不负责裁决默认下一步。
 
 ## 一句话结论
 
-截至 `2026-04-09 22:11 CST`，本地档案仓的真实状态已经不再是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”，而是：
+截至 `2026-04-09 22:40 CST`，本地档案仓的真实状态已经不再是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”，而是：
 
 - 本地 canonical git 档案仓仍是 `/home/zhengwei/project/python/chromBPNet`，且本轮已完成 worktree cleanup
 - 当前活跃实验只剩 `6000 / A6000x2` 上的 `NT v2 teacher-distill short10`
-- `6002 / RTX 3080` 当前空闲，但 `U-Net-lite` 已经在远端实际跑过 `r1/r2/r3`，当前缺的是正式 verdict，不是“起跑”
+- `6002 / RTX 3080` 当前空闲，但 `U-Net-lite` 已经在远端实际跑过 `r1/r2/r3`；其中只有 `r3` 是有效 run，因此当前缺的是严谨 closeout，不是“起跑”
 
 ---
 
@@ -149,10 +149,12 @@
 - 截至 `2026-04-09 22:11 CST`：
   - `6002` 的 3080 已空闲
   - `ps -ef | grep transchrombp.training.train_ddp` 没有活跃训练进程
+  - `r1` 是 loader/config contract 失败，`r2` 是 bigWig 路径 remap 失败
+  - 当前真正有效的只有 `r3`
   - `r3` 日志里的 best 出现在 `epoch=2`，峰区 `profile_target_jsd_full_mean=0.45525`
   - 日志末尾已打印 `U-Net-lite decoder probe completed.`
 - 结论：
-  - 这条线不是“尚未起跑”，而是“cheap-screen 已完成，待正式 verdict”
+  - 这条线不是“尚未起跑”，而是“已有一个有效 cheap-screen run，但 formal verdict 还需按严谨性复核收紧”
 
 ---
 
@@ -174,7 +176,7 @@
    - short10 gate 是否通过
    - 是否值得升 full
    - 若 short10 判负，是否继续 `6002` 的下一个 dense decoder / readout 变体
-3. 先把 `6002 U-Net-lite r1/r2/r3` 收成正式 verdict，而不是继续把它写成“尚未起跑”。
+3. 先按 [reports/unet_lite_v1_rigor_review_20260409.md](reports/unet_lite_v1_rigor_review_20260409.md) 的口径收紧 `6002 U-Net-lite`：当前只能写成 `single-run provisional no-go`，还不能把 `r1/r2/r3` 直接当成三次负向重复。
 
 ---
 
