@@ -72,6 +72,7 @@
 - `best_epoch=2`
 - `best peak.profile_target_jsd_full_mean=0.34532`
 - `early-stop at epoch=5`
+- formal gate verdict: `fail`
 
 规则如下：
 
@@ -147,6 +148,6 @@
 
 当前阶段的默认读法固定为：
 
-1. 先把已收口的 `6000 teacher-distill short10 r2` 做正式 gate 判读
+1. `6000 teacher-distill short10 r2` 已正式判负；当前不再为 tutorial `teacher-distill` 线分配下一个 `6000` run
 2. 先把 `6002 U-Net-lite r4` 这条确认性 cheap rerun 收口，再决定 `v1` 是正式停表还是仅记为 single-run no-go
 3. 即便 `6000` 判负，只要 `6002` 白名单队列还在，就继续实验，不默认切回“先写论文”
