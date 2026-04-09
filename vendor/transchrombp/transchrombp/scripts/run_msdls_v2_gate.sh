@@ -46,15 +46,6 @@ if [ "${#GPU_ID_LIST[@]}" -lt "${NPROC_PER_NODE}" ]; then
 fi
 
 require_file "${TRAIN_CONFIG}" "train config"
-require_file "${DATA_CONFIG}" "data config"
-require_file "${MODEL_CONFIG}" "model config"
-
-if [[ "${DRY_RUN}" != "1" ]] && [ "${NPROC_PER_NODE}" -gt 1 ]; then
-    if ! command -v torchrun >/dev/null 2>&1; then
-        echo "[error] torchrun not found in PATH" >&2
-        exit 1
-    fi
-fi
 
 RUNTIME_DIR="${OUTPUT_BASE}/runtime/msdls_v2_gate"
 mkdir -p "${RUNTIME_DIR}"
@@ -84,6 +75,16 @@ echo "RUNTIME_TRAIN=${RUNTIME_TRAIN}"
 
 if [[ "${DRY_RUN}" == "1" ]]; then
   exit 0
+fi
+
+require_file "${DATA_CONFIG}" "data config"
+require_file "${MODEL_CONFIG}" "model config"
+
+if [ "${NPROC_PER_NODE}" -gt 1 ]; then
+    if ! command -v torchrun >/dev/null 2>&1; then
+        echo "[error] torchrun not found in PATH" >&2
+        exit 1
+    fi
 fi
 
 export CUDA_VISIBLE_DEVICES="${TRAIN_GPU_IDS}"
