@@ -19,7 +19,15 @@ PYTHON_BIN="${PYTHON_BIN:-python}"
 DRY_RUN="${DRY_RUN:-0}"
 
 export PATH="${VENV_DIR}/bin:${PATH:-}"
-export PYTHONPATH="${ROOT_DIR}/src:${PYTHONPATH:-}"
+if [ -d "${ROOT_DIR}/src/transchrombp" ]; then
+    PACKAGE_IMPORT_ROOT="${ROOT_DIR}/src"
+elif [ -d "${ROOT_DIR}/../transchrombp" ]; then
+    PACKAGE_IMPORT_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
+else
+    echo "[error] Could not locate transchrombp package import root from ${ROOT_DIR}" >&2
+    exit 1
+fi
+export PYTHONPATH="${PACKAGE_IMPORT_ROOT}:${PYTHONPATH:-}"
 
 RUNTIME_DIR="${OUTPUT_BASE}/runtime/msdls_v2_gate"
 mkdir -p "${RUNTIME_DIR}"
