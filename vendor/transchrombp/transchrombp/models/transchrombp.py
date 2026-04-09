@@ -20,6 +20,7 @@ from .bias_branch import ChromBPNetBiasBranch, ResidualDilatedConvBlock, center_
 from .caduceus_adapter import CaduceusTokenAdapter
 from .foundation_adapter import FoundationCrossAttentionAdapter, FoundationResidualHead
 from .genos_adapter import GenosCountProj, GenosGatedAdapter, GenosSummaryFiLM
+from .profile_decoder import MultiScaleLocalSkipDecoderV2
 from .transformer_encoder import SequenceTransformerEncoder
 
 
@@ -195,6 +196,7 @@ class TransChromBP(nn.Module):
         profile_bias_stop_gradient: bool = False,
         bias_profile_pool_factor: int = 0,
         count_pool_mode: str = "full",
+        profile_decoder_cfg: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__()
         self.output_len = output_len
@@ -248,7 +250,31 @@ class TransChromBP(nn.Module):
         else:
             self.transformer = nn.Identity()
 
-        self.profile_signal_head = nn.Linear(d_model, 1)
+        profile_decoder_cfg = dict(profile_decoder_cfg or {})
+        profile_decoder_mode = str(profile_decoder_cfg.get("mode", "linear")).strip().lower()
+        self.profile_decoder: Optional[MultiScaleLocalSkipDecoderV2]
+        self.profile_signal_head: Optional[nn.Linear]
+        if profile_decoder_mode == "linear":
+            self.profile_decoder = None
+            self.profile_signal_head = nn.Linear(d_model, 1)
+        elif profile_decoder_mode == "multiscale_local_skip_v2":
+            decoder_channels_cfg = profile_decoder_cfg.get("decoder_channels", [d_model])
+            self.profile_decoder = MultiScaleLocalSkipDecoderV2(
+                encoded_channels=d_model,
+                local_channels=d_model,
+                output_len=output_len,
+                hidden_channels=int(profile_decoder_cfg.get("hidden_channels", d_model)),
+                decoder_channels=[int(channels) for channels in decoder_channels_cfg],
+                dropout=float(profile_decoder_cfg.get("dropout", dropout)),
+                upsample_mode=str(profile_decoder_cfg.get("upsample_mode", "linear")),
+            )
+            self.profile_signal_head = None
+        else:
+            raise ValueError(
+                "Unsupported profile_decoder.mode="
+                f"{profile_decoder_mode!r}; expected 'linear' or 'multiscale_local_skip_v2'"
+            )
+
         self.count_signal_head = nn.Sequential(
             nn.LayerNorm(d_model),
             nn.Linear(d_model, d_model // 2),
@@ -423,8 +449,13 @@ class TransChromBP(nn.Module):
         if genos_summary is not None and self.genos_film is not None:
             encoded = self.genos_film(encoded, genos_summary)
 
-        profile_signal = self.profile_signal_head(encoded).squeeze(-1)  # [B, L]
-        profile_signal = center_crop_1d(profile_signal, self.output_len)
+        if self.profile_decoder is not None:
+            profile_signal = self.profile_decoder(encoded, local_feat)
+        else:
+            if self.profile_signal_head is None:
+                raise RuntimeError("linear profile decoder requires profile_signal_head to be initialized")
+            profile_signal = self.profile_signal_head(encoded).squeeze(-1)  # [B, L]
+            profile_signal = center_crop_1d(profile_signal, self.output_len)
 
         pooled = self._pool_for_count(encoded)
 
@@ -543,6 +574,7 @@ def build_transchrombp_from_config(config: Dict[str, Any]) -> TransChromBP:
     genos_cfg = config.get("genos_branch", {})
     caduceus_cfg = config.get("caduceus_branch", {})
     foundation_cfg = config.get("foundation_model", {})
+    profile_decoder_cfg = config.get("profile_decoder", {})
 
     model = TransChromBP(
         input_channels=int(config.get("input_channels", 4)),
@@ -578,6 +610,7 @@ def build_transchrombp_from_config(config: Dict[str, Any]) -> TransChromBP:
         profile_bias_stop_gradient=bool(fusion_cfg.get("profile_bias_stop_gradient", False)),
         bias_profile_pool_factor=int(bias_cfg.get("profile_pool_factor", 0)),
         count_pool_mode=str(heads_cfg.get("count_pool_mode", "full")),
+        profile_decoder_cfg=profile_decoder_cfg,
     )
 
     # ── Attach optional Genos gated adapter (online mode) ──

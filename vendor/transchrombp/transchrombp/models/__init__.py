@@ -4,6 +4,7 @@ from .bias_branch import ChromBPNetBiasBranch
 from .caduceus_adapter import CaduceusFeatureExtractor, CaduceusTokenAdapter
 from .foundation_adapter import FoundationCrossAttentionAdapter, FoundationResidualHead
 from .genos_adapter import GenosCountProj, GenosFeatureExtractor, GenosGatedAdapter, GenosSummaryFiLM
+from .profile_decoder import MultiScaleLocalSkipDecoderV2
 from .transchrombp import (
     TransChromBP,
     TransChromBPOutput,
@@ -22,6 +23,7 @@ __all__ = [
     "GenosFeatureExtractor",
     "GenosGatedAdapter",
     "GenosSummaryFiLM",
+    "MultiScaleLocalSkipDecoderV2",
     "SequenceTransformerEncoder",
     "TransChromBP",
     "TransChromBPOutput",
