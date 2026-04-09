@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
+import warnings
+from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 import numpy as np
 import yaml
@@ -23,6 +27,13 @@ OUTPUT_COLUMNS = [
 ]
 
 
+@dataclass(frozen=True)
+class _FallbackRegionRecord:
+    chrom: str
+    center: int
+    source: str
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Build a deterministic matched AlphaGenome tutorial panel."
@@ -34,12 +45,22 @@ def parse_args() -> argparse.Namespace:
 
 
 def _import_real_data_helpers() -> tuple[Any, Any, Any, Any]:
-    from transchrombp.data.real_data import (
-        filter_records_by_chroms,
-        load_bigwig_chrom_sizes,
-        load_fold_chroms,
-        load_regions_from_bed,
-    )
+    try:
+        from transchrombp.data.real_data import (
+            filter_records_by_chroms,
+            load_bigwig_chrom_sizes,
+            load_fold_chroms,
+            load_regions_from_bed,
+        )
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"transchrombp.data", "transchrombp.data.real_data"}:
+            raise
+        return (
+            _fallback_load_fold_chroms,
+            _fallback_load_regions_from_bed,
+            _fallback_load_bigwig_chrom_sizes,
+            _fallback_filter_records_by_chroms,
+        )
 
     return (
         load_fold_chroms,
@@ -47,6 +68,101 @@ def _import_real_data_helpers() -> tuple[Any, Any, Any, Any]:
         load_bigwig_chrom_sizes,
         filter_records_by_chroms,
     )
+
+
+def _fallback_load_fold_chroms(folds_json: str, split: str) -> list[str]:
+    with open(folds_json, "r", encoding="utf-8") as handle:
+        folds = json.load(handle)
+    chroms = folds.get(split, [])
+    if not isinstance(chroms, list) or not chroms:
+        raise ValueError(f"No chromosomes found for split={split!r} in {folds_json}")
+    return [str(chrom) for chrom in chroms]
+
+
+def _fallback_maybe_int(value: str) -> Optional[int]:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _fallback_load_regions_from_bed(
+    path: str,
+    allowed_chroms: Optional[Sequence[str]] = None,
+    source: str = "regions",
+) -> list[_FallbackRegionRecord]:
+    allowed = set(allowed_chroms or [])
+    records: list[_FallbackRegionRecord] = []
+    with open(path, "r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            fields = line.split("\t")
+            if len(fields) < 3:
+                raise ValueError(f"BED line in {path} has fewer than 3 columns: {line}")
+
+            chrom = fields[0]
+            if allowed and chrom not in allowed:
+                continue
+
+            start = int(fields[1])
+            end = int(fields[2])
+            summit = _fallback_maybe_int(fields[9]) if len(fields) > 9 else None
+            center = start + summit if summit is not None else (start + end) // 2
+            records.append(_FallbackRegionRecord(chrom=chrom, center=center, source=source))
+
+    if not records:
+        raise ValueError(f"No usable regions found in {path}")
+    return records
+
+
+def _fallback_load_bigwig_chrom_sizes(path: str) -> dict[str, int]:
+    try:
+        import pyBigWig
+    except ModuleNotFoundError as exc:
+        raise SystemExit(
+            "pyBigWig is required to build the matched panel; use the TransChromBP runtime environment."
+        ) from exc
+
+    bigwig = pyBigWig.open(path)
+    if bigwig is None:
+        raise ValueError(f"Failed to open bigWig file: {path}")
+    try:
+        chrom_sizes = bigwig.chroms() or {}
+        return {str(chrom): int(size) for chrom, size in chrom_sizes.items()}
+    finally:
+        bigwig.close()
+
+
+def _fallback_filter_records_by_chroms(
+    records: Sequence[_FallbackRegionRecord],
+    available_chroms: Sequence[str],
+    path: str,
+    source: str,
+) -> list[_FallbackRegionRecord]:
+    available = set(str(chrom) for chrom in available_chroms)
+    if not available:
+        raise ValueError(f"No chromosomes found in bigWig while filtering {source} records from {path}")
+
+    filtered: list[_FallbackRegionRecord] = []
+    dropped: Counter[str] = Counter()
+    for record in records:
+        if record.chrom in available:
+            filtered.append(record)
+        else:
+            dropped[record.chrom] += 1
+
+    if dropped:
+        dropped_desc = ", ".join(f"{chrom}x{count}" for chrom, count in sorted(dropped.items()))
+        warnings.warn(
+            f"Filtered {sum(dropped.values())} {source} records from {path} because the bigWig lacks "
+            f"matching chromosomes: {dropped_desc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    return filtered
 
 
 def _quantile_token(quantile: float) -> str:
