@@ -1,6 +1,20 @@
 from __future__ import annotations
 
-from scripts.alphagenome_pilot.build_matched_panel_v2 import choose_panel_rows
+from scripts.alphagenome_pilot.build_matched_panel_v2 import (
+    _import_real_data_helpers,
+    choose_panel_rows,
+)
+
+
+def test_import_real_data_helpers_resolves_vendor_layout():
+    helpers = _import_real_data_helpers()
+
+    assert [helper.__name__ for helper in helpers] == [
+        "load_fold_chroms",
+        "load_regions_from_bed",
+        "load_bigwig_chrom_sizes",
+        "filter_records_by_chroms",
+    ]
 
 
 def test_choose_panel_rows_returns_unique_quantile_anchors():
