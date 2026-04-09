@@ -30,13 +30,13 @@ output_dir=${7?param missing - output_dir}
 fold=${8?param missing - fold}
 make_gc_matched_negatives_script="${MAKE_GC_MATCHED_NEGATIVES_SCRIPT:-}"
 
-if [[ -z "${make_gc_matched_negatives_script}" && -n "${CHROMBPNET_OFFICIAL_ROOT:-}" ]]; then
-    make_gc_matched_negatives_script="${CHROMBPNET_OFFICIAL_ROOT}/chrombpnet/helpers/make_gc_matched_negatives/make_gc_matched_negatives.sh"
-fi
-
 if [[ -z "${make_gc_matched_negatives_script}" ]]; then
-    echo "missing helper script: set MAKE_GC_MATCHED_NEGATIVES_SCRIPT or CHROMBPNET_OFFICIAL_ROOT" >&2
-    exit 1
+    official_root="${CHROMBPNET_OFFICIAL_ROOT:-}"
+    if [[ -z "${official_root}" ]]; then
+        echo "missing CHROMBPNET_OFFICIAL_ROOT or MAKE_GC_MATCHED_NEGATIVES_SCRIPT" >&2
+        exit 1
+    fi
+    make_gc_matched_negatives_script="${official_root}/chrombpnet/helpers/make_gc_matched_negatives/make_gc_matched_negatives.sh"
 fi
 
 if [[ ! -x "${make_gc_matched_negatives_script}" ]]; then
