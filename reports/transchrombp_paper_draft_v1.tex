@@ -31,8 +31,7 @@
 for Base-Resolution \\
 Chromatin Accessibility Modeling}
 
-\author[1]{Zhengwei Zhou}
-\affil[1]{\todo{Affiliation}}
+\author{Zhengwei Zhou}
 \date{Draft v1 --- March 24, 2026}
 
 %% =====================================================================
@@ -76,10 +75,14 @@ while retaining a low clean-test gap of \(0.00268\). In the matched
 tutorial \texttt{L3} shared-region system compare, TransChromBP also improves
 over official ChromBPNet on both peak mean/median JSD
 (\(0.31319/0.31547\) vs.\ \(0.33853/0.33989\)) and peak count
-correlation (\(0.84016\) vs.\ \(0.69958\)). We further
-evaluate integration of a genomic foundation model (Genos-1.2B) and
-observe no positive gain, indicating a strong granularity mismatch
-between frozen sequence-level summaries and base-resolution prediction.
+correlation (\(0.84016\) vs.\ \(0.69958\)). We further treat genomic
+foundation-model integration as a controlled side quest rather than a
+mainline claim. Across frozen Genos summaries, online Caduceus-PS
+token fusion, and two NT-v2 residual-head gates (coarse-summary and
+center-aligned bins16 residual), we observe no clean gain relative to
+matched controls. These results support keeping foundation integration
+as an appendix/future-work negative boundary rather than a core
+paper-facing contribution.
 
 \end{abstract}
 
@@ -464,16 +467,21 @@ to training-distribution profile shapes. The early best epoch (15 vs.\
 29--40 for other variants) further supports this interpretation.
 
 %% -------------------------------------------------------------------
-\subsection{Genomic foundation model integration yields no positive gain}
+\subsection{Controlled foundation-model integration yields no clean gain}
 \label{sec:genos}
 %% -------------------------------------------------------------------
 
 Motivated by the success of pretrained genomic foundation models in
-sequence-level tasks, we investigated whether Genos-1.2B \cite{genos2025}
-embeddings could provide additional benefit to TransChromBP. We evaluated
-five integration strategies spanning two paradigms:
-\emph{online fusion} (Genos runs during training) and
-\emph{cached fusion} (precomputed Genos summaries).
+sequence-level tasks, we treated foundation-model integration as a
+controlled side quest rather than a new paper mainline. The question was
+not whether \emph{some} large pretrained model contains genomic signal,
+but whether it can add low-disturbance, reproducible complementary
+information to a strong base-resolution ATAC predictor. The current
+evidence naturally falls into three layers: Genos-1.2B
+\cite{genos2025} represents frozen summary injection, Caduceus-PS
+represents online token-level fusion, and NT-v2 residual-head gates
+represent a more conservative ``learn only the debiased residual''
+recipe. We start with the Genos results, then summarize the later gates.
 
 \begin{table}[H]
 \centering
@@ -539,6 +547,42 @@ to global mean-pooled summaries, whereas ATAC profile prediction requires
 base-resolution spatial information about local motif composition and
 positional structure --- information that is lost in the global pooling
 step.
+
+\subsubsection{Subsequent controlled gates: Caduceus and NT-v2}
+
+After Genos, we asked a narrower question: if frozen summary injection is
+too coarse, can a lower-disturbance token-aware route recover clean gain?
+The first follow-up was Caduceus-PS online token fusion. This route was
+engineering-stable and therefore useful as a feasibility check, but the
+matched tutorial A/B runs were only near-null / marginal positive and
+never reached a level that justified expansion.
+
+The second follow-up was NT-v2 cached residual short10. The first gate
+used a coarse-summary residual recipe: cached early-layer NT-v2 features,
+a zero-initialized residual head, and supervision restricted to the
+debiased residual to minimize disturbance to the main backbone. After
+fixing cache-alignment and validation-path plumbing, the full
+cache$\rightarrow$train$\rightarrow$held-out pipeline ran end-to-end, but the
+held-out result still triggered fail-or-unsafe
+(peak JSD \(= 0.3560\), peak count \(r = 0.7729\), versus safety
+thresholds \(0.3197\) and \(0.8400\)).
+
+We then allowed one explicitly authorized re-entry: a center-aligned
+bins16 token-aware residual head designed to test whether the failure was
+caused by the original recipe being too global and too low-bandwidth. The
+new route also failed to produce clean gain. On full held-out test, it
+reached only overall JSD/count \(= 0.4625 / 0.7727\) and peak
+JSD/count \(= 0.3588 / 0.7516\), still clearly behind the matched
+short10 no-foundation control at overall \(0.4395 / 0.8457\) and peak
+\(0.3193 / 0.8298\).
+
+Taken together, the Genos, Caduceus, and NT-v2 gates support only a
+narrow claim: the currently tested summary-injection, token-fusion,
+coarse residual, and center-aligned bins16 residual recipes did not
+yield clean gain. They do \emph{not} justify the broader statement that
+all token/base-level foundation routes are futile. Accordingly, we keep
+foundation-model integration in this paper as an appendix/future-work
+negative boundary rather than a main-table contribution.
 
 %% -------------------------------------------------------------------
 \subsection{Multi-dataset generalization}
@@ -623,11 +667,22 @@ with learnable fusion, regardless of whether the backbone is a
 Transformer.
 
 %% -------------------------------------------------------------------
-\subsection{Foundation models and task granularity}
+\subsection{Foundation models, complementarity, and task granularity}
 %% -------------------------------------------------------------------
 
-Our Genos-1.2B experiments provide a well-controlled negative result for
-the genomics community. The key insight is that foundation model
+The Genos, Caduceus-PS, and NT-v2 gates together suggest a more precise
+boundary than ``foundation models do not work.'' The issue is not the
+absence of signal; it is the absence of \emph{complementary} signal that
+can be converted into a reproducible net gain for base-resolution ATAC
+prediction under a low-disturbance integration recipe. Genos shows that
+global frozen summaries discard spatial structure. Caduceus-PS shows that
+token-level online fusion can be made safe enough to train, but the gain
+under the current recipe is near zero. NT-v2 residual-head gates show
+that even when injection is restricted to a zero-initialized debiased
+residual path, moving from coarse summaries to center-aligned bins16
+residuals still does not recover the matched baseline.
+
+This still leaves a useful task-level lesson: foundation-model
 effectiveness depends critically on the \emph{granularity match} between
 pretraining and downstream tasks:
 
@@ -641,10 +696,12 @@ pretraining and downstream tasks:
 \end{itemize}
 
 \noindent This does not imply that foundation models are useless for
-profile prediction --- but it does imply that the integration strategy
-must preserve spatial resolution, potentially through per-position
-features, cross-attention, or fine-tuning rather than frozen summary
-injection.
+profile prediction. It does imply that the current paper only supports a
+much narrower statement: the recipes we actually tested do not justify
+promoting foundation integration into the main story. More invasive
+routes such as richer per-position features, cross-attention with a new
+hypothesis, or fine-tuning remain future work rather than implied next
+steps.
 
 Furthermore, the strong task-specific baseline achieved by TransChromBP
 leaves little room for incremental improvement from external embeddings.
@@ -670,10 +727,12 @@ Several limitations of this work suggest directions for future research:
   longer-context teacher guides a compact student, could potentially
   amplify the Transformer's benefit while maintaining efficiency.
 
-  \item \textbf{Foundation model integration.} We only tested frozen
-  global summary injection. More sophisticated strategies (per-position
-  features, cross-attention, LoRA fine-tuning) might unlock the spatial
-  information in foundation model representations.
+  \item \textbf{Foundation model integration.} We tested several
+  low-disturbance routes --- frozen summary injection, online token
+  fusion, coarse residual injection, and a center-aligned bins16
+  residual gate --- but not more invasive token/base-level adaptation
+  schemes. Per-position feature learning, cross-attention under a new
+  hypothesis, or fine-tuning may yet unlock useful complementary signal.
 
   \item \textbf{Input window length.} TransChromBP uses the same 2114\,bp
   window as ChromBPNet. Extending to longer windows could increase the
@@ -873,12 +932,19 @@ We report four primary metrics computed on held-out test regions:
 %% =====================================================================
 \section*{Acknowledgments}
 %% =====================================================================
-\todo{Acknowledgments.}
+We thank the ChromBPNet authors and the public ENCODE data ecosystem that
+made these controlled comparisons possible.
 
 %% =====================================================================
 \section*{Data and code availability}
 %% =====================================================================
-\todo{Repository URL, data accessions.}
+Code, configurations, and analysis scripts for the current TransChromBP
+study are maintained at
+\url{https://github.com/rose8happy/TransChromBP}. The baseline
+ChromBPNet codebase is based on
+\url{https://github.com/kundajelab/chrombpnet}. Tutorial and independent
+ATAC-seq inputs come from public ChromBPNet / ENCODE resources described
+in the Methods and repository documentation.
 
 %% =====================================================================
 %% References (placeholder)

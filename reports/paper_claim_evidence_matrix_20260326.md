@@ -12,7 +12,7 @@
 | C4 | 最终默认模型 `corrected B` 没有明显 bias reliance，可作为 paper-facing 主模型 | `shows` | corrected B clean test + B 两个 held-out seed | corrected B gap=`0.00268`；`B_s42/B_s1234` 为 `0.31467/0.85030` 与 `0.31453/0.84885` | 这里要把“最终模型”和“机制诊断 scaffold”分开写 |
 | C5 | `center pool` 是当前最稳的默认 readout 方案 | `shows` | `B_s42`、`B_s1234`、`F_s42`、`F_s1234` | `B` 两 seed 均稳定；`F_s1234` profile 退化到 `0.42691` | 不要再写成 `B/F` 并列主候选 |
 | C6 | 模型在独立 GM12878 和独立 K562 数据上仍能稳定工作 | `shows` | 6002 独立真实数据 held-out | GM12878=`0.42265 / 0.80396`；K562=`0.61235 / 0.85857` | 必须明确这两条是“独立真实数据验证”，不是 tutorial 主 benchmark |
-| C7 | Genos-1.2B 融合当前未带来正向收益，可能与任务粒度不匹配有关 | `suggests` | Genos 融合主表 + probe 分析 | `G1/G2/P2` 没有同时提升两项主指标；probe 显示 summary 信息与主干高度重叠 | 负结果因果不能写太满，保留为“可能原因” |
+| C7 | 当前 foundation-model 接入线未显示 clean gain，应作为 appendix / future work 的受控负结果 | `suggests` | Genos 融合主表 + Caduceus matched A/B + NT v2 两轮 residual held-out gate | Genos `G1/G2/P2` 均未同时提升两项主指标；Caduceus 为 `near-null / marginal positive`；NT v2 coarse residual held-out 为 `0.3560 / 0.7729`，后续 bins16 center-aligned residual 仍只有 `0.3588 / 0.7516`，且相对 matched `short10 no-foundation control` (`0.3193 / 0.8298`) 继续落后 | 当前已否定 summary 注入、token-fusion、coarse residual 与 bins16 center-aligned residual 这些已实测 recipe；不外推到未实测路线 |
 | C8 | 在 matched 的 `L3` shared-region system compare 上，TransChromBP 仍稳定优于 official ChromBPNet | `shows` | `tutorial_L3_shared_region_closure_20260330.md` + source table | official=`0.33853/0.33989/0.69958`；Trans=`0.31319/0.31547/0.84016`；分类=`0.82295/0.83148/0.75248` vs `0.87861/0.87530/0.80991` | 只能写成 `shared-region system comparison`，不能升格成 architecture-only 归因 |
 
 ## 2. 只能弱化、不能强写的结论
@@ -39,18 +39,18 @@
 | 章节 | 应保留的主结论 | 应删除/改写的内容 |
 |---|---|---|
 | 摘要 | bias-safe Transformer、full/debiased 诊断、`deb2` 更关键、corrected B 稳定 | 强 shortcut、Transformer 特有、纯卷积不会出现 |
-| 引言/贡献点 | 模型、诊断框架、受控复核、final readout、Genos 负结果 | “首次发现强失效模式”式表述 |
+| 引言/贡献点 | 模型、诊断框架、受控复核、final readout、foundation side quest 负结果 | “首次发现强失效模式”式表述 |
 | Shortcut 节 | 改名为 “Bias reliance 诊断与受控复核” | 旧的强机制解释、scale 轨迹主叙事、旧版 `2x2` 析因主结论 |
 | 讨论 | 诊断框架的意义、当前证据边界、architecture sensitivity 未定 | “普适架构风险已被证明” |
-| 结论 | 安全接入 Transformer + 可复用诊断 + 最终模型稳健 | 强 shortcut 发现和单一修复论 |
+| 结论 | 安全接入 Transformer + 可复用诊断 + 最终模型稳健；foundation 仅保留为受控 side quest | 强 shortcut 发现和单一修复论 |
 
 ## 5. 当前最值得推进的收口动作
 
-1. 把 `L3` shared-region 写进主文双轨主表
-   历史 tutorial baseline 继续保留，但当前最强的外部比较证据已经变成 `L3` shared-region 的 matched system compare。
+1. 维持双语主稿对 `C7/C8` 的同步口径
+   `L3 shared-region` 继续作为外部 system compare 主证据；foundation 线继续只写成 appendix / future work 的受控负结果，不回退到“Genos 单线负结果”。
 
-2. 把 `AUROC/AUPRC/F1` 放入 supplementary / 附表
-   这组指标已经闭环，不应再停留在“技术链路准备中”，但也不建议挤进主表。
+2. 维持 `AUROC/AUPRC/F1` 的 supplementary 定位
+   这组分类指标已经闭环并进入稿件，但仍不建议挤进主表，以免稀释 profile/count 主证据。
 
-3. no-bias 单 seed 补证已完成并应维持 supplementary 定位
-   `epoch 26` 的 held-out test 没有显示清晰收益差异，因此它更适合写成 component-necessity 的边界说明，而不是新的主证据来源。
+3. 用户提供型元数据独立处理，不反向影响主结论
+   作者单位、致谢、最终对外 release 说明属于投稿前元数据，不应阻塞 claim-evidence 与主文论证的收口。

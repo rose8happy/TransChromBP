@@ -1,5 +1,7 @@
 # Profile Shortcut 假设复核计划（2026-03-25）
 
+> 状态说明（2026-04-06）：本文件保留为 2026-03-25 当时的机制复核计划与执行记录，不再代表当前权威论文口径。后续 clean-matrix 双 seed 结果已由 `reports/profile_shortcut_revalidation_summary_20260326.md` 与 `reports/paper_claim_evidence_matrix_20260326.md` 收口；当前稳定结论是“Transformer 特有 shortcut / 特有 gap 机制”不成立，风险更接近 supervision-driven 的 bias reliance。下文出现的 “Transformer 更容易触发/放大” 等措辞，应按当时待检验假设理解，不能再直接当成当前结论引用。
+
 ## 1. 为什么现在必须重做
 
 当前 `reports/transchrombp_paper_cn_v1.tex` 里对 “Profile Shortcut” 的叙述过强，至少有两层证据缺口：
@@ -251,9 +253,9 @@
   - 若跑满 `30 epoch`，约在 `2026-03-26 16:00-18:00 CST` 结束
   - 若中途 early-stop，会更早收口
 
-## 7. 论文改写建议（在新结果出来前）
+## 7. 当时的临时论文改写建议（现已被后续结论覆盖）
 
-在新证据出来前，paper 里所有类似表述都应临时降级为：
+以下内容是 2026-03-25 在新证据出来前的临时降级建议，仅保留作历史参考：
 
 - 不要写“纯卷积架构中不会出现”
 - 改写成“现有证据表明，Transformer scaffold 下更容易暴露出显著的 full/debiased gap；这一现象是否为 Transformer 特有，仍需 matched conv-only 对照进一步确认”

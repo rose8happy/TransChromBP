@@ -60,19 +60,16 @@ TransChromBP 项目已进入论文收口阶段。核心证据基本齐备（clea
 
 ### 2A: 内容填充（Days 6-10）
 
-论文现有 9 个 `\todo{}` 标记，按优先级：
+原先显式 `\todo{}` 标记里的实验与数字项已基本收口，当前主要剩下的是双语主稿同步、
+foundation side quest 口径固定，以及投稿前元数据整理：
 
 | 优先级 | TODO 位置 | 内容 | 信息来源 |
 |--------|-----------|------|---------|
-| **P0** | Table 1 | L3 shared-region 数字 | Phase 1 产出 |
-| **P0** | Line 641 | 架构图 fig:arch | Phase 0.4 开始的草图 |
-| **P1** | Line 656 | 架构参数 (d_model, dilated layers) | `configs/model/transchrombp_teacher_v2.yaml` |
-| **P1** | Line 666 | Transformer 规格 (N, H, d_ff, dropout) | 同上 |
-| **P1** | Line 743 | 训练超参 (LR, wd, warmup, epochs, batch) | `configs/train/` 系列 yaml |
-| **P1** | Line 509 | 6002 单卡 runs 说明 | 重写或移至 supplementary |
-| **P2** | Line 33 | 作者单位 | 需用户提供 |
-| **P2** | Line 797 | 致谢 | 需用户提供 |
-| **P2** | Line 802 | 仓库 URL + 数据编号 | 需用户确认 |
+| **P0** | 双语主稿摘要 / Discussion / foundation 节 | 固定 `L3 shared-region + foundation side quest` 的最终口径 | Phase 1 产出 + `paper_claim_evidence_matrix_20260326.md` + `2026-04-05/06` foundation gate 文档 |
+| **P0** | Supplementary 分类附表 | 保持 `AUROC/AUPRC/F1` 在 supplementary 定位，不回退成“链路准备中” | Phase 1.4 产出 |
+| **P1** | 参考文献与写作打磨 | 扩充引用并收紧 system-compare / limitation 的措辞 | 现有 draft + claim matrix |
+| **P1** | 6002 单卡 runs 说明 | 保留为独立真实数据验证，不挤进 tutorial 主 benchmark | `reports/v2fix_and_6000_realdata_followup_20260325.md` |
+| **P2** | 投稿前元数据 | 作者单位、最终致谢、对外 release 说明 | 需用户 / 合作者最终确认 |
 
 其他内容任务：
 - 更新 clean matrix 表格（确保 conv-only 双 seed 数字已反映）
@@ -93,7 +90,7 @@ TransChromBP 项目已进入论文收口阶段。核心证据基本齐备（clea
 - 上传 ChatGPT 咨询包获取外部审核意见（用户操作）
 
 ### 决策门 DG-2（Day 19）
-- 所有 TODO 是否解决？数字是否一致？
+- 双语主稿是否完成同步？数字是否一致？
 - 外部审核是否揭示关键缺口？若是 → 考虑 Phase 3
 
 ---
@@ -199,7 +196,7 @@ GM12878/K562 在 6002 上的 smoke test，与 6000 上的 Phase 3A 并行。
 
 | 文件 | 用途 |
 |------|------|
-| `reports/transchrombp_paper_draft_v1.tex` | 英文论文主稿（839 行，9 TODO） |
+| `reports/transchrombp_paper_draft_v1.tex` | 英文论文主稿（显式 TODO 已清零；当前重点是 foundation 口径与投稿前打磨） |
 | `reports/transchrombp_paper_cn_v1.tex` | 中文论文主稿（833 行） |
 | `reports/paper_claim_evidence_matrix_20260326.md` | 论证强度权威指南 |
 | `reports/paper_rewrite_strategy_20260326.md` | 论文叙事策略 |
@@ -218,5 +215,5 @@ GM12878/K562 在 6002 上的 smoke test，与 6000 上的 Phase 3A 并行。
 
 - **Phase 0 完成**：TransChromBP L3 `best_epoch.json` 存在 + test JSON 存在 + Official L3 epoch 进度正常
 - **Phase 1 完成**：L3 对比表完整（双方 test 指标）+ TRACKING.md 已更新 + 新报告已写入 `reports/`
-- **Phase 2 完成**：论文 0 个 TODO + 数字全部有源文件 + claim-evidence 逐条核对通过 + LaTeX 编译无错误
+- **Phase 2 完成**：论文显式 TODO 已清零 + 数字全部有源文件 + claim-evidence 逐条核对通过 + LaTeX 编译无错误
 - **Phase 4 完成**：仓库无敏感文件 + README 可复现 + 最终 PDF 生成

@@ -2,7 +2,47 @@
 
 > 从 `TRACKING.md` 第一节"在做事情清单"中迁出的 `已完成` / `已合并` 条目。
 > 首次归档时间：2026-03-18
-> 最近一次追加归档：2026-04-03
+> 最近一次追加归档：2026-04-08
+
+---
+
+## 2026-04-08 第九轮归档（TRACKING 第一节结构收口）
+
+| 事项 | 关键结论 | 关键路径 |
+|---|---|---|
+| `NT v2 bins16 center-aligned residual gate`（6000 / A6000×2） | 显式授权的新 hypothesis 重入已完整执行并判负；相对 `short10_nofoundation_control` 没有 clean gain，当前 `summary / token-fusion / coarse residual / bins16 residual` family 默认停表 | `docs/plan/nt_v2_bins16_center_aligned_gate_20260405.md`、`reports/foundation_model_restart_v3_implementation_20260405.md` |
+| `NT v2 gate smoke after idle`（6000 / A6000×2） | `record_sha1 mismatch` 根因已修复并经真实 smoke 复验；结论固定为“链路已修，但当前 `bins4 / coarse residual` family 判负” | `reports/project_plan_code_review_20260405.md`、`docs/plan/a6000_foundation_reentry_candidates_20260405.md` |
+| 当前项目审查（计划 + 代码，2026-04-05） | launcher / cache contract 闭环缺口已定位、修复并完成 stop/go 收口；后续不再作为独立 live 条目维护 | `reports/project_plan_code_review_20260405.md`、`tests/test_foundation_cache_alignment.py` |
+| A6000 利用率 + foundation-model 停表规则 | A6000 空闲与 foundation stop-rule 的证据链已稳定，当前 NT v2 residual short10 family 默认停表 | `docs/plan/post_chatgpt_pro_priority_execution_20260405.md`、`reports/foundation_model_restart_v3_implementation_20260405.md` |
+| `short10 matched no-foundation control`（6000 / A6000×2） | full held-out 已完成并固定为健康 baseline；后续作为 gate 校准底座，不再作为独立实验跟踪 | `docs/plan/a6000_foundation_reentry_candidates_20260405.md` |
+| ChatGPT Pro 外部分析回流与行动化 | 外发包与技术路线咨询入口已固定；后续不再把“外发包准备”本身当作 live 主任务 | `reports/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md`、`reports/chatgpt_bundle_project_handoff_20260405/10_ready_to_send_chatgpt_pro_prompt.md` |
+| Gemini deep think 外部技术路线回流 | 已完成“输入 unified shortlist”的职责，转为稳定参考报告 | `reports/gemini_deep_think_technical_route_review_20260407.md` |
+| ChatGPT Pro 技术路线回流（2026-04-07） | 已完成“输入 unified shortlist”的职责，转为稳定参考报告 | `reports/chatgpt_pro_technical_route_review_20260407.md` |
+| 外部技术路线双报告汇总 | 统一 shortlist 已形成并写死；当前执行入口已经转移到 `corrected B + multiscale decoder probe` | `reports/external_technical_route_consensus_and_shortlist_20260407.md` |
+| 6000/6002 前置资源盘点（2026-04-07） | 资源盘点结论已稳定；剩余运行约束现并入当前双机 active 实验条目维护 | `reports/remote_prereq_audit_6000_6002_20260407.md` |
+| 当前工作接续说明（2026-04-07） | 双机执行入口已统一收口到 handoff 报告本身，不再作为 `TRACKING.md` 第一节的单独事项重复维护 | `reports/session_handoff_multiscale_and_next_tasks_20260407.md` |
+| foundation model gate 总结（tutorial canonical） | foundation 线的高层结论已固定为 appendix / side quest 负结果；若再重开，必须是显式授权的新 hypothesis | `reports/nt_v2_probe_20260404.md`、`docs/plan/a6000_foundation_reentry_candidates_20260405.md` |
+| ChromBPNet 官方锚点 + shared-region L3 收口 | 证据本身已稳定；剩余写回工作并入论文主稿与附表条目 | `reports/tutorial_L3_shared_region_closure_20260330.md` |
+| ATAC 分类指标扩展（AUROC/AUPRC/F1） | supplementary 指标定位已稳定；剩余写回工作并入论文主稿与附表条目 | `docs/plan/chrombpnet_official_externalization_implementation_plan_20260406.md`、`reports/chrombpnet_official_patch_ledger_20260406.md` |
+| clean matrix / profile shortcut 叙事收口 | clean matrix 与 shortcut 叙事的稳定结论已写实；剩余写回工作并入论文主稿与 supporting writeup | `reports/profile_shortcut_revalidation_summary_20260326.md`、`reports/paper_claim_evidence_matrix_20260326.md` |
+| `chrombpnet-remote` 自定义 skill | 已在真实 6002 任务中完成 launch / monitor / 文档回写前向试用，不再需要单独 live 跟踪 | `~/.codex/skills/chrombpnet-remote/SKILL.md`、`AGENTS.md` |
+
+---
+
+## 2026-04-05 第八轮归档（foundation 停表 + 工作目录归档层落地）
+
+| 事项 | 关键结论 | 关键路径 |
+|---|---|---|
+| foundation-model restart v3：NT v2 cached residual short10（6000） | 正式 rerun 与 sidecar held-out 已全部完成；最终 held-out 为 overall `count_r=0.6800`、`jsd=0.4612`，peak `count_r=0.7729`、`jsd=0.3560`，直接触发 `fail-or-unsafe`。结论固定为“训练链路已跑通，但当前 `FoundationResidualHead + NT v2 cached short10` 方案在 tutorial canonical 上判负，不再进入 matched control / `cross_attention` / 多 seed 扩线” | `reports/foundation_model_restart_v3_implementation_20260405.md`、`docs/plan/post_chatgpt_pro_priority_execution_20260405.md` |
+| 本机 WSL + 6000/6002 工作目录整理（两轮执行） | 已完成本地临时噪音清理、6000 `TRACKING.md` 单入口收口，以及远端结果归档层落地。6000 foundation side quest 结果已迁入 `outputs/archive/foundation_sidequest/` 并保留兼容软链接；6002 历史 checkpoint 已迁入 `outputs/archive/historical_6002/checkpoints/`，只为两条文档显式引用路径保留软链接 | `docs/plan/workspace_cleanup_plan_20260405.md`、`TRACKING.md` |
+
+---
+
+## 2026-04-05 第七轮归档（ChatGPT Pro 外发总档案闭环）
+
+| 事项 | 关键结论 | 关键路径 |
+|---|---|---|
+| ChatGPT Pro 全局接盘外发总档案 | 面向“全局接盘”的外发主包已固定为 `8` 个文件，覆盖项目状态、关键证据、开放问题与两份源码快照；随后已成功获得一轮高质量外部回流意见，后续不再把“生成外发包”本身当作 live 主任务，而改由“外部意见回流与行动化”承接 | `reports/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md`、`reports/chatgpt_pro_external_review_20260405.md` |
 
 ---
 

@@ -8,31 +8,45 @@
 - Remove stale guidance when it becomes misleading instead of endlessly appending new caveats below it.
 
 ## Project Structure & Module Organization
-- This repo is the TransChromBP main repository and project archive; official ChromBPNet source lookup and reproduction live in the 6000 external repo at `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`.
-- Local official ChromBPNet payload is retired; official ChromBPNet source lookup and reproduction live only in the 6000 external repo at `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`; do not treat any local `chrombpnet/` tree as the canonical package root.
+- This repo is the TransChromBP main repository and project archive; official ChromBPNet source lookup and reproduction currently use the 6000 external repo at `/data1/zhoujiazhen/bylw_atac/chromBPNet`.
+- Local official ChromBPNet payload is retired; official ChromBPNet source lookup and reproduction live only in the 6000 external repo at `/data1/zhoujiazhen/bylw_atac/chromBPNet`. Do not assume a `/data1/zhoujiazhen/bylw_atac/chrombpnet_official` alias exists unless `TRACKING.md` explicitly says it has been validated.
 - `scripts/` holds utility scripts: `sync_project.sh`, `benchmark/`, data prep launchers, `setup_report_env.sh`.
 - `workflows/` holds end-to-end bash workflows plus `tutorial/` step scripts.
 - `tests/` contains shell-based integration checks.
 - `docs/` organizes durable documentation by topic: `plan/`（实验计划）, `research/`（研究笔记）, `env/`（环境配置）, `learning/`（学习资料）. 按需新增子目录，不预建空目录。
 - `reports/` stores reusable analysis sources (`.tex`/`.md`) with `assets/` for result summaries (csv/png/json); LaTeX build products and PDF outputs stay local-only unless explicitly needed for delivery.
 - `vendor/transchrombp/` is the versioned local snapshot of the TransChromBP codebase and helper scripts. Local TransChromBP imports should come from this snapshot or from the relevant 6000/6002 runtime workspace, not from the root repo as an official ChromBPNet package.
+- 6000 的实际 TransChromBP 运行仓使用 `src/transchrombp/` 布局，不是本地归档仓的 `vendor/transchrombp/` 布局；核对远端代码、运行脚本或环境时不要机械套本地路径。
 - `tmp_remote_edit/` is only the staging area for remote file edits and transient copies — not the final archive.
 - `images/` and `README.md` provide documentation assets and usage notes.
 
 ## Build, Test, and Development Commands
 - `pip install -r requirements.txt` installs shared Python deps for the repo.
 - If you need local TransChromBP imports, set `PYTHONPATH=vendor/transchrombp:$PYTHONPATH` in the active workspace, or use the relevant remote runtime workspace on 6000/6002.
-- Official ChromBPNet CLI, code lookup, and reproduction should be done in `/data1/zhoujiazhen/bylw_atac/chrombpnet_official` on 6000.
+- Official ChromBPNet CLI, code lookup, and reproduction should be done in `/data1/zhoujiazhen/bylw_atac/chromBPNet` on 6000, or through an explicitly exported `CHROMBPNET_OFFICIAL_ROOT` that points to the current validated official root.
 - `bash workflows/tutorial/step1_download_bams_and_peaks.sh /path/to/data` downloads tutorial inputs.
 - `bash tests/full_workflow.sh 0` executes the full tutorial workflow on GPU 0 (long, GPU-heavy).
 
 ## 环境激活（6000）
-- 在 6000 机器上跑脚本前先加载 chrombpnet 环境，避免找不到 `modisco`、`bedGraphToBigWig` 等工具。
+- 6000 上至少区分两套环境，不要混用：
+  - 官方 ChromBPNet CLI、`modisco`、`bedGraphToBigWig`、官方 data prep / reproduction：用 `chrombpnet` 环境。
+  - TransChromBP / foundation 训练、评估、代码自检：优先用 `.venvs/genos-1.2b`，并指向远端运行仓的 `src/` 布局。
+- `chrombpnet` 环境适合官方工具链，但当前**不包含** foundation 训练所需的 `torch`；凡是要跑 `TransChromBP` foundation 代码、最小复现实验或 runtime 自检，默认不要用这套环境。
+
+### 6000: 官方 ChromBPNet / 工具链
 ```
 export CHROMBPNET_ENV=/data1/zhoujiazhen/bylw_atac/.mamba/envs/chrombpnet
 export PATH="$CHROMBPNET_ENV/bin:$PATH"
 export LD_LIBRARY_PATH="$CHROMBPNET_ENV/lib:$LD_LIBRARY_PATH"
 export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/TransChromBP/vendor/transchrombp:$PYTHONPATH
+```
+
+### 6000: TransChromBP / foundation runtime
+```
+export TRANSCHROMBP_ENV=/data1/zhoujiazhen/bylw_atac/.venvs/genos-1.2b
+export PATH="$TRANSCHROMBP_ENV/bin:$PATH"
+export LD_LIBRARY_PATH="$TRANSCHROMBP_ENV/lib:$LD_LIBRARY_PATH"
+export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/TransChromBP/src:$PYTHONPATH
 ```
 
 ## Coding Style & Naming Conventions
@@ -56,7 +70,9 @@ export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/TransChromBP/vendor/transchrombp:
   `nohup bash workflows/tutorial/step6_train_chrombpnet_model.sh ... > logs/train.log 2>&1 &`
 - 即使已有程序在跑，只要目标 GPU 还有明显余量、没有跑满，就可以继续启动新任务；启动前先用 `nvidia-smi` 确认可用余量，并根据情况显式指定 `CUDA_VISIBLE_DEVICES`、适当下调 `batch_size`，避免把现有任务直接挤爆。
 - 在 6000 上启动长跑训练时，如果代码路径已支持 DDP 且两张 A6000 都空闲或仍有明显余量，默认优先双卡；不要无说明地把本应双卡的长跑训练落成单卡。
+- 启动长任务前，必须把任务预计耗时纳入是否“现在就启动”的判断：结合当前时间、GPU 余量、串并行队列、以及后续需要人工跟进的时间窗，明确评估现在开跑是否合适；不要只因为 GPU 空闲就直接启动。
 - 若一个串行任务包含“单卡预处理/缓存构建 + 双卡训练”两个阶段，必须在 launcher、日志和 `TRACKING.md` 明确写出“当前单卡是预处理，后续训练会切到双卡”，避免误判为训练没有用双卡。
+- 启动后台任务后，向用户汇报时必须包含预计结束时间；若只能估区间，也要明确给出预计完成时间窗，不能只报日志路径和监控命令。
 - Tell the user how to check progress: `tail -f logs/train.log`, `grep -i "Finished" logs/train.log`.
 - Pause for user confirmation that the run finished before proceeding.
 - 开始处理新任务前先查看并按最新进度更新 `TRACKING.md`（尤其”在做事情清单”和”下载资源清单”）。
