@@ -44,7 +44,7 @@
 | 分支 / worktree | 基线 | 当前状态 | 主要职责 |
 |---|---|---|---|
 | `master` | 本轮 docs closeout 后的最新状态 | clean | 主档案仓，承载 canonical docs / tracking / paper / reports |
-| `dual-track-20260409` | `4ffc6e7` | clean | 最新实验 pivot：`teacher-distill + U-Net-lite` |
+| `dual-track-20260409` | `4ffc6e7` | clean | 近期 dual-track pivot 快照：`teacher-distill + U-Net-lite` |
 | `multiscale-decoder-probe-20260407` | `4c62096` | clean | `msdec/skipprobe` 旧 readout probe 的干净切片 |
 | `autonomy/20260406-chrombpnet-externalization` | `4aadffa` | clean | `official chrombpnet` 外置化收尾与工具链 bridge |
 | `autonomy/20260406-structure` | `764b8c0` | clean | `foundation cache contract` 抽象层重构 |
@@ -60,9 +60,9 @@
   - `reports/*.tex`
   - `docs/superpowers/` 下的设计 / 执行文档
 
-### 2.2 `dual-track-20260409` 持有的新增代码
+### 2.2 `dual-track-20260409` 的历史 pivot 代码入口
 
-这条 worktree 已在本轮整理后落成 clean 提交 `4ffc6e7 (wip: snapshot dual track pivot)`，是当前活跃实验路线的真正代码入口，核心内容包括：
+这条 worktree 已在本轮整理后落成 clean 提交 `4ffc6e7 (wip: snapshot dual track pivot)`，是近期 dual-track pivot 的历史代码入口，核心内容包括：
 
 - `NT v2 teacher-distill`
   - `teacher_cache_export.py`
