@@ -16,6 +16,7 @@
 
 - `docs/plan/2026-04-09_dual_machine_experiment_charter.md`：规则源
 - `TRACKING.md`：live 状态与下一步
+- `docs/experiments/registry.md` / `docs/experiments/runs.csv`：family/workstream 与 run 的 canonical 索引
 - `reports/repository_status_handoff_20260409.md`：仓库 / worktree / 双机现场快照
 
 除非本文件被新的 charter 明确替换，否则任何旧文档都不能单独把默认动作改成“先写论文”。
@@ -36,21 +37,23 @@
 
 - 默认承担 full-budget、正式 gate、长任务，或明显受益于更高吞吐的实验
 - foundation 与 non-foundation 都可以在这里跑，是否 foundation 不是硬门
-- 当前默认动作仍是不等 `6002`，而是维护自己的独立高价值队列
-- `AlphaGenome matched raw-track slice v1` 已在 `2026-04-10 00:22:55 CST` 完成 technical/alignment gate closeout 并通过
-- 若继续 AlphaGenome 这条线，唯一允许下一步是扩到约 `12-20 loci` 的稍大 matched panel；它仍是窄 external coordinate，不是大 benchmark
+- 当前没有 active training run；`teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1` 已在 `2026-04-10 10:10:10 CST` 左右完成 formal gate closeout，并判定 `fail`
+- `alphagenome_matched_raw_track_slice_v1_20260410` 已在 `2026-04-10 00:22:55 CST` 完成 technical/alignment gate closeout 并通过
+- `alphagenome_matched_raw_track_slice_v2_20260410` 已在 `2026-04-10 03:34:42 CST` 完成 technical / external-coordinate sidecar closeout 并通过
+- AlphaGenome v1/v2 都已经收口；它们现在只算窄 external coordinate，不再占 active slot，也不自动升级成 benchmark
 
 ### 3.2 `6002 / RTX 3080`
 
 - 默认承担 short10 cheap-screen、确认性 rerun、轻量结构探索、工具/数据小验证
 - foundation 与 non-foundation 都可以在这里跑，是否 foundation 不是硬门
+- 当前没有 active training run；`teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4` 已在 `2026-04-10 03:34:42 CST` 左右收口，`r1/r2` 仍是无效启动，`r3/r4` 是有效 run，但最终 verdict 仍是 `no-go / stop`
 - 结果只能作为建议，不能自动变成 `6000` 发车命令
 
 ## 4. 当前允许与禁止的 family
 
 ### 4.1 白名单
 
-当前只有以下三类实验允许自然推进：
+当前没有 active family。若未来要重新推进任何新 run，必须先通过第 9 节新增准入。历史上曾允许自然推进、但现在都已收口的 family 仅作为参考保留：
 
 1. 只有 genuinely new teacher / init hypothesis 的 foundation-assisted family 才允许重新进入；当前 tutorial `teacher-distill` 近邻变体不在自然推进范围内
 2. `multiscale / dense decoder / U-Net-lite readout family`
@@ -68,43 +71,48 @@
 
 ### 5.1 `6000 / A6000 x2`
 
-截至 `2026-04-10 00:22:55 CST`，`teacher-distill tutorial` 线已停表，而 `6000` 上的 `AlphaGenome matched raw-track slice v1` 已完成 closeout 并通过 technical/alignment gate。当前事实如下：
+截至 `2026-04-10 10:10:10 CST`，`6000` 没有 active training run。当前事实如下：
 
-- `teacher-distill` 历史 formal gate verdict 仍为 `fail`
+- `teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1`
+  - start time：`2026-04-10 02:48:42 CST`
+  - end time：`2026-04-10 10:10:10 CST` 左右
+  - hard verdict：`fail`
+  - best epoch：`22`
+  - best peak `profile_target_jsd_full_mean=0.3337811803218466`
+  - best peak `count_pearson_full=0.7948227405497477`
+  - formal gate 只和 corrected B comparator 比，不和 `6002` 或旧 `msdec/skipprobe` 链比较
 - `alphagenome_matched_raw_track_slice_v1_20260410`
-- start time：`2026-04-10 00:22:40 CST`
-- end time：`2026-04-10 00:22:55 CST`
-- hard verdict：`pass`
-- 4 个固定 loci 全部成功，且每个位点都保留 `1` 条可比较的 `ATAC` track
-- 已成功产出 `summary.csv`、`region_metadata.jsonl`、`profiles/*.npz`、`run_meta.json`、`merged_locus_totals.csv`
-- 详细证据与边界结论见 `reports/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md`
+  - hard verdict：`pass`
+  - 4 个固定 loci 全部成功，且每个位点都保留 `1` 条可比较的 `ATAC` track
+  - 已成功产出 `summary.csv`、`region_metadata.jsonl`、`profiles/*.npz`、`run_meta.json`、`merged_locus_totals.csv`
+- `alphagenome_matched_raw_track_slice_v2_20260410`
+  - hard verdict：`pass`
+  - `16` 个 loci 全部成功落盘，且每个位点都保留 `1` 条可用 `ATAC` track
+  - 这是已完成的 external-coordinate sidecar，不占 active slot
 
 规则如下：
 
-- `teacher-distill tutorial` 线已停表，不再为这条线分配后续 `6000` run
-- `6000` 继续独立维护自己的高价值 backlog，不等待 `6002`
+- `6000` 现在没有 active run，不再等待 `6002`
 - 明确禁止为了同步去复制 `6002` 的确认性 rerun 或镜像 `6002` 的 cheap-screen
-- 后续若补充 `6000` 候选，必须是独立高价值任务，而不是旧 tutorial 线的续跑
-- `AlphaGenome matched raw-track slice v1` 已经完成，不再按“待启动 / active run”口径描述
-- 若继续 AlphaGenome 线，唯一允许下一步是 `12-20 loci` 的小幅扩面；禁止把这次 `pass` 改写成模型质量胜利或直接扩成大 benchmark
+- 后续若补充 `6000` 候选，必须是显式新 hypothesis，而不是当前已关闭 run 的续跑
+- `AlphaGenome matched raw-track slice v1` / `v2` 都已经完成，不再按“待启动 / active run”口径描述
+- AlphaGenome 的两个 closeout 都只算 external coordinate，不自动改写 A6000 formal gate 语义
 
 ### 5.2 `6002 / RTX 3080`
 
-截至 `2026-04-09 23:16:50 CST`，当前已确认的事实是：
+截至 `2026-04-10 03:34:42 CST`，`6002` 没有 active training run。当前已确认的事实是：
 
-- `U-Net-lite` 已在 `6002` 实际跑过 `r1/r2/r3`
-- 经严谨性复核后，`r1/r2` 被确认为启动失败，当前唯一有效历史 run 是 `r3`
-- 用户已批准补一条同配方确认性 cheap rerun：`teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4`
-- `6002` 当前仍在跑 `r4`
-- 整条 `r4` 收口 ETA 窗口约为 `2026-04-10 00:50 CST` 到 `2026-04-10 01:30 CST`
+- `U-Net-lite` 已在 `6002` 实际跑过 `r1/r2/r3/r4`
+- 经严谨性复核后，`r1/r2` 被确认为启动失败，`r3/r4` 是有效 run
+- `r4` 已完成确认性复跑，但仍不足以把 `U-Net-lite v1` 推上 shortlist
+- 当前 family verdict 保持 `no-go / stop`
 
 规则如下：
 
-- `6002` 的队列只保留本次 `r4` 收口与最终判读，不在 `r4` 结束前追加新 `6002` run
-- `r1/r2/r3/r4` 的 rigor 背景保留，但不把 `r4` 结束前的任何外部 backlog 当成已发车项
-- `r4` 结束后再基于最终判读决定下一步；在此之前不追加新的 `6002` run
-- 若 `r4` 与 `r3` 仍落在同一区间，则 `U-Net-lite v1` 正式收成 `no-go` 并停表
-- 若 `r4` 明显改善，则唯一允许下一步是一次确认性 cheap rerun；确认性 rerun 通过后，才可把它保留为新的 `3080 shortlist` 候选
+- `6002` 现在没有 active run，不再追加同配方 `U-Net-lite v1` run
+- `r1/r2/r3/r4` 的 rigor 背景保留，但不把任何已关闭 run 当成当前 active backlog
+- 若未来要再动 `6002`，必须是显式新 hypothesis，而不是当前 `U-Net-lite v1` 的续跑
+- 当前没有任何理由把这条 family 写成正向 shortlist
 
 ### 5.3 双机协同门
 
@@ -121,20 +129,20 @@
 2. 不过 gate 后必须停到哪里
 3. 明确禁止“没过也再试一个小改动”
 
-当前两条 active family 的 stop-rule 已经在第 5 节固定，不允许再回到“先小修一版试试看”的松散模式。
+第 5 节里各条已收口 family 的 stop-rule 已经固定，不允许再回到“先小修一版试试看”的松散模式。
 
 `AlphaGenome matched raw-track slice` 的最小规则如下：
 
 - 这是一条 `6000` 独立 backlog 的窄 external coordinate / pilot，不是大 benchmark
 - 过 gate 的最小条件：在固定 matched loci 面板上成功产出可用的 AlphaGenome raw-track 输出；“可用”指所有选定位点都生成 summary / metadata / profile 结果，ontology / filter 后仍保留至少一条可比较的 ATAC track，且没有因为 API / track matching 失败让大部分位点失效
-- 过 gate 后唯一下一步：扩大到约 `12-20 loci` 的稍大 matched panel
-- 不过 gate 后：这条 pilot 停表，不扩成大 benchmark，`6000` 转去下一个 genuinely new high-value family
+- 当前 v1/v2 都已完成；后续若再推进，必须作为新的显式 hypothesis 重新准入，而不是自动续跑
+- 不过 gate 后：这条 pilot 停表，不扩成大 benchmark，也不再占 active slot
 
 `6002 U-Net-lite v1` 的最小规则如下：
 
-- 当前只保留 `r4` 收口与最终判读
-- 若 `r4` 与 `r3` 同区间，则 `U-Net-lite v1` 正式收成 `no-go` 并停表
-- 若 `r4` 明显改善，则唯一允许下一步是一次确认性 cheap rerun
+- 当前只保留已完成的 `r1/r2/r3/r4` closeout 结论
+- `U-Net-lite v1` 已正式收成 `no-go / stop`
+- 若未来要继续，只能是一个新的显式 hypothesis，而不是同配方补跑
 
 ## 7. 论文让路条件
 
@@ -144,9 +152,7 @@
 2. 当前白名单 family 已全部触发停表
 3. 双机都没有共享前置物之外的可发车项
 
-某台机器正在跑，不等于另一台机器的 backlog 自动清空。
-
-论文工作只能占各自机器的空档，不再通过“另一台机器在跑”来顶掉 backlog。
+现在两台机器都没有 active training run，因此论文工作、归档整理和新 hypothesis 准入可以并行推进；任何未来新 run 都必须单独经过本 charter 的准入门。
 
 ## 8. 文档同步门
 
@@ -174,6 +180,6 @@
 
 当前阶段的默认读法固定为：
 
-1. `6000` 已完成 `alphagenome_matched_raw_track_slice_v1_20260410` 并以 technical/alignment gate `pass` 收口；若继续 AlphaGenome 线，唯一允许下一步是 `12-20 loci` 的小幅扩面，而不是大 benchmark
-2. `6002` 继续把当前 `U-Net-lite r4` 跑完，并完成 rigor closeout；若 `r4` 明显改善，则只允许先走一次确认性 cheap rerun
-3. 双机并行推进，不互相卡住；一台机器的负结果不自动改写另一台机器的默认下一步
+1. `6000` 没有 active training run；`teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1` 已正式 `fail`，`alphagenome_matched_raw_track_slice_v1_20260410` / `v2_20260410` 都已完成 closeout
+2. `6002` 没有 active training run；`U-Net-lite v1` 已正式收成 `no-go / stop`
+3. 现在默认动作不是“等对方收口”，而是按各自已关闭的事实继续做文档收口、归档和新 hypothesis 准入

@@ -3,7 +3,7 @@
 ## Instruction Hierarchy
 - `AGENTS.md` is the canonical repository instruction file. Stable, cross-agent rules belong here.
 - `CLAUDE.md` and `GEMINI.md` are thin agent-specific wrappers. They should only add tool-specific reminders and point back to `AGENTS.md` for repository rules.
-- Keep live status in `TRACKING.md`, reusable full analysis in `reports/`, and medium/large execution plans in `docs/plan/`.
+- Keep live status in `TRACKING.md`, experiment registry in `docs/experiments/registry.md` and `docs/experiments/runs.csv`, reusable full analysis in `reports/`, and medium/large execution plans in `docs/plan/`.
 - When repository reality changes, update `AGENTS.md` first and then trim or refresh any wrapper files that depend on it.
 - Remove stale guidance when it becomes misleading instead of endlessly appending new caveats below it.
 
@@ -14,6 +14,7 @@
 - `workflows/` holds end-to-end bash workflows plus `tutorial/` step scripts.
 - `tests/` contains shell-based integration checks.
 - `docs/` organizes durable documentation by topic: `plan/`（实验计划）, `research/`（研究笔记）, `env/`（环境配置）, `learning/`（学习资料）. 按需新增子目录，不预建空目录。
+- `docs/experiments/registry.md` is the canonical family/workstream index; `docs/experiments/runs.csv` is the canonical run-level manifest.
 - `reports/` stores reusable analysis sources (`.tex`/`.md`) with `assets/` for result summaries (csv/png/json); LaTeX build products and PDF outputs stay local-only unless explicitly needed for delivery.
 - `vendor/transchrombp/` is the versioned local snapshot of the TransChromBP codebase and helper scripts. Local TransChromBP imports should come from this snapshot or from the relevant 6000/6002 runtime workspace, not from the root repo as an official ChromBPNet package.
 - 6000 的实际 TransChromBP 运行仓使用 `src/transchrombp/` 布局，不是本地归档仓的 `vendor/transchrombp/` 布局；核对远端代码、运行脚本或环境时不要机械套本地路径。
@@ -83,10 +84,15 @@ export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/TransChromBP/src:$PYTHONPATH
 - 维护时遵循三层分工：
   - `TRACKING.md`：live 状态与短结论，只保留 `进行中` / `待处理` / `待验证` 条目
   - `TRACKING_archive.md`：阶段性完成事项归档
+  - `docs/experiments/registry.md` / `docs/experiments/runs.csv`：family/workstream 与 run 的 canonical 索引
   - `reports/`：可复用的完整分析报告（`.tex`/`.md`），含 `assets/` 下的结果摘要
 - `已完成` / `已合并` 条目堆积时先做归档整理，再继续追加新状态。
 - 超出”状态 + 下一步 + 一句话结论”粒度的分析，应改写为 `reports/` 下的独立报告，`TRACKING.md` 只保留高层结论与报告链接。
 - 适合单独出报告的内容：多 run 对照、gate/停跑原因、跨实验线比较、路线结论链、后续实验建议。
+- 启动或收口任何 run 时，除了更新 `TRACKING.md` / `reports/`，还必须同步更新 `docs/experiments/runs.csv`；若 family/workstream 的状态、canonical branch 或 next action 变化，再同步更新 `docs/experiments/registry.md`。
+- `runs.csv` 的 `commit_sha` 默认记录本地 canonical archival commit；当 6000/6002 运行仓缺乏可靠 git 历史时，不要伪造“远端真实 commit”，而要在 `notes` 中注明这是归档快照 commit。
+- 关键实验里程碑使用 annotated tag：`run/<machine>/<run_id>`、`closeout/<family_id>/<yyyymmdd>`、`snapshot/<branch_slug>/<yyyymmdd>`。
+- 挂载中的 worktree 必须先在 `docs/experiments/registry.md` 里有对应 family/workstream 记录，确认 closeout tag、report 与 run manifest 已齐全后，才允许收起明显过时的 worktree。
 
 ## Agent Response Language
 - Reply in Chinese for all user-facing responses and explanations.
