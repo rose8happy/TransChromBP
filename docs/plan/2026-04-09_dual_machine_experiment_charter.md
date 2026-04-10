@@ -128,7 +128,7 @@
 2. 不过 gate 后必须停到哪里
 3. 明确禁止“没过也再试一个小改动”
 
-当前两条 active family 的 stop-rule 已经在第 5 节固定，不允许再回到“先小修一版试试看”的松散模式。
+第 5 节里各条已收口 family 的 stop-rule 已经固定，不允许再回到“先小修一版试试看”的松散模式。
 
 `AlphaGenome matched raw-track slice` 的最小规则如下：
 
