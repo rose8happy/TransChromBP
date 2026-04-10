@@ -1,12 +1,12 @@
-# U-Net-lite v1 实验严谨性复核（2026-04-09）
+# U-Net-lite v1 实验严谨性复核（2026-04-10）
 
 ## 一句话结论
 
-截至 `2026-04-09 22:40 CST`，`teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409` 这组尝试里，只有 `r3` 算真正有效的 cheap-screen run；`r1` 与 `r2` 都是基础设施 / 配置失败，不能当作负向重复。因此当前最严谨的结论不是“`U-Net-lite family` 已正式判负”，而是：
+截至 `2026-04-10 03:34:42 CST`，`teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409` 这组尝试已经完成 `r4` 确认性复跑。`r1` 与 `r2` 仍然是基础设施 / 配置失败，`r3` 与 `r4` 是两条有效 cheap-screen / confirmation run；其中 `r4` 没有把这条线推上 shortlist，反而把原先的 provisional 判断收得更硬。当前最严谨的结论是：
 
-- `U-Net-lite v1` 当前只有一个有效 short10 结果；
-- 这个有效结果相对现有 shortlist 明显不占优，因此**不具备晋级资格**；
-- 但若要把它写成更强的“正式停表 / family 判负”，还缺一次确认性复核。
+- `U-Net-lite v1` 已经有两条有效 short10 结果；
+- 这两条结果都明显不占优，因此**不具备晋级资格**；
+- 这条 family 现在可以收成 `no-go / stop`，但不应写成正向 shortlist。
 
 ## 1. 复核问题
 
@@ -53,6 +53,22 @@
 - 结论：
   - `r3` 是一条技术上有效、配置口径基本正确的 short10 cheap-screen。
 
+### 2.4 `r4` 是有效确认性复跑，但仍不构成晋级
+
+- 日志：`/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4.log`
+- 完成时间：`2026-04-10 03:34:42 CST`
+- 关键事实：
+  - `best_epoch=6`
+  - `stopped_early=true`
+  - `best peak profile_target_jsd_full_mean=0.44839715448596246`
+  - `best peak count_pearson_full=0.7989915325863597`
+  - `best overall profile_target_jsd_full_mean=0.4681349953322501`
+  - `best overall count_pearson_full=0.8049882518128701`
+  - final epoch `9` 的 peak 仍是 `0.45226327185176557 / 0.7932712502144175`
+- 结论：
+  - `r4` 比 `r3` 更严谨，但没有改变这条 family 的方向；
+  - 它确认了 `U-Net-lite v1` 不是“只差一次好 seed 就能晋级”的那类候选。
+
 ## 3. 与当前 shortlist 的对照
 
 ### 3.1 对 `skipprobe_v1_wide`
@@ -69,6 +85,13 @@
 
 相较之下，`U-Net-lite r3` 的 `0.45525 / 0.7711` 在 `JSD` 和 `count_r` 两侧都更差。
 
+`r4` 虽然相较 `r3` 有所改善，但仍然没有追上 `skipprobe_v1_wide`：
+
+- `r4` best peak `0.448397 / 0.798992`
+- `skipprobe_v1_wide` best peak `0.447541 / 0.802370`
+
+这说明 `r4` 只能把 `U-Net-lite v1` 从“更差”推到“仍然不够好”，不能把它推成 shortlist。
+
 ### 3.2 对 matched `short10_nofoundation_control`
 
 - 现有锚点：
@@ -84,38 +107,31 @@
 现有证据足以支持：
 
 1. `U-Net-lite v1` 当前**不具备晋级资格**
-2. `U-Net-lite v1 r3` 没有达到原先 cheap-screen gate
+2. `U-Net-lite v1 r4` 只是把原先的 provisional no-go 再确认了一次
 3. 不能把这条结果写成“readout family 的正向候选”
+4. 这条 family 可以停表，不需要再按当前同配方继续 cheap rerun
 
 ### 4.2 还不足以支持的结论
 
 现有证据还**不足以**支持：
 
-1. 把 `U-Net-lite family` 整体写成强意义上的“正式判负”
-2. 把 `r1/r2/r3` 写成三次负向重复
-3. 用“已经充分复现”来证明这条 family 不值得再看
+1. 把 `U-Net-lite family` 写成“正向 shortlist”
+2. 把 `r1/r2/r3/r4` 写成需要继续扩线的信号
+3. 用 `r4` 的小幅改进去主张 family-level promotion
 
 核心原因只有一个：
 
-- 目前只有 `r3` 是有效 run，`r1/r2` 都是启动失败，不是有效重复。
+- 即使加上 `r4`，这条 family 也只是“有效但不够好”，不是“值得晋级”。
 
 ## 5. 当前最严谨的状态标记
 
 因此，当前最严谨的状态应写成：
 
-- `U-Net-lite v1`: `provisional no-go`
-- 含义：单个有效 run 已经显示它不值得直接晋级，但还没到“family 级正式停表”的证据强度
+- `U-Net-lite v1`: `no-go / stop`
+- 含义：`r4` 已经把它从“暂不晋级”推进到“无需继续按当前配方再跑”
 
 ## 6. 建议的下一步
 
-若要把这条线收得更硬，最小额外动作应该是二选一：
+当前不建议再为 `U-Net-lite v1` 追加同配方 run。
 
-1. **推荐：同配方确认性 cheap rerun**
-   - 在 `6002` 重新跑一次完全同口径 `U-Net-lite v1`
-   - 目的不是“救这条线”，而是确认 `r3` 不是单次偶然波动
-
-2. **备选：只做 best checkpoint 的补充 closeout**
-   - 明确承认“当前只有一个有效 run”
-   - 把结论限制为“v1 single-run no-go，不晋级，不足以 family-level stop”
-
-在没有执行上述任一补强前，不建议把它写成“正式判负已成立”。
+如果未来要重开，只能是一个显式的新 hypothesis，而不是延续当前 `r3/r4` 配方。

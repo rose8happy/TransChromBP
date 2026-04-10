@@ -1,14 +1,15 @@
-# 仓库现况总览（2026-04-09 23:16 CST）
+# 仓库现况总览（2026-04-10 10:10 CST）
 
 > 新 charter 和 `TRACKING.md` 已经改成解耦规则源 / 并列 live 入口；本文只负责快照，不再承担排程裁决角色。
 
 ## 一句话结论
 
-截至 `2026-04-09 23:16 CST`，本地档案仓的真实状态已经切换成并列快照，而不是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”那套旧口径：
+截至 `2026-04-10 10:10 CST`，本地档案仓的真实状态已经切换成终态快照，而不是“`msdec_v1_s2 + skipprobe_wide` 双机并跑”那套旧口径：
 
-- `6000` 已结束 `teacher-distill`，当前按新调度规则独立维护自己的 backlog，处于 `idle`
-- `6002` 继续自己的 `U-Net-lite r4 / cheap-screen` 队列，`r4` 仍在跑
-- 本报告只记录现场快照，不再给出“双机必须串行推进”的默认动作
+- `6000` 的 A6000 formal gate `teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1` 已收口并判为 `fail`
+- `6000` 的 AlphaGenome v2 sidecar `alphagenome_matched_raw_track_slice_v2_20260410` 已收口并判为 `pass`
+- `6002` 的 `U-Net-lite v1` 已完成 `r4` 确认性复跑并收成 `no-go / stop`
+- 当前没有 active 的 `6000` / `6002` training run；本报告只记录现场快照，不再给出“双机必须串行推进”的默认动作
 
 ---
 
@@ -121,68 +122,53 @@
   - run 已完成，不再活跃
   - 这条 `skipprobe` 高带宽 cheap-screen 没有形成值得保留的正向信号
 
-### 3.2 当前活跃线
+### 3.2 已收口的 6000 / 6002 运行线
 
-#### 6000：`NT v2 teacher-distill short10`
+#### 6000：A6000 formal gate
 
-- run：`ntv2_teacher_distill_short10_s42_6000_20260409_r2`
-- 机器：`6000 / A6000 x2`
-- 截至 `2026-04-09 22:43 CST` 的证据：
-  - `nvidia-smi` 显示两张 A6000 都已回到 `13 MiB / 0% util`
-  - `ps` 中已无该 run 的活跃训练进程
-  - 日志 `/data1/zhoujiazhen/bylw_atac/TransChromBP/logs/ntv2_teacher_distill_short10_s42_6000_20260409_r2.log` 尾部明确写出 `[early-stop] epoch=5` 与 `NT v2 teacher distill completed.`
-  - `run_meta.json` 已写出：
-    - `best_epoch=2`
-    - `best_metric_value=0.345324...`
-    - `stopped_early=true`
-  - log 中 `epoch=2` 对应的 `val:peak` 为：
-    - `profile_target_jsd_full_mean=0.3453`
-    - `count_pearson_full=0.5781`
-- gate 判读：
-  - matched no-foundation control 的同口径 `valid peak` best 为 `0.336346 / 0.8006`
-  - distill `r2` 的 best `valid peak` 为 `0.345324 / 0.5781`
-  - 因此既没有达到 `peak JSD` 改善 `>= 0.002`，也没有达到 `count_r` 不下降超过 `0.005`
-- 结论：
-  - run 已收口
-  - formal gate 已判负
-  - tutorial `teacher-distill` 线当前不升 full、不扩 seed，直接停表
+- run：`teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1`
+- 完成时间：`2026-04-10 10:10:10 CST` 左右
+- 结论：`fail`
+- best epoch：`22`
+- best peak `profile_target_jsd_full_mean=0.3337811803218466`
+- best peak `count_pearson_full=0.7948227405497477`
+- 与历史 `corrected B` comparator 相比，JSD / count 都明显落后，因此不做 promotion
 
-### 3.3 已完成 cheap-screen、待正式判读的线
+#### 6000：AlphaGenome v2 sidecar
 
-#### 6002：`U-Net-lite readout`
+- run：`alphagenome_matched_raw_track_slice_v2_20260410`
+- 完成时间：`2026-04-10 03:34:42 CST`
+- 结论：`pass`
+- `16` 个 loci 全部完成，且每个位点都保留 `1` 条可用 `ATAC` track
+- 这是已完成的 technical / external-coordinate sidecar，不占 active slot，也不改写 A6000 formal gate
 
-- 实际日志：
-  - `/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r1.log`
-  - `/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r2.log`
-  - `/home/zhengwei/bylw_atac/TransChromBP/logs/teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r3.log`
-- 截至 `2026-04-09 23:16:50 CST`：
-  - `6002` 的 3080 仍被 `r4` 占用，`teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4` 继续运行
-  - `r1` 是 loader/config contract 失败，`r2` 是 bigWig 路径 remap 失败
-  - 当前真正有效的只有 `r3`
-  - `r3` 日志里的 best 出现在 `epoch=2`，峰区 `profile_target_jsd_full_mean=0.45525`
-  - 日志末尾已打印 `U-Net-lite decoder probe completed.`
-  - 按 `r3` 节奏粗估，现场 ETA 窗口约为 `2026-04-10 00:50 CST` 到 `2026-04-10 01:30 CST`
-- 结论：
-  - 这条线不是“尚未起跑”，而是“已有一个有效 cheap-screen run，当前正在用 `r4` 做确认性补强”
+#### 6002：U-Net-lite v1
+
+- run：`teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4`
+- 完成时间：`2026-04-10 03:34:42 CST` 左右
+- 结论：`no-go / stop`
+- `r1/r2` 仍是启动失败，`r3/r4` 是有效 run，但 `r4` 仍没有把这条 family 推上 shortlist
+- 当前没有 active 6002 training run
 
 ---
 
 ## 4. 当前仍需注意的不一致
 
 - `TRACKING.md` 已把规则源指向 `docs/plan/2026-04-09_dual_machine_experiment_charter.md`，并把它作为 live 入口，而不是让 handoff 自己承担优先级裁决
-- 旧的 `reports/session_handoff_multiscale_and_next_tasks_20260409.md` 仍保留着“`msdec_v1_s2` / `skipprobe_wide` 是 active run”的旧快照
+- 旧的 `reports/session_handoff_multiscale_and_next_tasks_20260409.md` 仍保留着 `msdec_v1_s2 / skipprobe_wide` 的历史快照
 - 真实现场已经切到：
-  - `6000 teacher-distill r2` 已结束，并已正式判负
-  - `6002` 正在跑 `U-Net-lite r4` 确认性 cheap rerun
+  - `6000` 的 A6000 formal gate 已收口并判 `fail`
+  - `6000` 的 AlphaGenome v2 sidecar 已收口并判 `pass`
+  - `6002` 的 `U-Net-lite v1` 已收口并判 `no-go / stop`
 - `dual-track-20260409` 的计划与 pivot 记录已经以 `wip` 提交固定在对应 worktree，但尚未合回 `master`
 
 ---
 
 ## 5. 按当前 live 文档读取
 
-1. `6000` 当前处于 `idle`，独立 backlog 的首选仍是 `AlphaGenome matched raw-track slice`。
-2. `6002` 当前仍在跑 `U-Net-lite r4`，队列只保留本次 cheap rerun 收口与 rigor closeout。
-3. 若要改默认下一步，以 charter / `TRACKING.md` 为准，本报告不裁决。
+1. `6000` 当前没有 active training run；`A6000 formal gate` 已 `fail`，AlphaGenome v1/v2 sidecar 都已完成 closeout。
+2. `6002` 当前没有 active training run；`U-Net-lite v1` 已收成 `no-go / stop`。
+3. 若未来要改默认下一步，以 charter / `TRACKING.md` 为准，本报告只记录终态快照，不再裁决。
 
 ---
 

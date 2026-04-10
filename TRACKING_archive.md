@@ -6,12 +6,14 @@
 
 ---
 
-## 2026-04-10 第十轮归档（AlphaGenome matched raw-track slice closeout）
+## 2026-04-10 第十轮归档（A6000 formal gate + AlphaGenome sidecar + U-Net-lite closeout）
 
 | 事项 | 关键结论 | 关键路径 |
 |---|---|---|
 | `6000 AlphaGenome matched raw-track slice` | `alphagenome_matched_raw_track_slice_v1_20260410` 已完成 closeout，并通过 technical/alignment gate `pass`；4 个固定 loci 全部成功，`summary / metadata / profiles / run_meta / merged` 产物齐全。后续若再推进，只允许扩到 `12-20 loci` 的 matched panel，不进入大 benchmark。 | `reports/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md`、`docs/superpowers/specs/2026-04-10-a6000-alphagenome-matched-slice-v1-design.md` |
+| `6000 A6000 formal gate` | `teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1` 已完成 formal gate closeout，并判定 `fail`；best epoch 为 `22`，但 peak `profile_target_jsd_full_mean=0.3337811803218466`、peak `count_pearson_full=0.7948227405497477` 仍明显落后于历史 `corrected B` two-seed mean，因此不做 promotion。 | `reports/multiscale_local_skip_v2_30ep_gate_closeout_20260410.md` |
 | `6000 AlphaGenome matched raw-track slice v2` | `alphagenome_matched_raw_track_slice_v2_20260410` 已完成 technical / external-coordinate sidecar closeout，并判定 `pass`；`16` 个 loci 全部成功落盘、每个 locus 都保留 `1` 条可用 `ATAC` track，且 `merged_locus_totals.csv` 已干净形成。该结果只作为 external coordinate 保留，不升级成 benchmark，也不改写 A6000 formal gate 语义。 | `reports/alphagenome_matched_raw_track_slice_v2_closeout_20260410.md` |
+| `6002 U-Net-lite v1` | `teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4` 已完成确认性复跑；`r1/r2` 仍是无效启动，`r3/r4` 是有效 run，但 `r4` 仍无法把这条 family 推上 shortlist，因此最终收成 `no-go / stop`。 | `reports/unet_lite_v1_rigor_review_20260409.md` |
 
 ---
 
