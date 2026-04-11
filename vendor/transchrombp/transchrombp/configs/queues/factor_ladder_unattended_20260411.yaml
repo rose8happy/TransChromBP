@@ -10,6 +10,7 @@ stages:
   - stage_id: wait_existing_e2_short10
     stage_type: wait_existing_run
     run_name: teacher_v2_hierdec4096_short10_s42_6000_20260411_r1
+    log_path: logs/teacher_v2_hierdec4096_short10_s42_6000_20260411_r1.log
     completion:
       require_run_meta: true
       checkpoint_policy: best_or_latest_epoch

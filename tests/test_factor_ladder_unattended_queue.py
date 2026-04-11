@@ -44,6 +44,7 @@ def test_factor_ladder_unattended_queue_config_declares_expected_stage_order() -
 
     wait_stage = stages[0]
     assert wait_stage["run_name"] == "teacher_v2_hierdec4096_short10_s42_6000_20260411_r1"
+    assert wait_stage["log_path"] == "logs/teacher_v2_hierdec4096_short10_s42_6000_20260411_r1.log"
     assert wait_stage["completion"]["require_run_meta"] is True
     assert wait_stage["completion"]["checkpoint_policy"] == "best_or_latest_epoch"
 
