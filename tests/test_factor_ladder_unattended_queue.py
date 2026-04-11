@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -10,7 +11,9 @@ from transchrombp.orchestration.factor_ladder_unattended_queue import (
     choose_checkpoint_path,
     load_queue_spec,
     render_summary_markdown,
+    parse_args,
     run_completion_probe,
+    run_queue,
     write_queue_state,
 )
 
@@ -223,3 +226,327 @@ def test_queue_state_and_summary_include_current_stage(tmp_path: Path) -> None:
     assert state_payload["current_stage_id"] == "e1_longctx4096_short10"
     assert "e1_longctx4096_short10" in summary
     assert "stage_started" in summary
+
+
+def test_parse_args_binds_queue_cli_flags() -> None:
+    args = parse_args(
+        [
+            "--queue-config",
+            "configs/queues/factor_ladder_unattended_20260411.yaml",
+            "--state-dir",
+            "outputs/queue/factor_ladder_unattended_20260411",
+            "--dry-run",
+            "--once",
+        ]
+    )
+
+    assert args.queue_config == "configs/queues/factor_ladder_unattended_20260411.yaml"
+    assert args.state_dir == "outputs/queue/factor_ladder_unattended_20260411"
+    assert args.dry_run is True
+    assert args.once is True
+
+
+def test_run_queue_dry_run_writes_queue_state_events_and_summary(tmp_path: Path) -> None:
+    args = argparse.Namespace(
+        queue_config=QUEUE_CONFIG,
+        state_dir=tmp_path / "queue-state",
+        dry_run=True,
+        once=True,
+    )
+
+    exit_code = run_queue(args)
+
+    assert exit_code == 0
+    state_path = args.state_dir / "queue_state.json"
+    events_path = args.state_dir / "events.jsonl"
+    summary_path = args.state_dir / "summary.md"
+
+    assert state_path.exists()
+    assert events_path.exists()
+    assert summary_path.exists()
+
+    state_payload = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state_payload["queue_id"] == "factor_ladder_unattended_20260411"
+    assert state_payload["status"] == "completed"
+    assert state_payload["current_stage_id"] == ""
+    events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert [event["event_type"] for event in events] == ["stage_started", "stage_dry_run", "queue_completed"]
+    assert "stage_dry_run" in summary_path.read_text(encoding="utf-8")
+
+
+def test_run_queue_launch_stage_dry_run_records_command_without_executing(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    queue_config = tmp_path / "queue.yaml"
+    queue_config.write_text(
+        "\n".join(
+            [
+                "queue_id: launch_dry_run_queue",
+                f"runtime_root: {tmp_path}",
+                "state_dir: outputs/queue/launch_dry_run_queue",
+                "default_master_ports: [29982, 29983]",
+                "poll_interval_sec: 1",
+                "gpu_wait_interval_sec: 1",
+                "gpu_idle_used_mem_threshold_mib: 1",
+                "stages:",
+                "  - stage_id: launch_stage",
+                "    stage_type: launch_run",
+                "    run_name: run_one",
+                "    model_config: configs/model/transchrombp_teacher_v2_hierdec4096.yaml",
+                "    train_config: configs/train/train_tutorial_teacher_v2_hierdec4096_teacher30.yaml",
+                "    data_config: configs/data/data_tutorial_canonical_v1_longctx4096.yaml",
+                "    output_dir: outputs",
+                "    log_path: logs/run_one.log",
+                '    train_gpu_ids: "0,1"',
+                "    nproc_per_node: 2",
+                "    master_ports: [29982, 29983]",
+                "    env:",
+                "      RUN_NAME: run_one",
+                "    completion:",
+                "      require_run_meta: true",
+                "      checkpoint_policy: best_or_latest_epoch",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def fail_if_called(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("launch command should not run during dry-run")
+
+    monkeypatch.setattr(
+        "transchrombp.orchestration.factor_ladder_unattended_queue.run_stage_command",
+        fail_if_called,
+    )
+    monkeypatch.setattr(
+        "transchrombp.orchestration.factor_ladder_unattended_queue.wait_for_idle_gpus",
+        fail_if_called,
+    )
+
+    args = argparse.Namespace(
+        queue_config=queue_config,
+        state_dir=tmp_path / "state",
+        dry_run=True,
+        once=True,
+    )
+
+    exit_code = run_queue(args)
+
+    assert exit_code == 0
+    events = [json.loads(line) for line in (args.state_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert events[1]["event_type"] == "stage_dry_run"
+    assert events[1]["stage_id"] == "launch_stage"
+    assert events[1]["command"][0] == "torchrun"
+    assert events[1]["command"][1] == "--standalone"
+
+
+def test_run_queue_export_stage_dry_run_skips_checkpoint_lookup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    queue_config = tmp_path / "queue_export.yaml"
+    queue_config.write_text(
+        "\n".join(
+            [
+                "queue_id: export_dry_run_queue",
+                f"runtime_root: {tmp_path}",
+                "state_dir: outputs/queue/export_dry_run_queue",
+                "default_master_ports: [29982, 29983]",
+                "poll_interval_sec: 1",
+                "gpu_wait_interval_sec: 1",
+                "gpu_idle_used_mem_threshold_mib: 1",
+                "stages:",
+                "  - stage_id: export_stage",
+                "    stage_type: export_teacher_cache",
+                "    checkpoint_from_stage: teacher_stage",
+                "    teacher_cache_dir: outputs/teacher_cache/export_dry_run_queue",
+                "    data_config: configs/data/data_tutorial_canonical_v1_longctx4096.yaml",
+                '    targets: ["profile16", "logcount"]',
+                '    splits: ["train", "valid"]',
+                "  - stage_id: teacher_stage",
+                "    stage_type: launch_run",
+                "    run_name: teacher_run",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def fail_if_called(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise AssertionError("checkpoint lookup should not run during dry-run")
+
+    monkeypatch.setattr(
+        "transchrombp.orchestration.factor_ladder_unattended_queue.choose_checkpoint_path",
+        fail_if_called,
+    )
+
+    args = argparse.Namespace(
+        queue_config=queue_config,
+        state_dir=tmp_path / "export-state",
+        dry_run=True,
+        once=True,
+    )
+
+    exit_code = run_queue(args)
+
+    assert exit_code == 0
+    events = [json.loads(line) for line in (args.state_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert events[1]["event_type"] == "stage_dry_run"
+    assert events[1]["stage_id"] == "export_stage"
+    assert "--targets" in events[1]["command"]
+    target_index = events[1]["command"].index("--targets")
+    assert events[1]["command"][target_index + 1 : target_index + 3] == ["profile16", "logcount"]
+    checkpoint_index = events[1]["command"].index("--checkpoint")
+    assert events[1]["command"][checkpoint_index + 1] == str(
+        tmp_path / "outputs" / "checkpoints" / "teacher_run" / "best.pt"
+    )
+
+
+def test_run_queue_export_stage_uses_teacher_checkpoint_under_outputs_root(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    queue_config = tmp_path / "queue_export_run.yaml"
+    queue_config.write_text(
+        "\n".join(
+            [
+                "queue_id: export_run_queue",
+                f"runtime_root: {tmp_path}",
+                "state_dir: outputs/queue/export_run_queue",
+                "default_master_ports: [29982, 29983]",
+                "poll_interval_sec: 1",
+                "gpu_wait_interval_sec: 1",
+                "gpu_idle_used_mem_threshold_mib: 1",
+                "stages:",
+                "  - stage_id: export_stage",
+                "    stage_type: export_teacher_cache",
+                "    checkpoint_from_stage: teacher_stage",
+                "    teacher_cache_dir: outputs/teacher_cache/export_run_queue",
+                "    data_config: configs/data/data_tutorial_canonical_v1_longctx4096.yaml",
+                '    targets: ["profile16", "logcount"]',
+                '    splits: ["train", "valid"]',
+                "  - stage_id: teacher_stage",
+                "    stage_type: launch_run",
+                "    run_name: teacher_run",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    observed: dict[str, object] = {}
+
+    def fake_choose_checkpoint_path(checkpoint_dir: Path, policy: str) -> Path:
+        observed["checkpoint_dir"] = checkpoint_dir
+        observed["policy"] = policy
+        return checkpoint_dir / "best.pt"
+
+    def fake_run_stage_command(command, stage_log_path, env):  # type: ignore[no-untyped-def]
+        observed["command"] = list(command)
+        observed["stage_log_path"] = stage_log_path
+        cache_root = tmp_path / "outputs" / "teacher_cache" / "export_run_queue"
+        cache_root.mkdir(parents=True, exist_ok=True)
+        (cache_root / "teacher_manifest_train.json").write_text("{}", encoding="utf-8")
+        (cache_root / "teacher_manifest_valid.json").write_text("{}", encoding="utf-8")
+        return 0, ""
+
+    monkeypatch.setattr(
+        "transchrombp.orchestration.factor_ladder_unattended_queue.choose_checkpoint_path",
+        fake_choose_checkpoint_path,
+    )
+    monkeypatch.setattr(
+        "transchrombp.orchestration.factor_ladder_unattended_queue.run_stage_command",
+        fake_run_stage_command,
+    )
+
+    args = argparse.Namespace(
+        queue_config=queue_config,
+        state_dir=tmp_path / "export-run-state",
+        dry_run=False,
+        once=True,
+    )
+
+    exit_code = run_queue(args)
+
+    assert exit_code == 0
+    assert observed["checkpoint_dir"] == tmp_path / "outputs" / "checkpoints" / "teacher_run"
+    assert observed["policy"] == "best_or_latest_epoch"
+    assert "--targets" in observed["command"]
+
+
+def test_run_queue_launch_stage_retries_once_on_port_conflict(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    queue_config = tmp_path / "queue_retry.yaml"
+    queue_config.write_text(
+        "\n".join(
+            [
+                "queue_id: retry_queue",
+                f"runtime_root: {tmp_path}",
+                "state_dir: outputs/queue/retry_queue",
+                "default_master_ports: [29982, 29983]",
+                "poll_interval_sec: 1",
+                "gpu_wait_interval_sec: 1",
+                "gpu_idle_used_mem_threshold_mib: 1",
+                "stages:",
+                "  - stage_id: launch_stage",
+                "    stage_type: launch_run",
+                "    run_name: run_retry",
+                "    model_config: configs/model/transchrombp_teacher_v2_hierdec4096.yaml",
+                "    train_config: configs/train/train_tutorial_teacher_v2_hierdec4096_teacher30.yaml",
+                "    data_config: configs/data/data_tutorial_canonical_v1_longctx4096.yaml",
+                "    output_dir: outputs",
+                "    log_path: logs/run_retry.log",
+                '    train_gpu_ids: "0,1"',
+                "    nproc_per_node: 2",
+                "    master_ports: [12345, 12346]",
+                "    env:",
+                "      RUN_NAME: run_retry",
+                "    completion:",
+                "      require_run_meta: true",
+                "      checkpoint_policy: best_or_latest_epoch",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "transchrombp.orchestration.factor_ladder_unattended_queue.wait_for_idle_gpus",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "transchrombp.orchestration.factor_ladder_unattended_queue.run_completion_probe",
+        lambda *args, **kwargs: type("Probe", (), {"status": "completed", "checkpoint_path": tmp_path / "checkpoints" / "run_retry" / "best.pt", "reason": "ok"})(),
+    )
+
+    calls: list[tuple[list[str], dict[str, str]]] = []
+
+    def fake_run_stage_command(command, stage_log_path, env):  # type: ignore[no-untyped-def]
+        calls.append((list(command), dict(env)))
+        if len(calls) == 1:
+            return 1, "Address already in use"
+        return 0, "done"
+
+    monkeypatch.setattr(
+        "transchrombp.orchestration.factor_ladder_unattended_queue.run_stage_command",
+        fake_run_stage_command,
+    )
+
+    args = argparse.Namespace(
+        queue_config=queue_config,
+        state_dir=tmp_path / "retry-state",
+        dry_run=False,
+        once=True,
+    )
+
+    exit_code = run_queue(args)
+
+    assert exit_code == 0
+    assert len(calls) == 2
+    assert calls[0][1]["MASTER_PORT"] == "12345"
+    assert calls[1][1]["MASTER_PORT"] == "12346"
+    events = [json.loads(line) for line in (args.state_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert any(event["event_type"] == "stage_retry_port_conflict" for event in events)
