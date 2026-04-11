@@ -39,16 +39,20 @@ def test_tracking_registers_factor_ladder_as_live_row() -> None:
     assert "2110" in factor_row["当前结论 / 进度"]
     assert "5877077" in factor_row["当前结论 / 进度"]
     assert "079b603" in factor_row["当前结论 / 进度"]
+    assert "ac55153" in factor_row["当前结论 / 进度"]
     assert "已回填" in factor_row["当前结论 / 进度"]
     assert "teacher_v2_hierdec4096_short10_s42_6000_20260411_r1" in factor_row["当前结论 / 进度"]
-    assert "已于 `2026-04-11 21:46:19 CST` 启动" in factor_row["当前结论 / 进度"]
-    assert "23:20-23:45" in factor_row["当前结论 / 进度"]
+    assert "已于 `2026-04-11 23:06:08 CST` 正常完成" in factor_row["当前结论 / 进度"]
+    assert "teacher_v2_center_pool_longctx4096_short10_s42_6000_20260411_r1" in factor_row["当前结论 / 进度"]
+    assert "2026-04-12 00:40:09 CST" in factor_row["当前结论 / 进度"]
+    assert "--nnodes=1 --master_addr=127.0.0.1 --master_port" in factor_row["当前结论 / 进度"]
+    assert "05:30-06:30" in factor_row["当前结论 / 进度"]
     assert "unattended matrix queue" in factor_row["当前结论 / 进度"]
-    assert "outputs/queue/factor_ladder_unattended_20260411" in factor_row["当前结论 / 进度"]
-    assert "E2" in factor_row["下一步"]
-    assert "不并行再开 `E3`" in factor_row["下一步"]
-    assert "当前 run log" in factor_row["下一步"]
-    assert "GPU" in factor_row["下一步"]
+    assert "/outputs/queue/factor_ladder_unattended_20260411" in factor_row["当前结论 / 进度"]
+    assert "E1 -> E2 teacher30 -> export -> E3" in factor_row["下一步"]
+    assert "不手动并行再开 factor-ladder 新 run" in factor_row["下一步"]
+    assert "queue 是否在 `teacher_v2_center_pool_longctx4096_short10_s42_6000_20260411_r1` 结束后自动推进到 `teacher_v2_hierdec4096_teacher30_s42_6000_20260411_r1`" in factor_row["下一步"]
+    assert "queue state dir" in factor_row["下一步"]
     assert "teacher_v2_center_pool_longctx4096_short10_s42_6000_20260411_r1" in factor_row["下一步"]
     assert "teacher_v2_hierdec4096_teacher30_s42_6000_20260411_r1" in factor_row["下一步"]
     assert "teacher_v2_hierdec4096_distill_short10_s42_6000_20260411_r1" in factor_row["下一步"]
@@ -61,17 +65,22 @@ def test_registry_registers_factor_ladder_family_row() -> None:
     )
 
     assert factor_row["status"] == "`running`"
-    assert factor_row["latest_terminal_run"] == "`hierdec4096_exporter_distill_smoke_20260411_2110`"
-    assert "teacher_v2_hierdec4096_short10_s42_6000_20260411_r1" in factor_row["next_allowed_action"]
-    assert "不并行再开 `E3`" in factor_row["next_allowed_action"]
+    assert factor_row["latest_terminal_run"] == "`teacher_v2_hierdec4096_short10_s42_6000_20260411_r1`"
+    assert "teacher_v2_center_pool_longctx4096_short10_s42_6000_20260411_r1" in factor_row["next_allowed_action"]
+    assert "teacher_v2_hierdec4096_teacher30_s42_6000_20260411_r1" in factor_row["next_allowed_action"]
+    assert "teacher_v2_hierdec4096_distill_short10_s42_6000_20260411_r1" in factor_row["next_allowed_action"]
+    assert "不并行再开新的 factor-ladder run" in factor_row["next_allowed_action"]
     assert "remote runtime" in factor_row["notes"]
     assert "079b603" in factor_row["notes"]
+    assert "ac55153" in factor_row["notes"]
     assert "5877077" in factor_row["notes"]
     assert "single-GPU" in factor_row["notes"]
     assert "genos_summary" in factor_row["notes"]
     assert "n_records" in factor_row["notes"]
-    assert "2026-04-11 21:46:19 CST" in factor_row["notes"]
-    assert "23:20-23:45" in factor_row["notes"]
+    assert "2026-04-11 23:06:08 CST" in factor_row["notes"]
+    assert "2026-04-12 00:40:09 CST" in factor_row["notes"]
+    assert "05:30-06:30" in factor_row["notes"]
+    assert "OMP warning / `c10d` socket timeout" in factor_row["notes"]
     assert "unattended matrix queue" in factor_row["next_allowed_action"]
     assert "outputs/queue/factor_ladder_unattended_20260411" in factor_row["notes"]
 
@@ -84,6 +93,21 @@ def test_runs_manifest_pre_registers_unattended_queue_downstream_runs() -> None:
         if row["family_id"] == "alphagenome_factor_ladder" and row["run_status"] == "queued"
     }
 
-    assert queued["teacher_v2_center_pool_longctx4096_short10_s42_6000_20260411_r1"]["commit_sha"] == "079b603"
-    assert queued["teacher_v2_hierdec4096_teacher30_s42_6000_20260411_r1"]["commit_sha"] == "079b603"
-    assert queued["teacher_v2_hierdec4096_distill_short10_s42_6000_20260411_r1"]["commit_sha"] == "079b603"
+    assert queued["teacher_v2_hierdec4096_teacher30_s42_6000_20260411_r1"]["commit_sha"] == "ac55153"
+    assert queued["teacher_v2_hierdec4096_distill_short10_s42_6000_20260411_r1"]["commit_sha"] == "ac55153"
+
+    active = {
+        row["run_id"]: row
+        for row in rows
+        if row["family_id"] == "alphagenome_factor_ladder" and row["run_status"] == "running"
+    }
+    completed = {
+        row["run_id"]: row
+        for row in rows
+        if row["family_id"] == "alphagenome_factor_ladder" and row["run_status"] == "completed"
+    }
+
+    assert active["teacher_v2_center_pool_longctx4096_short10_s42_6000_20260411_r1"]["commit_sha"] == "ac55153"
+    assert active["teacher_v2_center_pool_longctx4096_short10_s42_6000_20260411_r1"]["start_time"] == "2026-04-12 00:40:09 CST"
+    assert "05:30-06:30" in active["teacher_v2_center_pool_longctx4096_short10_s42_6000_20260411_r1"]["notes"]
+    assert completed["teacher_v2_hierdec4096_short10_s42_6000_20260411_r1"]["end_time"] == "2026-04-11 23:06:08 CST"
