@@ -520,7 +520,7 @@ class TransChromBP(nn.Module):
         self.bias_branch.unfreeze_core()
 
 
-def build_transchrombp_from_config(config: Dict[str, Any]) -> TransChromBP:
+def build_transchrombp_from_config(config: Dict[str, Any]) -> nn.Module:
     """Build model from nested config dict loaded from YAML/JSON.
 
     Expected structure:
@@ -532,6 +532,18 @@ def build_transchrombp_from_config(config: Dict[str, Any]) -> TransChromBP:
       fusion: profile_scale_init, count_scale_init, learnable_scales
       heads: profile_output_len
     """
+    architecture_cfg = config.get("architecture", {})
+    architecture_variant = str(architecture_cfg.get("variant", "baseline")).strip().lower()
+    if architecture_variant == "hierarchical_encoder_decoder_v1":
+        from .hierarchical_transchrombp import build_hierarchical_transchrombp_from_config
+
+        return build_hierarchical_transchrombp_from_config(config)
+    if architecture_variant not in {"", "baseline", "transchrombp_v1", "standard"}:
+        raise ValueError(
+            "Unsupported architecture.variant="
+            f"{architecture_variant!r}; expected 'baseline' or 'hierarchical_encoder_decoder_v1'"
+        )
+
     seq_cfg = config.get("sequence_encoder", {})
     conv_cfg = config.get("conv_stem", {})
     local_cfg = config.get("local_tower", {})

@@ -1395,6 +1395,29 @@ def extract_foundation_feature_kwargs(
     return kwargs
 
 
+def extract_genos_summary_kwargs(
+    batch: Dict[str, Any],
+    model_cfg: Dict[str, Any],
+    device: torch.device,
+    require_genos_summary: bool = False,
+) -> Dict[str, Tensor]:
+    uses_cached_genos = bool(model_cfg.get("genos_cached", {}).get("enabled", False))
+    if not uses_cached_genos:
+        return {}
+
+    if "genos_global_mean" not in batch:
+        if require_genos_summary:
+            raise RuntimeError(
+                "Cached Genos mode is enabled, but batch is missing 'genos_global_mean'. "
+                "Check genos_cache_dir and genos_cache_features."
+            )
+        return {}
+
+    return {
+        "genos_summary": batch["genos_global_mean"].to(device, non_blocking=True),
+    }
+
+
 def extract_teacher_targets(batch: Dict[str, Any], device: torch.device) -> Dict[str, Tensor]:
     out: Dict[str, Tensor] = {}
     for key, value in batch.items():
@@ -1694,6 +1717,7 @@ def run_validation(
     model: nn.Module,
     val_loader: DataLoader,
     dist_env: DistEnv,
+    model_cfg: Dict[str, Any],
     loss_cfg: Dict[str, Any],
     use_amp: bool,
     amp_dtype: torch.dtype,
@@ -1726,16 +1750,13 @@ def run_validation(
 
             online_feature_kwargs = extract_online_feature_kwargs(seq, online_runtime)
             foundation_feature_kwargs = extract_foundation_feature_kwargs(batch, model_cfg, dist_env.device)
+            genos_summary_kwargs = extract_genos_summary_kwargs(
+                batch,
+                model_cfg,
+                dist_env.device,
+                require_genos_summary=require_genos_summary,
+            )
             teacher_targets = extract_teacher_targets(batch, dist_env.device)
-
-            genos_summary = None
-            if "genos_global_mean" in batch:
-                genos_summary = batch["genos_global_mean"].to(dist_env.device, non_blocking=True)
-            elif require_genos_summary:
-                raise RuntimeError(
-                    "Cached Genos mode is enabled, but validation batch is missing "
-                    "'genos_global_mean'. Check genos_cache_dir and genos_cache_features."
-                )
 
             with torch.autocast(
                 device_type=dist_env.device.type,
@@ -1744,7 +1765,7 @@ def run_validation(
             ):
                 outputs = model(
                     seq,
-                    genos_summary=genos_summary,
+                    **genos_summary_kwargs,
                     **online_feature_kwargs,
                     **foundation_feature_kwargs,
                 )
@@ -2045,16 +2066,13 @@ def main() -> None:
                 genos_fetch_t0 = time.perf_counter()
                 online_feature_kwargs = extract_online_feature_kwargs(seq, online_runtime)
                 foundation_feature_kwargs = extract_foundation_feature_kwargs(batch, model_cfg, dist_env.device)
+                genos_summary_kwargs = extract_genos_summary_kwargs(
+                    batch,
+                    model_cfg,
+                    dist_env.device,
+                    require_genos_summary=uses_cached_genos,
+                )
                 teacher_targets = extract_teacher_targets(batch, dist_env.device)
-
-                genos_summary = None
-                if "genos_global_mean" in batch:
-                    genos_summary = batch["genos_global_mean"].to(dist_env.device, non_blocking=True)
-                elif uses_cached_genos:
-                    raise RuntimeError(
-                        "Cached Genos mode is enabled, but training batch is missing "
-                        "'genos_global_mean'. Check genos_cache_dir and genos_cache_features."
-                    )
                 t_after_genos = time.perf_counter()
 
                 should_step = (step_idx % grad_accum_steps == 0)
@@ -2068,7 +2086,7 @@ def main() -> None:
                     ):
                         outputs = model(
                             seq,
-                            genos_summary=genos_summary,
+                            **genos_summary_kwargs,
                             **online_feature_kwargs,
                             **foundation_feature_kwargs,
                         )
@@ -2217,6 +2235,7 @@ def main() -> None:
                     model=model,
                     val_loader=val_loader,
                     dist_env=dist_env,
+                    model_cfg=model_cfg,
                     loss_cfg=train_cfg.get("loss", {}),
                     use_amp=use_amp,
                     amp_dtype=amp_dtype,
