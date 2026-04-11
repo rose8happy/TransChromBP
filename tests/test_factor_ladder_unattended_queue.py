@@ -295,6 +295,27 @@ def test_run_stage_command_returns_only_new_output_when_stage_log_has_stale_port
     assert "fresh failure" in full_log
 
 
+def test_run_stage_command_keeps_early_port_conflict_marker_in_failed_long_output(tmp_path: Path) -> None:
+    stage_log_path = tmp_path / "stage.log"
+    payload = "Address already in use\\n" + ("x" * 5000)
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "import sys; "
+            f"sys.stdout.write({payload!r}); "
+            "sys.stdout.flush(); "
+            "sys.exit(1)"
+        ),
+    ]
+
+    return_code, combined_log = run_stage_command(command, stage_log_path, dict(os.environ))
+
+    assert return_code == 1
+    assert "Address already in use" in combined_log
+    assert len(combined_log) > 4000
+
+
 def test_parse_args_binds_queue_cli_flags() -> None:
     args = parse_args(
         [

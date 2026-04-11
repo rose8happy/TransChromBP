@@ -317,12 +317,14 @@ def build_export_command(spec: QueueSpec, stage: StageSpec, checkpoint_path: Pat
     return command, env
 
 
-def _read_log_excerpt(stage_log_path: Path, *, start_offset: int = 0, max_chars: int = 4000) -> str:
+def _read_log_delta(stage_log_path: Path, *, start_offset: int = 0, max_chars: int | None = 4000) -> str:
     if not stage_log_path.exists():
         return ""
     with stage_log_path.open("rb") as handle:
         handle.seek(max(0, start_offset))
         text = handle.read().decode("utf-8", errors="replace")
+    if max_chars is None:
+        return text
     return text[-max_chars:]
 
 
@@ -338,7 +340,8 @@ def run_stage_command(command: list[str], stage_log_path: Path, env: dict[str, s
             stderr=subprocess.STDOUT,
         )
         return_code = proc.wait()
-    return return_code, _read_log_excerpt(stage_log_path, start_offset=start_offset)
+    max_chars = None if return_code != 0 else 4000
+    return return_code, _read_log_delta(stage_log_path, start_offset=start_offset, max_chars=max_chars)
 
 
 def _record_event(
