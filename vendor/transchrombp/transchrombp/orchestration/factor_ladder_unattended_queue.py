@@ -20,6 +20,7 @@ FATAL_LOG_MARKERS = (
 
 DEFAULT_QUEUE_CONFIG = Path("configs/queues/factor_ladder_unattended_20260411.yaml")
 DEFAULT_STATE_DIR = Path("outputs/queue/factor_ladder_unattended_20260411")
+DEFAULT_MASTER_ADDR = "127.0.0.1"
 
 
 @dataclass(frozen=True)
@@ -269,15 +270,15 @@ def wait_for_existing_run_completion(spec: QueueSpec, stage: StageSpec) -> Stage
 
 def build_launch_command(spec: QueueSpec, stage: StageSpec, master_port: int) -> tuple[list[str], dict[str, str]]:
     env = os.environ.copy()
+    env.pop("MASTER_ADDR", None)
+    env.pop("MASTER_PORT", None)
     env.update(stage.env)
     env["CUDA_VISIBLE_DEVICES"] = stage.train_gpu_ids
-    env["MASTER_ADDR"] = env.get("MASTER_ADDR", "127.0.0.1")
-    env["MASTER_PORT"] = str(master_port)
     command = [
         "torchrun",
-        "--standalone",
-        "--nproc_per_node",
-        str(stage.nproc_per_node),
+        "--nnodes=1",
+        f"--nproc_per_node={stage.nproc_per_node}",
+        f"--master_addr={DEFAULT_MASTER_ADDR}",
         "--master_port",
         str(master_port),
         "-m",
@@ -316,16 +317,28 @@ def build_export_command(spec: QueueSpec, stage: StageSpec, checkpoint_path: Pat
     return command, env
 
 
+def _read_log_excerpt(stage_log_path: Path, *, start_offset: int = 0, max_chars: int = 4000) -> str:
+    if not stage_log_path.exists():
+        return ""
+    with stage_log_path.open("rb") as handle:
+        handle.seek(max(0, start_offset))
+        text = handle.read().decode("utf-8", errors="replace")
+    return text[-max_chars:]
+
+
 def run_stage_command(command: list[str], stage_log_path: Path, env: dict[str, str]) -> tuple[int, str]:
     stage_log_path.parent.mkdir(parents=True, exist_ok=True)
-    proc = subprocess.run(command, env=env, text=True, capture_output=True, check=False)
-    combined = (proc.stdout or "") + (proc.stderr or "")
+    start_offset = stage_log_path.stat().st_size if stage_log_path.exists() else 0
     with stage_log_path.open("a", encoding="utf-8") as handle:
-        if proc.stdout:
-            handle.write(proc.stdout)
-        if proc.stderr:
-            handle.write(proc.stderr)
-    return proc.returncode, combined
+        proc = subprocess.Popen(
+            command,
+            env=env,
+            text=True,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+        )
+        return_code = proc.wait()
+    return return_code, _read_log_excerpt(stage_log_path, start_offset=start_offset)
 
 
 def _record_event(

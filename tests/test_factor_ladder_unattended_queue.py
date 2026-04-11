@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
+import sys
+import threading
+import time
 
 import yaml
 
@@ -14,6 +18,7 @@ from transchrombp.orchestration.factor_ladder_unattended_queue import (
     parse_args,
     run_completion_probe,
     run_queue,
+    run_stage_command,
     write_queue_state,
 )
 
@@ -228,6 +233,68 @@ def test_queue_state_and_summary_include_current_stage(tmp_path: Path) -> None:
     assert "stage_started" in summary
 
 
+def test_run_stage_command_streams_output_to_stage_log_before_process_exit(tmp_path: Path) -> None:
+    stage_log_path = tmp_path / "stage.log"
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "import sys, time; "
+            "print('hello', flush=True); "
+            "print('stderr-line', file=sys.stderr, flush=True); "
+            "time.sleep(0.5)"
+        ),
+    ]
+
+    result: dict[str, object] = {}
+
+    def run_command() -> None:
+        return_code, combined_log = run_stage_command(command, stage_log_path, dict(os.environ))
+        result["return_code"] = return_code
+        result["combined_log"] = combined_log
+
+    thread = threading.Thread(target=run_command)
+    thread.start()
+
+    deadline = time.time() + 1.0
+    saw_live_log = False
+    while time.time() < deadline:
+        if stage_log_path.exists():
+            log_text = stage_log_path.read_text(encoding="utf-8")
+            if "hello" in log_text and "stderr-line" in log_text:
+                saw_live_log = True
+                break
+        time.sleep(0.02)
+
+    thread.join()
+
+    assert saw_live_log is True
+    assert result["return_code"] == 0
+    assert "hello" in str(result["combined_log"])
+    assert "stderr-line" in str(result["combined_log"])
+
+
+def test_run_stage_command_returns_only_new_output_when_stage_log_has_stale_port_conflict_marker(
+    tmp_path: Path,
+) -> None:
+    stage_log_path = tmp_path / "stage.log"
+    stage_log_path.write_text("old failure: Address already in use\n", encoding="utf-8")
+    command = [
+        sys.executable,
+        "-c",
+        "import sys; print('fresh failure', flush=True); sys.exit(3)",
+    ]
+
+    return_code, combined_log = run_stage_command(command, stage_log_path, dict(os.environ))
+
+    assert return_code == 3
+    assert "fresh failure" in combined_log
+    assert "Address already in use" not in combined_log
+    full_log = stage_log_path.read_text(encoding="utf-8")
+    assert "old failure: Address already in use" in full_log
+    assert "fresh failure" in full_log
+
+
 def test_parse_args_binds_queue_cli_flags() -> None:
     args = parse_args(
         [
@@ -338,7 +405,9 @@ def test_run_queue_launch_stage_dry_run_records_command_without_executing(
     assert events[1]["event_type"] == "stage_dry_run"
     assert events[1]["stage_id"] == "launch_stage"
     assert events[1]["command"][0] == "torchrun"
-    assert events[1]["command"][1] == "--standalone"
+    assert "--nnodes=1" in events[1]["command"]
+    assert "--master_addr=127.0.0.1" in events[1]["command"]
+    assert "--standalone" not in events[1]["command"]
 
 
 def test_run_queue_export_stage_dry_run_skips_checkpoint_lookup(
@@ -517,6 +586,8 @@ def test_run_queue_launch_stage_retries_once_on_port_conflict(
         "transchrombp.orchestration.factor_ladder_unattended_queue.wait_for_idle_gpus",
         lambda *args, **kwargs: None,
     )
+    monkeypatch.setenv("MASTER_ADDR", "10.0.0.1")
+    monkeypatch.setenv("MASTER_PORT", "9999")
     monkeypatch.setattr(
         "transchrombp.orchestration.factor_ladder_unattended_queue.run_completion_probe",
         lambda *args, **kwargs: type("Probe", (), {"status": "completed", "checkpoint_path": tmp_path / "checkpoints" / "run_retry" / "best.pt", "reason": "ok"})(),
@@ -546,7 +617,19 @@ def test_run_queue_launch_stage_retries_once_on_port_conflict(
 
     assert exit_code == 0
     assert len(calls) == 2
-    assert calls[0][1]["MASTER_PORT"] == "12345"
-    assert calls[1][1]["MASTER_PORT"] == "12346"
+    assert "--nnodes=1" in calls[0][0]
+    assert "--master_addr=127.0.0.1" in calls[0][0]
+    assert "--standalone" not in calls[0][0]
+    assert "--master_port" in calls[0][0]
+    assert calls[0][0][calls[0][0].index("--master_port") + 1] == "12345"
+    assert "--nnodes=1" in calls[1][0]
+    assert "--master_addr=127.0.0.1" in calls[1][0]
+    assert "--standalone" not in calls[1][0]
+    assert "--master_port" in calls[1][0]
+    assert calls[1][0][calls[1][0].index("--master_port") + 1] == "12346"
+    assert "MASTER_PORT" not in calls[0][1]
+    assert "MASTER_ADDR" not in calls[0][1]
+    assert "MASTER_PORT" not in calls[1][1]
+    assert "MASTER_ADDR" not in calls[1][1]
     events = [json.loads(line) for line in (args.state_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
     assert any(event["event_type"] == "stage_retry_port_conflict" for event in events)
