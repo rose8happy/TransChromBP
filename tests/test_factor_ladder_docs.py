@@ -32,11 +32,13 @@ def test_tracking_registers_factor_ladder_as_live_row() -> None:
     assert "single-GPU" in factor_row["当前结论 / 进度"]
     assert "2110" in factor_row["当前结论 / 进度"]
     assert "5877077" in factor_row["当前结论 / 进度"]
-    assert "尚未回填" in factor_row["当前结论 / 进度"]
+    assert "079b603" in factor_row["当前结论 / 进度"]
+    assert "已回填" in factor_row["当前结论 / 进度"]
     assert "正式 short10 / formal run" in factor_row["当前结论 / 进度"]
-    assert "回填" in factor_row["下一步"]
-    assert "E2/E3 short10" in factor_row["下一步"]
-    assert "technical smoke" in factor_row["下一步"]
+    assert "E2" in factor_row["下一步"]
+    assert "E3 short10" in factor_row["下一步"]
+    assert "079b603" in factor_row["下一步"]
+    assert "ETA" in factor_row["下一步"]
 
 
 def test_registry_registers_factor_ladder_family_row() -> None:
@@ -47,12 +49,12 @@ def test_registry_registers_factor_ladder_family_row() -> None:
 
     assert factor_row["status"] == "`staged`"
     assert factor_row["latest_terminal_run"] == "`hierdec4096_exporter_distill_smoke_20260411_2110`"
-    assert "回填 canonical archive" in factor_row["next_allowed_action"]
-    assert "E2/E3 short10" in factor_row["next_allowed_action"]
-    assert "technical smoke" in factor_row["next_allowed_action"]
-    assert "remote isolated workdir" in factor_row["notes"]
+    assert "E2" in factor_row["next_allowed_action"]
+    assert "E3 short10" in factor_row["next_allowed_action"]
+    assert "079b603" in factor_row["next_allowed_action"]
+    assert "remote runtime" in factor_row["notes"]
+    assert "079b603" in factor_row["notes"]
     assert "5877077" in factor_row["notes"]
     assert "single-GPU" in factor_row["notes"]
-    assert "尚未回填" in factor_row["notes"]
     assert "genos_summary" in factor_row["notes"]
     assert "n_records" in factor_row["notes"]
