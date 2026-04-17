@@ -16,6 +16,13 @@
 
 - [reports/transchrombp_internal_design_and_experiment_history_20260331.md](../../reports/transchrombp_internal_design_and_experiment_history_20260331.md)
 
+如果你更关心下面这些问题，也建议直接并行看新专题：
+
+- 想先补概念：看 [深度学习补课手册.md](深度学习补课手册.md)
+- 想只看效果最好的主线模型：看 [无大模型基线到当前主线.md](无大模型基线到当前主线.md)
+- 想看 foundation / AlphaGenome 路线：看 [基座模型接入路线图.md](基座模型接入路线图.md)
+- 想看全部实验 family：看 [TransChromBP项目实验全景图.md](TransChromBP项目实验全景图.md)
+
 ## 2. 当前默认模型到底是什么
 
 ### 2.1 一句话结构图
@@ -190,23 +197,27 @@ held-out test 上：
 ### 路线 A：只想尽快理解今天的主线
 
 1. 本文件
-2. [TransChromBP当前模型详解.md](TransChromBP当前模型详解.md)
-3. [reports/paper_claim_evidence_matrix_20260326.md](../../reports/paper_claim_evidence_matrix_20260326.md)
+2. [无大模型基线到当前主线.md](无大模型基线到当前主线.md)
+3. [TransChromBP当前模型详解.md](TransChromBP当前模型详解.md)
+4. [reports/paper_claim_evidence_matrix_20260326.md](../../reports/paper_claim_evidence_matrix_20260326.md)
 
 ### 路线 B：想把代码和论文一起重新串起来
 
 1. [reports/transchrombp_internal_design_and_experiment_history_20260331.md](../../reports/transchrombp_internal_design_and_experiment_history_20260331.md)
 2. [TransChromBP当前模型详解.md](TransChromBP当前模型详解.md)
-3. [reports/paper_writeup_flow_20260330.md](../../reports/paper_writeup_flow_20260330.md)
-4. [reports/transchrombp_paper_cn_v1.tex](../../reports/transchrombp_paper_cn_v1.tex)
+3. [TransChromBP项目实验全景图.md](TransChromBP项目实验全景图.md)
+4. [reports/paper_writeup_flow_20260330.md](../../reports/paper_writeup_flow_20260330.md)
+5. [reports/transchrombp_paper_cn_v1.tex](../../reports/transchrombp_paper_cn_v1.tex)
 
 ### 路线 C：想从基础一路学到当前模型
 
-1. [小白学习指南.md](小白学习指南.md)
-2. [BPNet模型小白教程.md](BPNet模型小白教程.md)
-3. [BPNet与ChromBPNet模型对比.md](BPNet与ChromBPNet模型对比.md)
-4. 本文件
-5. [TransChromBP当前模型详解.md](TransChromBP当前模型详解.md)
+1. [深度学习补课手册.md](深度学习补课手册.md)
+2. [小白学习指南.md](小白学习指南.md)
+3. [BPNet模型小白教程.md](BPNet模型小白教程.md)
+4. [BPNet与ChromBPNet模型对比.md](BPNet与ChromBPNet模型对比.md)
+5. [无大模型基线到当前主线.md](无大模型基线到当前主线.md)
+6. 本文件
+7. [TransChromBP当前模型详解.md](TransChromBP当前模型详解.md)
 
 ## 7. 一张记忆卡片
 

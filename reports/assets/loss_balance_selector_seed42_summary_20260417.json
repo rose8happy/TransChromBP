@@ -1,0 +1,22 @@
+{
+  "run": "teacher_v2_center_pool_lossbal_e0_selector_s42_6000_20260417_r1",
+  "machine": "6000",
+  "family_id": "loss_balance_curriculum",
+  "epochs": 29,
+  "stop_reason": "early-stop at epoch 29 after 8 validations without improving peak.profile_target_jsd_full_mean",
+  "best_jsd_epoch": 21,
+  "best_jsd": 0.3313205898101434,
+  "best_jsd_count_r": 0.8055535222910426,
+  "best_jsd_profile_gap": 0.00010605993767668056,
+  "best_jsd_count_shift": 0.28362665835349243,
+  "best_loss_epoch": 22,
+  "loss_sel_jsd": 0.3324635056895848,
+  "loss_sel_count_r": 0.8041085751893685,
+  "loss_sel_profile_gap": 0.00010614415524043855,
+  "loss_sel_count_shift": 0.21190741110432618,
+  "selector_epoch_gap": 1,
+  "selector_jsd_gap": 0.0011429158794414307,
+  "best_metric_name": "peak.profile_target_jsd_full_mean",
+  "best_checkpoint_path": "/data1/zhoujiazhen/bylw_atac/TransChromBP/outputs/checkpoints/teacher_v2_center_pool_lossbal_e0_selector_s42_6000_20260417_r1/best.pt",
+  "decision": "selector mismatch is real but modest in seed42; run seed1234 before entering the static safe-envelope grid"
+}

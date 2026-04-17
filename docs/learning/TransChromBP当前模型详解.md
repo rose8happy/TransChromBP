@@ -10,6 +10,13 @@
 - [TransChromBP当前模型学习总览.md](TransChromBP当前模型学习总览.md)
 - [reports/transchrombp_internal_design_and_experiment_history_20260331.md](../../reports/transchrombp_internal_design_and_experiment_history_20260331.md)
 
+如果你当前的目标更偏向某个专题，建议先分流：
+
+- 想先补 `QKV / KL / JSD / loss`：看 [深度学习补课手册.md](深度学习补课手册.md)
+- 想只看当前最好的非 foundation 主线：看 [无大模型基线到当前主线.md](无大模型基线到当前主线.md)
+- 想看所有实验 family：看 [TransChromBP项目实验全景图.md](TransChromBP项目实验全景图.md)
+- 想看 Genos / NT v2 / Caduceus / AlphaGenome：看 [基座模型接入路线图.md](基座模型接入路线图.md)
+
 ## 1. 当前模型的最短定义
 
 今天的 `TransChromBP` 可以压缩成下面这句话：
@@ -329,19 +336,26 @@ total =
 
 这就是为什么 `L3 shared-region` 现在可以真正做官方侧和自研侧对齐。
 
-## 7. 实验线与配置文件应该怎么对上
+## 7. 实验线与代码 / 配置应该怎么对上
 
-如果你现在想从实验名回到代码/配置，可以用下面这张表。
+如果你现在想从实验名回到代码，可以先按“改的是哪一层”来找，而不是先背 run 名。
 
-| 实验线 | 模型配置 | 训练配置 | 你应该怎么理解 |
+| 实验类别 | 先看哪 1-2 个文件 | 代表配置 | 你只需要先看懂什么 |
 |---|---|---|---|
-| 当前默认主线 | `transchrombp_teacher_v2_center_pool.yaml` | `train_ablation_v2_main_profile_select.yaml` 等同类 paper-facing 训练配置 | 当前默认 paper-facing scaffold |
-| noTF 对照 | `transchrombp_teacher_v2_noTF.yaml` / `ablation_no_transformer.yaml` | `train_ablation_v2_main_profile_select.yaml` | backbone 对照，不是默认 |
-| no-sg 对照 | `transchrombp_teacher_v2_nosg.yaml` | 相应 ablation train config | clean-matrix 的一部分，不是默认 |
-| center-pool readout | `transchrombp_teacher_v2_center_pool.yaml` | `train_v2fix_cpool_s1234_6000_single.yaml` 等 | 当前默认 readout 线 |
-| attention-pool readout | `v2fix_attn_pool.yaml` | 对应 v2fix train config | 研究性读出头，对照用途大于默认用途 |
-| no-bias | `ablations/ablation_no_bias.yaml` | `train_ablation_v2_main.yaml` | supplementary boundary result |
-| strict compare L3 | 对应 corrected-B L3 模型配置 | `train_tutorial_corrected_b_strict_compare_L3_6000.yaml` | 当前最强 external evidence 训练线 |
+| backbone ablation | `models/transchrombp.py`、`models/transformer_encoder.py` | `ablations/ablation_no_transformer.yaml` | `sequence_encoder.enabled` 是不是打开 |
+| readout design | `models/transchrombp.py` | `transchrombp_teacher_v2_center_pool.yaml`、`v2fix_attn_pool.yaml` | `count_pool_mode` 怎么影响 count 头 |
+| bias / clean matrix | `models/transchrombp.py`、`training/train_ddp.py` | `transchrombp_teacher_v2_nosg.yaml` 等 clean-matrix configs | `profile_bias_stop_gradient` 和 `debiased_profile_weight` 是怎样一起生效的 |
+| loss / selector | `training/train_ddp.py`、`scripts/select_best_epoch.py` | `train_ablation_v2_main_profile_select.yaml` | `best_metric`、`compute_losses()`、`run_validation()` |
+| strict compare / held-out test | `evaluation/evaluate_checkpoint.py`、`scripts/paper_aligned_repro/select_best_epoch.py` | `train_tutorial_corrected_b_strict_compare_L3_6000.yaml` | external selector 和 held-out 输出字段 |
+| no-bias boundary | `models/transchrombp.py` | `ablations/ablation_no_bias.yaml` | 去掉 bias branch 后还有哪些输出保留 |
+| Genos 接入 | `models/genos_adapter.py`、`models/transchrombp.py` | `v2fix_genos_gate.yaml`、`train_genos_cached_short10.yaml` | summary / FiLM / count 注入挂在哪里 |
+| Caduceus 接入 | `models/caduceus_adapter.py`、`training/train_ddp.py` | `transchrombp_teacher_v2_center_pool_caduceus_ps.yaml` | token-level 在线融合发生在 Transformer 前面 |
+| NT v2 / foundation adapter | `models/foundation_adapter.py`、`scripts/build_foundation_cache.py` | `transchrombp_teacher_v2_center_pool_ntv2_residual.yaml` | cache / residual / adapter 路线怎样挂进主干 |
+
+如果你想按结论而不是按代码看，直接读：
+
+- [TransChromBP项目实验全景图.md](TransChromBP项目实验全景图.md)
+- [基座模型接入路线图.md](基座模型接入路线图.md)
 
 ## 8. 当前哪些结论已经从“探索”变成“默认”
 
@@ -396,6 +410,18 @@ total =
 - held-out test 的真实输出字段
 - selector 用的 metric 路径
 - official 与自研是怎么被对齐到同一套外部规则下的
+
+### 第四层：如果你要看 foundation 线
+
+1. `vendor/transchrombp/transchrombp/models/genos_adapter.py`
+2. `vendor/transchrombp/transchrombp/models/caduceus_adapter.py`
+3. `vendor/transchrombp/transchrombp/models/foundation_adapter.py`
+
+重点看：
+
+- 外部特征是在 backbone 前、backbone 内还是 head 附近被接进来
+- 为什么这些模块是“后来挂上去的分支”，不是主干最初就天然需要的一部分
+- 哪些接法已经被实验线判成 `no-go` 或 `near-null`
 
 ## 10. 如果现在要边看代码边想论文，应该怎么连起来
 
