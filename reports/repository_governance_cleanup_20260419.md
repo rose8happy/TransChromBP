@@ -22,12 +22,24 @@
    - `bpnet_model_annotated.py` → `docs/learning/assets/bpnet_model_annotated.py`
    - `visualize_bpnet.py` → `scripts/visualize_bpnet.py`
 
+## 后续补收口
+
+1. 从临时保护分支 `master-wip-20260419-pre-governance-merge` 只挑回真正仍有价值的内容，而不是整支回滚：
+   - `TRACKING.md`、`docs/experiments/registry.md`、`docs/experiments/runs.csv` 的 factor-ladder / loss-balance 最新状态
+   - `reports/chatgpt_bundle_loss_balance_20260416/` 外发专题包
+   - `reports/repository_hygiene_cleanup_20260417.md`
+   - `reports/assets/chrombpnet_bias_training_20260123/` 小型正式资产
+   - `vendor/transchrombp/scripts/summarize_loss_balance_selectors.py`
+2. 明确不回流会冲掉治理主线的旧内容，例如旧版 `scripts/sync_project.sh`、回顶层的历史单文件路径、以及删除 `docs/env/repository_governance.md` 的改动。
+3. 修正 `.gitignore` 对 `docs/env/` 的误伤：保留 `env/` 目录默认忽略的意图，但显式放开 `docs/env/**`，并把 `docs/env/transchrombp_genos_env.md` 纳入 Git。
+
 ## 当前结论
 
 - 本地 `/home/zhengwei/project/python/chromBPNet` 继续作为唯一 canonical trunk。
 - 6000 `/data1/zhoujiazhen/bylw_atac/chromBPNet` 只承担官方 ChromBPNet 查阅 / 复现。
 - 6000 与 6002 的 `TransChromBP` 目录默认都只是 runtime/mirror，远端热修必须先回收进本地仓。
 - 目录物理改名值得做，但不应和本轮同步接口重写绑在一起。
+- 保护分支 `master-wip-20260419-pre-governance-merge` 只剩“把治理主线打回去”的旧内容；在完成上述 selective curation 之后，已于 `2026-04-19` 删除。
 
 ## 后续最值得做的事
 

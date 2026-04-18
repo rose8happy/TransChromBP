@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -12,7 +13,9 @@ def read_text(path: str) -> str:
 
 def test_governance_doc_declares_single_source_of_truth() -> None:
     governance_path = REPO_ROOT / "docs/env/repository_governance.md"
+    genos_env_path = REPO_ROOT / "docs/env/transchrombp_genos_env.md"
     assert governance_path.exists()
+    assert genos_env_path.exists()
 
     text = governance_path.read_text(encoding="utf-8")
     assert "single source of truth" in text.lower()
@@ -91,3 +94,30 @@ def test_curated_artifacts_and_ignore_rules_exist() -> None:
 
     assert (REPO_ROOT / "reports/repository_hygiene_cleanup_20260417.md").exists()
     assert (REPO_ROOT / "vendor/transchrombp/scripts/summarize_loss_balance_selectors.py").exists()
+
+
+def test_docs_env_is_not_masked_by_root_env_ignore_rule() -> None:
+    for path in (
+        "docs/env/repository_governance.md",
+        "docs/env/transchrombp_genos_env.md",
+    ):
+        result = subprocess.run(
+            ["git", "check-ignore", path],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert result.returncode == 1, (
+            f"{path} should stay visible to git, but check-ignore reported: "
+            f"{result.stdout}{result.stderr}"
+        )
+
+    root_env = subprocess.run(
+        ["git", "check-ignore", "env/example.txt"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert root_env.returncode == 0

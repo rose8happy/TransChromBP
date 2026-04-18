@@ -54,6 +54,8 @@ MANIFEST
 .venv-report/
 .venv-*/
 env/
+!docs/env/
+!docs/env/**
 venv/
 ENV/
 
