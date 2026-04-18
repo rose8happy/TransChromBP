@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="500">
+<rect width="100%" height="100%" fill="white"/>
+<line x1="70" y1="70" x2="70" y2="430" stroke="#333"/>
+<line x1="70" y1="430" x2="830" y2="430" stroke="#333"/>
+<text x="70" y="50" font-size="16">ChromBPNet Bias Model Training Curves</text>
+<text x="20" y="250.0" font-size="12" transform="rotate(-90 20,250.0)">Total loss</text>
+<text x="450.0" y="470" font-size="12">Epoch</text>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" points="70.00,227.04 110.00,307.84 150.00,330.98 190.00,347.31 230.00,359.08 270.00,368.15 310.00,373.54 350.00,377.42 390.00,380.29 430.00,383.15 470.00,385.35 510.00,388.01 550.00,389.47 590.00,391.08 630.00,392.86 670.00,394.63 710.00,395.87 750.00,397.62 790.00,398.57 830.00,400.00" />
+<polyline fill="none" stroke="#ff7f0e" stroke-width="2" points="70.00,100.00 110.00,131.15 150.00,136.49 190.00,158.51 230.00,162.80 270.00,175.02 310.00,153.33 350.00,136.97 390.00,178.45 430.00,185.28 470.00,182.48 510.00,185.58 550.00,181.21 590.00,182.94 630.00,190.47 670.00,185.76 710.00,185.57 750.00,188.81 790.00,186.23 830.00,188.09" />
+<rect x="670" y="80" width="150" height="50" fill="white" stroke="#ccc"/>
+<line x1="685" y1="95" x2="715" y2="95" stroke="#1f77b4" stroke-width="2"/>
+<text x="720" y="99" font-size="12">train total</text>
+<line x1="685" y1="115" x2="715" y2="115" stroke="#ff7f0e" stroke-width="2"/>
+<text x="720" y="119" font-size="12">val total</text>
+</svg>

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="900">
+<rect width="100%" height="100%" fill="white"/>
+<text x="80" y="40" font-size="18">ChromBPNet Bias Model Training Curves</text>
+<rect x="80" y="60" width="840" height="233" fill="none" stroke="#333"/>
+<text x="80" y="52" font-size="14">Total loss (profile + 5.7*logcount)</text>
+<text x="70" y="72" font-size="10" text-anchor="end">161.27</text>
+<text x="70" y="293" font-size="10" text-anchor="end">153.41</text>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" points="80.00,161.64 124.21,213.93 168.42,228.91 212.63,239.48 256.84,247.10 301.05,252.97 345.26,256.45 389.47,258.97 433.68,260.83 477.89,262.68 522.11,264.10 566.32,265.83 610.53,266.77 654.74,267.81 698.95,268.97 743.16,270.11 787.37,270.91 831.58,272.04 875.79,272.66 920.00,273.58" />
+<polyline fill="none" stroke="#ff7f0e" stroke-width="2" points="80.00,79.42 124.21,99.58 168.42,103.03 212.63,117.28 256.84,120.06 301.05,127.97 345.26,113.94 389.47,103.35 433.68,130.19 477.89,134.61 522.11,132.80 566.32,134.81 610.53,131.98 654.74,133.10 698.95,137.97 743.16,134.92 787.37,134.80 831.58,136.89 875.79,135.23 920.00,136.43" />
+<rect x="760" y="70" width="150" height="44" fill="white" stroke="#ccc"/>
+<line x1="770" y1="84" x2="800" y2="84" stroke="#1f77b4" stroke-width="2"/>
+<text x="805" y="88" font-size="12">train</text>
+<line x1="770" y1="102" x2="800" y2="102" stroke="#ff7f0e" stroke-width="2"/>
+<text x="805" y="106" font-size="12">val</text>
+<rect x="80" y="333" width="840" height="233" fill="none" stroke="#333"/>
+<text x="80" y="325" font-size="14">Profile loss</text>
+<text x="70" y="345" font-size="10" text-anchor="end">158.36</text>
+<text x="70" y="566" font-size="10" text-anchor="end">151.07</text>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" points="80.00,472.77 124.21,517.84 168.42,526.36 212.63,531.57 256.84,535.02 301.05,537.50 345.26,539.06 389.47,540.54 433.68,541.71 477.89,542.46 522.11,543.26 566.32,544.02 610.53,544.45 654.74,544.76 698.95,544.92 743.16,545.64 787.37,545.92 831.58,546.13 875.79,546.33 920.00,546.58" />
+<polyline fill="none" stroke="#ff7f0e" stroke-width="2" points="80.00,352.42 124.21,364.24 168.42,365.52 212.63,372.68 256.84,374.91 301.05,376.35 345.26,375.65 389.47,376.24 433.68,379.38 477.89,379.06 522.11,379.56 566.32,380.88 610.53,380.54 654.74,378.01 698.95,381.27 743.16,380.07 787.37,380.05 831.58,380.49 875.79,380.20 920.00,379.49" />
+<rect x="760" y="343" width="150" height="44" fill="white" stroke="#ccc"/>
+<line x1="770" y1="357" x2="800" y2="357" stroke="#1f77b4" stroke-width="2"/>
+<text x="805" y="361" font-size="12">train</text>
+<line x1="770" y1="375" x2="800" y2="375" stroke="#ff7f0e" stroke-width="2"/>
+<text x="805" y="379" font-size="12">val</text>
+<rect x="80" y="606" width="840" height="233" fill="none" stroke="#333"/>
+<text x="80" y="598" font-size="14">Logcount loss</text>
+<text x="70" y="618" font-size="10" text-anchor="end">0.71</text>
+<text x="70" y="839" font-size="10" text-anchor="end">0.28</text>
+<text x="80" y="859" font-size="10">0</text>
+<text x="910" y="859" font-size="10">19</text>
+<text x="500.0" y="879" font-size="12" text-anchor="middle">Epoch</text>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" points="80.00,625.42 124.21,658.81 168.42,681.21 212.63,699.44 256.84,713.46 301.05,724.76 345.26,731.26 389.47,734.88 433.68,737.36 477.89,740.98 522.11,743.16 566.32,746.37 610.53,748.10 654.74,750.51 698.95,753.71 743.16,755.22 787.37,756.94 831.58,759.89 875.79,761.29 920.00,763.44" />
+<polyline fill="none" stroke="#ff7f0e" stroke-width="2" points="80.00,718.38 124.21,747.53 168.42,754.76 212.63,778.91 256.84,781.15 301.05,801.98 345.26,759.55 389.47,724.23 433.68,800.11 477.89,815.07 522.11,807.86 566.32,810.33 610.53,802.39 654.74,813.35 698.95,819.23 743.16,813.10 787.37,812.76 831.58,818.13 875.79,813.69 920.00,819.58" />
+<rect x="760" y="616" width="150" height="44" fill="white" stroke="#ccc"/>
+<line x1="770" y1="630" x2="800" y2="630" stroke="#1f77b4" stroke-width="2"/>
+<text x="805" y="634" font-size="12">train</text>
+<line x1="770" y1="648" x2="800" y2="648" stroke="#ff7f0e" stroke-width="2"/>
+<text x="805" y="652" font-size="12">val</text>
+</svg>

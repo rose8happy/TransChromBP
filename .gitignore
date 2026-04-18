@@ -25,6 +25,7 @@ old
 
 # Python
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 *.so
@@ -91,19 +92,28 @@ tmp/
 temp/
 
 # Specific large files to ignore
-2024.12.25.630221v2.full.pdf
-2024.12.25.630221v2.full.pdf:Zone.Identifier
-s41586-025-10014-0.pdf
-s41586-025-10014-0.pdf:Zone.Identifier
-bias_training_log.csv
-bias_training_curve.svg
-bias_training_curve_detailed.svg
+/2024.12.25.630221v2.full.pdf
+/2024.12.25.630221v2.full.pdf:Zone.Identifier
+/s41586-025-10014-0.pdf
+/s41586-025-10014-0.pdf:Zone.Identifier
+/bias_training_log.csv
+/bias_training_curve.svg
+/bias_training_curve_detailed.svg
 .codex_remote_edit/
 .agents/
 server_public_key.txt
 *.deb
 *.checked
+references/local-only/*
+!references/local-only/README.md
 reports/*.pdf
+reports/*.aux
+reports/*.fdb_latexmk
+reports/*.fls
+reports/*.log
+reports/*.out
+reports/*.toc
+reports/*.xdv
 reports/texput.log
 tmp_remote_edit/*
 !tmp_remote_edit/README.md

@@ -60,5 +60,34 @@ def test_supporting_readmes_exist_for_reports_references_and_staging() -> None:
     assert staging_readme.exists()
 
     assert "md/tex/assets" in reports_readme.read_text(encoding="utf-8")
+    assert "避免和 LaTeX build 日志混淆" in reports_readme.read_text(encoding="utf-8")
     assert "local-only" in references_readme.read_text(encoding="utf-8")
     assert "staging" in staging_readme.read_text(encoding="utf-8")
+
+
+def test_curated_artifacts_and_ignore_rules_exist() -> None:
+    gitignore = read_text(".gitignore")
+    assert ".pytest_cache/" in gitignore
+    assert "references/local-only/*" in gitignore
+    assert "!references/local-only/README.md" in gitignore
+    assert "reports/*.aux" in gitignore
+    assert "reports/*.fdb_latexmk" in gitignore
+    assert "/bias_training_curve.svg" in gitignore
+    assert "/bias_training_curve_detailed.svg" in gitignore
+    assert "/bias_training_log.csv" in gitignore
+
+    asset_dir = REPO_ROOT / "reports/assets/chrombpnet_bias_training_20260123"
+    assert (asset_dir / "bias_training_curve.svg").exists()
+    assert (asset_dir / "bias_training_curve_detailed.svg").exists()
+    assert (asset_dir / "bias_training_log.csv").exists()
+
+    asset_readme = (asset_dir / "README.md").read_text(encoding="utf-8")
+    assert "reports/chrombpnet_tutorial_bias_training_analysis_20260123.md" in asset_readme
+
+    bundle_dir = REPO_ROOT / "reports/chatgpt_bundle_loss_balance_20260416"
+    assert (bundle_dir / "00_readme_upload_order_and_prompt.md").exists()
+    assert (bundle_dir / "03_questions_for_external_models_dynamic_loss.md").exists()
+    assert (bundle_dir / "10_ready_to_send_chatgpt_pro_prompt.md").exists()
+
+    assert (REPO_ROOT / "reports/repository_hygiene_cleanup_20260417.md").exists()
+    assert (REPO_ROOT / "vendor/transchrombp/scripts/summarize_loss_balance_selectors.py").exists()
