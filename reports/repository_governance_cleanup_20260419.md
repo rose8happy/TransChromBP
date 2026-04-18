@@ -32,6 +32,10 @@
    - `vendor/transchrombp/scripts/summarize_loss_balance_selectors.py`
 2. 明确不回流会冲掉治理主线的旧内容，例如旧版 `scripts/sync_project.sh`、回顶层的历史单文件路径、以及删除 `docs/env/repository_governance.md` 的改动。
 3. 修正 `.gitignore` 对 `docs/env/` 的误伤：保留 `env/` 目录默认忽略的意图，但显式放开 `docs/env/**`，并把 `docs/env/transchrombp_genos_env.md` 纳入 Git。
+4. 完成一轮 mounted worktree 审计并写入 `reports/worktree_registry_audit_20260419.md`：
+   - 冗余的 `loss-balance-bundle-20260416` 挂载已删除；
+   - dirty 的 `loss-balance-20260417` 先冻结成提交 `c9066b6`，补齐 `run/`、`closeout/`、`snapshot/` tags，再卸载 live worktree；
+   - `loss_balance_curriculum` 后续若要复查 exact local dynamic-count 实现，不再依赖 live worktree，而是走 `snapshot/loss-balance-20260417/20260419`。
 
 ## 当前结论
 

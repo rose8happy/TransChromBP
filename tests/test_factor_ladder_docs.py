@@ -1,5 +1,6 @@
 import csv
 from pathlib import Path
+import subprocess
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -104,11 +105,28 @@ def test_registry_registers_loss_balance_family_row() -> None:
     assert "静态 safe-envelope" in loss_row["next_allowed_action"]
     assert "不要重开 selector-only `s1234`" in loss_row["next_allowed_action"]
     assert "不要直接扩 dynamic-count sweep" in loss_row["next_allowed_action"]
+    assert loss_row["mounted_worktree"] == "`n/a`"
+    assert "closeout/loss_balance_curriculum/20260418" in loss_row["closeout_tags"]
+    assert "snapshot/loss-balance-20260417/20260419" in loss_row["closeout_tags"]
     assert "selector_jsd_gap=0.00114" in loss_row["notes"]
     assert "2026-04-17 14:55:46 CST" in loss_row["notes"]
     assert "2026-04-17 21:45:24 CST" in loss_row["notes"]
     assert "count_weight` 从 `0.10` 增到 `0.23186`" in loss_row["notes"]
     assert "clear gain" in loss_row["notes"]
+    assert "exact local dynamic-count worktree state" in loss_row["notes"]
+
+
+def test_loss_balance_snapshot_and_closeout_tags_exist() -> None:
+    tag_list = subprocess.run(
+        ["git", "tag", "--list", "closeout/loss_balance_curriculum/20260418", "snapshot/loss-balance-20260417/20260419"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout
+
+    assert "closeout/loss_balance_curriculum/20260418" in tag_list
+    assert "snapshot/loss-balance-20260417/20260419" in tag_list
 
 
 def test_runs_manifest_records_factor_ladder_halt_and_loss_balance_closeout() -> None:
