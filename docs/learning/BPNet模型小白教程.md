@@ -460,11 +460,10 @@ Profile (1000 个值) + Counts (1 个值)
 
 ## 代码详细注释
 
-我已经创建了一个完全注释版本：`bpnet_model_annotated.py`
+我已经创建了一个完全注释版本：`docs/learning/assets/bpnet_model_annotated.py`
 
 这个文件包含：
 - 每一行的详细中文注释
 - 参数解释和设计原理
 - 常见问题 FAQ
 - 使用示例
-

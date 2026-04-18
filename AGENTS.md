@@ -3,6 +3,7 @@
 ## Instruction Hierarchy
 - `AGENTS.md` is the canonical repository instruction file. Stable, cross-agent rules belong here.
 - `CLAUDE.md` and `GEMINI.md` are thin agent-specific wrappers. They should only add tool-specific reminders and point back to `AGENTS.md` for repository rules.
+- Repository topology, single-source-of-truth wording, and sync command names are summarized in `docs/env/repository_governance.md`; if that document and `AGENTS.md` diverge, `AGENTS.md` wins.
 - Keep live status in `TRACKING.md`, experiment registry in `docs/experiments/registry.md` and `docs/experiments/runs.csv`, reusable full analysis in `reports/`, and medium/large execution plans in `docs/plan/`.
 - When repository reality changes, update `AGENTS.md` first and then trim or refresh any wrapper files that depend on it.
 - Remove stale guidance when it becomes misleading instead of endlessly appending new caveats below it.
@@ -10,12 +11,14 @@
 ## Project Structure & Module Organization
 - This repo is the TransChromBP main repository and project archive; official ChromBPNet source lookup and reproduction currently use the 6000 external repo at `/data1/zhoujiazhen/bylw_atac/chromBPNet`.
 - Local official ChromBPNet payload is retired; official ChromBPNet source lookup and reproduction live only in the 6000 external repo at `/data1/zhoujiazhen/bylw_atac/chromBPNet`. Do not assume a `/data1/zhoujiazhen/bylw_atac/chrombpnet_official` alias exists unless `TRACKING.md` explicitly says it has been validated.
+- The repository topology is fixed as: local canonical trunk, 6000 official lookup root, 6000 runtime workspace, and 6002 runtime mirror. Do not describe this as three-way peer sync; it is a single-source-of-truth plus one-way publish model.
 - `scripts/` holds utility scripts: `sync_project.sh`, `benchmark/`, data prep launchers, `setup_report_env.sh`.
 - `workflows/` holds end-to-end bash workflows plus `tutorial/` step scripts.
 - `tests/` contains shell-based integration checks.
 - `docs/` organizes durable documentation by topic: `plan/`（实验计划）, `research/`（研究笔记）, `env/`（环境配置）, `learning/`（学习资料）. 按需新增子目录，不预建空目录。
 - `docs/experiments/registry.md` is the canonical family/workstream index; `docs/experiments/runs.csv` is the canonical run-level manifest.
 - `reports/` stores reusable analysis sources (`.tex`/`.md`) with `assets/` for result summaries (csv/png/json); LaTeX build products and PDF outputs stay local-only unless explicitly needed for delivery.
+- `references/` stores lightweight indexes for local-only lookup material; keep the actual heavy files under `references/local-only/`.
 - `vendor/transchrombp/` is the versioned local snapshot of the TransChromBP codebase and helper scripts. Local TransChromBP imports should come from this snapshot or from the relevant 6000/6002 runtime workspace, not from the root repo as an official ChromBPNet package.
 - 6000 的实际 TransChromBP 运行仓使用 `src/transchrombp/` 布局，不是本地归档仓的 `vendor/transchrombp/` 布局；核对远端代码、运行脚本或环境时不要机械套本地路径。
 - `tmp_remote_edit/` is only the staging area for remote file edits and transient copies — not the final archive.
@@ -25,6 +28,8 @@
 - `pip install -r requirements.txt` installs shared Python deps for the repo.
 - If you need local TransChromBP imports, set `PYTHONPATH=vendor/transchrombp:$PYTHONPATH` in the active workspace, or use the relevant remote runtime workspace on 6000/6002.
 - Official ChromBPNet CLI, code lookup, and reproduction should be done in `/data1/zhoujiazhen/bylw_atac/chromBPNet` on 6000, or through an explicitly exported `CHROMBPNET_OFFICIAL_ROOT` that points to the current validated official root.
+- `./scripts/sync_project.sh publish-runtime-6000|publish-runtime-6002 [--dry-run]` are the only supported publish commands; do not use ambiguous `deploy` wording.
+- `./scripts/sync_project.sh pull-results-6000|pull-results-6002 [--dry-run]` are the only supported result-sync commands; do not sync `outputs/` wholesale.
 - `bash workflows/tutorial/step1_download_bams_and_peaks.sh /path/to/data` downloads tutorial inputs.
 - `bash tests/full_workflow.sh 0` executes the full tutorial workflow on GPU 0 (long, GPU-heavy).
 
