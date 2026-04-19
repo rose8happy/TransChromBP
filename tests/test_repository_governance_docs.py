@@ -35,7 +35,7 @@ def test_governance_doc_declares_single_source_of_truth() -> None:
 
     text = governance_path.read_text(encoding="utf-8")
     assert "single source of truth" in text.lower()
-    assert "/home/zhengwei/project/python/chromBPNet" in text
+    assert "本地 canonical trunk" in text
     assert "/data1/zhoujiazhen/bylw_atac/chromBPNet" in text
     assert "/data1/zhoujiazhen/bylw_atac/TransChromBP" in text
     assert "/home/zhengwei/bylw_atac/TransChromBP" in text
