@@ -47,8 +47,13 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 
 PUBLISH_EXCLUDES=(
+    "--exclude=.agents/"
+    "--exclude=.claude/"
+    "--exclude=.codex"
+    "--exclude=.codex_remote_edit/"
     "--exclude=.git/"
     "--exclude=.gitignore"
+    "--exclude=.idea/"
     "--exclude=.pytest_cache/"
     "--exclude=.venv/"
     "--exclude=.venv-report/"
@@ -59,8 +64,10 @@ PUBLISH_EXCLUDES=(
     "--exclude=outputs/"
     "--exclude=temp/"
     "--exclude=tmp/"
+    "--exclude=tmp_remote_edit/"
     "--exclude=trained_models/"
     "--exclude=wandb/"
+    "--exclude=references/local-only/"
     "--exclude=*.bam"
     "--exclude=*.bed"
     "--exclude=*.bed.gz"

@@ -94,6 +94,34 @@ def test_publish_runtime_6000_dry_run_targets_runtime_repo(tmp_path: Path) -> No
     assert "--exclude=.git/" in argv
 
 
+def test_publish_runtime_excludes_local_only_and_staging_paths(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    capture_path = tmp_path / "rsync_calls.json"
+    write_rsync_stub(bin_dir, capture_path)
+
+    result = run_script(
+        ["publish-runtime-6000", "--dry-run"],
+        env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"},
+    )
+
+    assert result.returncode == 0
+    calls = json.loads(capture_path.read_text(encoding="utf-8"))
+    assert len(calls) == 1
+
+    argv = calls[0]
+    for expected in (
+        "--exclude=.agents/",
+        "--exclude=.claude/",
+        "--exclude=.codex",
+        "--exclude=.codex_remote_edit/",
+        "--exclude=.idea/",
+        "--exclude=tmp_remote_edit/",
+        "--exclude=references/local-only/",
+    ):
+        assert expected in argv
+
+
 def test_pull_results_6000_dry_run_only_requests_logs_and_reports(tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()

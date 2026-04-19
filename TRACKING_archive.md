@@ -6,6 +6,14 @@
 
 ---
 
+## 2026-04-19 第十二轮归档（文档体系重整与发布边界收口）
+
+| 事项 | 关键结论 | 关键路径 |
+|---|---|---|
+| 文档体系重整与历史归档收口 | `README.md`、`TRACKING.md`、`AGENTS.md`、`docs/learning/学习材料索引.md`、`reports/README.md` 已完成新 canonical 入口收口；`docs/plan/` 根目录只保留 3 份 live 计划，其余迁入 `docs/plan/archive/`；`docs/research/` 的执行型笔记已迁到 `docs/archive/ops/`；`reports/` 根目录只保留 `README.md`。随后用真实 `publish-runtime-6000/6002 --dry-run` 验证发布契约，定位出 `.agents/`、`.claude/`、`.codex*`、`.idea/`、`tmp_remote_edit/`、`references/local-only/` 被误纳入发布集的问题，并已通过收紧 `scripts/sync_project.sh` 的 exclude 列表与 `tests/test_sync_project_contract.py` 契约测试修复。 | `README.md`、`docs/learning/学习材料索引.md`、`reports/README.md`、`scripts/sync_project.sh`、`tests/test_sync_project_contract.py` |
+
+---
+
 ## 2026-04-19 第十一轮归档（本地仓 physical rename 收口）
 
 | 事项 | 关键结论 | 关键路径 |
