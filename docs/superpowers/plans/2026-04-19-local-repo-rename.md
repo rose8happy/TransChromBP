@@ -246,7 +246,7 @@ docs/superpowers/plans/2026-04-19-local-repo-rename.md
 Required outcomes:
 - keep old local path where it is part of the symlink, rollback, or historical comparison narrative
 - do not touch remote official root `/data1/zhoujiazhen/bylw_atac/chromBPNet`
-- do not invent `/home/zhengwei/.config/superpowers/worktrees/TransChromBP/...`
+- do not invent a fake renamed historical worktree path under `~/.config/superpowers/worktrees/...`
 
 - [ ] **Step 3: Capture the residual old-path hits after the bulk rewrite**
 
