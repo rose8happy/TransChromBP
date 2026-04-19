@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 import subprocess
 
@@ -27,6 +28,29 @@ def parse_markdown_table(path: str) -> list[dict[str, str]]:
     return parsed_rows
 
 
+def parse_csv_rows(path: str) -> list[dict[str, str]]:
+    text = read_text(path)
+    return list(csv.DictReader(text.splitlines()))
+
+
+def old_local_root_is_compatibility_only(text: str) -> bool:
+    old_path = "/home/zhengwei/project/python/chromBPNet"
+    if old_path not in text:
+        return True
+
+    compatibility_markers = ("compatibility", "rollback", "兼容", "回滚")
+    for line in text.splitlines():
+        if old_path not in line:
+            continue
+        lowered = line.lower()
+        if "canonical" in lowered and not any(marker in lowered for marker in compatibility_markers):
+            return False
+        if not any(marker in lowered for marker in compatibility_markers):
+            return False
+
+    return True
+
+
 def test_governance_doc_declares_single_source_of_truth() -> None:
     governance_path = REPO_ROOT / "docs/env/repository_governance.md"
     genos_env_path = REPO_ROOT / "docs/env/transchrombp_genos_env.md"
@@ -52,6 +76,7 @@ def test_tracking_and_agents_reference_transchrombp_local_root() -> None:
     for path in ("AGENTS.md", "TRACKING.md", "README.md"):
         text = read_text(path)
         assert "/home/zhengwei/project/python/TransChromBP" in text
+        assert old_local_root_is_compatibility_only(text)
 
 
 def test_no_fake_transchrombp_worktree_paths_exist() -> None:
@@ -76,12 +101,22 @@ def test_no_fake_transchrombp_worktree_paths_exist() -> None:
 
 
 def test_runs_manifest_does_not_require_removed_local_worktrees() -> None:
-    runs = read_text("docs/experiments/runs.csv")
-    assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/dual-track-20260409" not in runs
-    assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/autonomy-20260406-structure" not in runs
-    assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/autonomy-20260406-chrombpnet-externalization" not in runs
-    assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/multiscale-decoder-probe-20260407" not in runs
-    assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/a6000-dual-track-20260410" not in runs
+    removed_archival_branches = {
+        "dual-track-20260409",
+        "autonomy/20260406-chrombpnet-externalization",
+        "multiscale-decoder-probe-20260407",
+        "a6000-dual-track-20260410",
+    }
+    rows = parse_csv_rows("docs/experiments/runs.csv")
+
+    for row in rows:
+        if row["branch"] not in removed_archival_branches:
+            continue
+
+        notes = row["notes"].lower()
+        assert row["worktree"] == "n/a"
+        assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/" not in notes
+        assert "recover from branch" in notes or "snapshot/" in notes
 
 
 def test_core_docs_reference_governance_doc_and_explicit_publish_commands() -> None:
