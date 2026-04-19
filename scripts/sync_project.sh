@@ -157,6 +157,7 @@ publish_runtime() {
     fi
 
     rsync "${RSYNC_ARGS[@]}" \
+        --delete \
         "${PUBLISH_EXCLUDES[@]}" \
         -e "$ssh_cmd" \
         "$REPO_ROOT/" "$target/"
