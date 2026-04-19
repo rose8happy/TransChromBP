@@ -1,5 +1,7 @@
 # 官方 ChromBPNet 外置化设计（2026-04-06）
 
+> 历史设计记录。当前已验证的 6000 官方根路径是 `/data1/zhoujiazhen/bylw_atac/chromBPNet`；若与旧执行稿或历史 alias 表述冲突，以该路径和 `docs/env/repository_governance.md` 为准。
+
 ## 1. 目标
 
 把当前根仓库从“官方 `chrombpnet` clone 上叠加项目档案与自研代码”收口为：
@@ -54,7 +56,7 @@
 
 官方 `ChromBPNet` 的 canonical 参考位置改为：
 
-- 6000：`/data1/zhoujiazhen/bylw_atac/chrombpnet_official`
+- 6000：`/data1/zhoujiazhen/bylw_atac/chromBPNet`
 
 后续所有“看官方源码”和“跑官方复现”的需求，都默认在该 A6000 参考仓完成，而不是在本仓完成。
 
@@ -154,7 +156,7 @@
 
 ### 6.2 6000 官方参考仓角色
 
-6000 上的 `/data1/zhoujiazhen/bylw_atac/chrombpnet_official` 成为唯一官方参考仓，承担：
+6000 上的 `/data1/zhoujiazhen/bylw_atac/chromBPNet` 成为唯一官方参考仓，承担：
 
 - 官方源码查阅
 - official compare 所需的 patched `predict.py` / `metrics.py` / helper code
@@ -185,7 +187,7 @@
 
 同时固定唯一远端路径合同：
 
-- `CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chrombpnet_official`
+- `CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chromBPNet`
 
 任何桥接脚本都必须围绕这个路径合同工作，不允许各自再发明第二套路径。
 

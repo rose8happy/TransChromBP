@@ -1456,11 +1456,11 @@ def test_factor_ladder_docs_are_registered() -> None:
 - [ ] **Step 4: Update `TRACKING.md` and `registry.md`**
 
 ```markdown
-| AlphaGenome-like factor ladder（E1/E2/E3） | 待处理 | `E1=4096 corrected B`、`E2=hierdec4096`、`E3=model-teacher distill` 的实现计划已写定，尚未起跑。 | 先完成代码与 launcher，再按 stop-rule 依次启动 `Phase 0` smoke。 | `docs/superpowers/specs/2026-04-11-alphagenome-like-factor-ladder-design.md`、`docs/superpowers/plans/2026-04-11-alphagenome-like-factor-ladder.md` |
+| AlphaGenome-like factor ladder（E1/E2/E3） | 待处理 | `E1=4096 corrected B`、`E2=hierdec4096`、`E3=model-teacher distill` 的实现计划已写定，尚未起跑。 | 先完成代码与 launcher，再按 stop-rule 依次启动 `Phase 0` smoke。 | `docs/plan/alphagenome_like_factor_ladder_design_20260411.md`、`docs/plan/alphagenome_like_factor_ladder_implementation_20260411.md` |
 ```
 
 ```markdown
-| `alphagenome_factor_ladder` | `planned` | `master` | `n/a` | `n/a` | `docs/superpowers/specs/2026-04-11-alphagenome-like-factor-ladder-design.md` | 仅允许按 `E1 -> E2 -> E3` 与 stop-rule 启动 | `n/a` | 新 family 尚未起跑；必须先完成 4096 long-context、hierdec 和 model-teacher cache wiring。 |
+| `alphagenome_factor_ladder` | `planned` | `master` | `n/a` | `n/a` | `docs/plan/alphagenome_like_factor_ladder_design_20260411.md` | 仅允许按 `E1 -> E2 -> E3` 与 stop-rule 启动 | `n/a` | 新 family 尚未起跑；必须先完成 4096 long-context、hierdec 和 model-teacher cache wiring。 |
 ```
 
 - [ ] **Step 5: Run the docs regression check**

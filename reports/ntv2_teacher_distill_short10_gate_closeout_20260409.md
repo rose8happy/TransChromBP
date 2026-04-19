@@ -10,7 +10,7 @@
 
 ## 1. Gate 规则
 
-根据 [dual_track_ntv2_distill_unet_lite_20260409.md](/home/zhengwei/.config/superpowers/worktrees/chromBPNet/dual-track-20260409/docs/plan/dual_track_ntv2_distill_unet_lite_20260409.md) 的原始定义，`teacher-distill short10` 相对 matched `short10_nofoundation_control`，必须同时满足：
+根据当时 `dual-track-20260409` pivot charter 固定下来的 short10 gate 定义（现通过 `snapshot/dual-track-20260409/20260409` 与 `docs/experiments/registry.md` 追溯），`teacher-distill short10` 相对 matched `short10_nofoundation_control`，必须同时满足：
 
 1. `peak JSD` 改善 `>= 0.002`
 2. `peak count_r` 不下降超过 `0.005`

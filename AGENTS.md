@@ -5,6 +5,7 @@
 - `CLAUDE.md` and `GEMINI.md` are thin agent-specific wrappers. They should only add tool-specific reminders and point back to `AGENTS.md` for repository rules.
 - Repository topology, single-source-of-truth wording, and sync command names are summarized in `docs/env/repository_governance.md`; if that document and `AGENTS.md` diverge, `AGENTS.md` wins.
 - Keep live status in `TRACKING.md`, experiment registry in `docs/experiments/registry.md` and `docs/experiments/runs.csv`, reusable full analysis in `reports/`, and medium/large execution plans in `docs/plan/`.
+- `docs/superpowers/` is a legacy archive for historical agent-generated design/execution docs. New or still-live plans/specs must live under `docs/plan/`, not under `docs/superpowers/`.
 - When repository reality changes, update `AGENTS.md` first and then trim or refresh any wrapper files that depend on it.
 - Remove stale guidance when it becomes misleading instead of endlessly appending new caveats below it.
 
@@ -16,6 +17,7 @@
 - `workflows/` holds end-to-end bash workflows plus `tutorial/` step scripts.
 - `tests/` contains shell-based integration checks.
 - `docs/` organizes durable documentation by topic: `plan/`（实验计划）, `research/`（研究笔记）, `env/`（环境配置）, `learning/`（学习资料）. 按需新增子目录，不预建空目录。
+- `docs/superpowers/` only keeps historical agent-planning artifacts that still matter for auditability; treat it as an archive namespace, not a second live planning root.
 - `docs/experiments/registry.md` is the canonical family/workstream index; `docs/experiments/runs.csv` is the canonical run-level manifest.
 - `reports/` stores reusable analysis sources (`.tex`/`.md`) with `assets/` for result summaries (csv/png/json); LaTeX build products and PDF outputs stay local-only unless explicitly needed for delivery.
 - `references/` stores lightweight indexes for local-only lookup material; keep the actual heavy files under `references/local-only/`.

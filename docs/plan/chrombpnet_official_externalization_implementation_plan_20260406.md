@@ -1,17 +1,19 @@
 # Official ChromBPNet Externalization Implementation Plan
 
+> Historical implementation record. The currently validated official root on 6000 is `/data1/zhoujiazhen/bylw_atac/chromBPNet`; treat any older alias wording as superseded.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Remove the local official `chrombpnet/` payload from this repository without breaking active official-compare or dataset-prep workflows, by bridging every live dependency to the 6000 official repository and rewriting canonical docs around the new repo role.
 
-**Architecture:** Keep this repository as the `TransChromBP` main repo plus project archive, and treat `/data1/zhoujiazhen/bylw_atac/chrombpnet_official` on 6000 as the only canonical official ChromBPNet source tree. Active scripts in this repo must either call that external official root explicitly or fail with a clear message; only after all live dependencies are cut do we delete `chrombpnet/`, `chrombpnet.egg-info/`, `setup.py`, and `MANIFEST.in`.
+**Architecture:** Keep this repository as the `TransChromBP` main repo plus project archive, and treat `/data1/zhoujiazhen/bylw_atac/chromBPNet` on 6000 as the only canonical official ChromBPNet source tree. Active scripts in this repo must either call that external official root explicitly or fail with a clear message; only after all live dependencies are cut do we delete `chrombpnet/`, `chrombpnet.egg-info/`, `setup.py`, and `MANIFEST.in`.
 
 **Tech Stack:** Bash, Python 3, SSH/SCP, ripgrep, Git, `bash -n`, `python3 -m py_compile`
 
 ## `2026-04-08` Execution Note
 
-- Fresh 6000 verification this round showed `/data1/zhoujiazhen/bylw_atac/chrombpnet_official` does not currently exist; the real usable official source root is still `/data1/zhoujiazhen/bylw_atac/chromBPNet`.
-- Therefore the `CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chrombpnet_official` strings below should currently be read as a target alias, not as an already-validated machine path.
+- Fresh 6000 verification this round confirmed the real usable official source root is `/data1/zhoujiazhen/bylw_atac/chromBPNet`.
+- Therefore the `CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chromBPNet` strings below should now be read as the validated machine path, not as a future alias target.
 - This round completed the helper-bridge part of the plan locally: [test_chrombpnet_official_externalization.sh](/home/zhengwei/project/python/chromBPNet/tests/test_chrombpnet_official_externalization.sh), [run_remote_chrombpnet_dataset_prep.sh](/home/zhengwei/project/python/chromBPNet/scripts/run_remote_chrombpnet_dataset_prep.sh), [start_6000_chrombpnet_dataset_prep.sh](/home/zhengwei/project/python/chromBPNet/scripts/start_6000_chrombpnet_dataset_prep.sh), [start_6002_chrombpnet_dataset_prep.sh](/home/zhengwei/project/python/chromBPNet/scripts/start_6002_chrombpnet_dataset_prep.sh), and [step3_get_background_regions.sh](/home/zhengwei/project/python/chromBPNet/workflows/tutorial/step3_get_background_regions.sh) now pass the local guard and `bash -n`.
 - A real 6000 smoke was then launched as `chrombpnet_official_step3_bridge_smoke_20260408_110411`, explicitly exporting `CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chromBPNet` and running the patched tutorial `step3_get_background_regions.sh` in a fresh scratch output directory. This was chosen over the full dataset-prep launcher because existing `prep_v1` artifacts would cause most steps to `skip`, which would not truly validate the helper bridge.
 - `2026-04-08 11:21 CST` re-check: the smoke passed. Evidence chain:
@@ -19,7 +21,7 @@
   - scratch output `negatives_with_summit.bed` exists at `/data1/zhoujiazhen/bylw_atac/.codex_jobs/chrombpnet_official_step3_bridge_smoke_20260408_110411/output/negatives_with_summit.bed`
   - `wc -l` on that file is `508429`
   - the actual executed helper path was `/data1/zhoujiazhen/bylw_atac/chromBPNet/chrombpnet/helpers/make_gc_matched_negatives/make_gc_matched_negatives.sh`
-- Therefore the helper bridge is now validated on a real 6000 run. The remaining documentation action is no longer “wait for smoke”, but “choose one canonical root and make it consistent everywhere”: either promote `/data1/zhoujiazhen/bylw_atac/chromBPNet` to the validated canonical root, or create and verify a real `chrombpnet_official` alias first.
+- Therefore the helper bridge is now validated on a real 6000 run. The remaining documentation action is no longer “wait for smoke”, but “make `/data1/zhoujiazhen/bylw_atac/chromBPNet` consistent everywhere and retire the old alias wording”.
 
 ---
 
@@ -34,7 +36,7 @@
     - `--official-root` for in-place use on 6000
     - `--gc-helper-dir` for staged helper files on 6002
 - `scripts/start_6000_chrombpnet_dataset_prep.sh`
-  - 6000 launcher. Must stop uploading helper scripts from the local repo and pass `--official-root /data1/zhoujiazhen/bylw_atac/chrombpnet_official`.
+  - 6000 launcher. Must stop uploading helper scripts from the local repo and pass `--official-root /data1/zhoujiazhen/bylw_atac/chromBPNet`.
 - `scripts/start_6002_chrombpnet_dataset_prep.sh`
   - 6002 launcher. Must fetch the three GC helper python files from 6000’s official repo into a local temp dir, then upload them to the 6002 job dir as runtime staging only.
 - `workflows/tutorial/step3_get_background_regions.sh`
@@ -44,7 +46,7 @@
 - `reports/chrombpnet_official_patch_ledger_20260406.md`
   - Durable patch ledger for the official files we still depend on operationally after externalization (`predict.py`, `metrics.py`, GC helper scripts).
 - `scripts/paper_aligned_repro/README.md`
-  - Operator instructions for strict compare / best-epoch selection. Must tell users to set `CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chrombpnet_official`.
+  - Operator instructions for strict compare / best-epoch selection. Must tell users to set `CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chromBPNet`.
 - `AGENTS.md`
   - Canonical repo guidance. Must describe the repo as `TransChromBP` main repo + archive, not as a local official ChromBPNet package.
 - `DEVELOPMENT.md`
@@ -269,7 +271,7 @@ fi
 
 ```bash
 # scripts/start_6000_chrombpnet_dataset_prep.sh
-OFFICIAL_ROOT="${CHROMBPNET_OFFICIAL_ROOT:-/data1/zhoujiazhen/bylw_atac/chrombpnet_official}"
+OFFICIAL_ROOT="${CHROMBPNET_OFFICIAL_ROOT:-/data1/zhoujiazhen/bylw_atac/chromBPNet}"
 
 "${scp_base[@]}" \
   "$REPO_ROOT/scripts/run_remote_chrombpnet_dataset_prep.sh" \
@@ -291,7 +293,7 @@ pid="$("${ssh_base[@]}" \
 # scripts/start_6002_chrombpnet_dataset_prep.sh
 OFFICIAL_HOST="${OFFICIAL_HOST:-zhoujiazhen@127.0.0.1}"
 OFFICIAL_PORT="${OFFICIAL_PORT:-6000}"
-OFFICIAL_ROOT="${CHROMBPNET_OFFICIAL_ROOT:-/data1/zhoujiazhen/bylw_atac/chrombpnet_official}"
+OFFICIAL_ROOT="${CHROMBPNET_OFFICIAL_ROOT:-/data1/zhoujiazhen/bylw_atac/chromBPNet}"
 LOCAL_STAGE="$(mktemp -d)"
 trap 'rm -rf "$LOCAL_STAGE"' EXIT
 
@@ -370,14 +372,14 @@ git commit -m "bridge dataset prep to official helper source"
 - [ ] **Step 1: Write the failing operator-contract check**
 
 ```bash
-rg -n 'CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chrombpnet_official|chrombpnet_official_patch_ledger_20260406.md' \
+rg -n 'CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chromBPNet|chrombpnet_official_patch_ledger_20260406.md' \
   scripts/paper_aligned_repro/README.md \
   reports/chrombpnet_official_patch_ledger_20260406.md
 ```
 
 - [ ] **Step 2: Run the check and verify it fails before the doc changes**
 
-Run: `rg -n 'CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chrombpnet_official|chrombpnet_official_patch_ledger_20260406.md' scripts/paper_aligned_repro/README.md reports/chrombpnet_official_patch_ledger_20260406.md`
+Run: `rg -n 'CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chromBPNet|chrombpnet_official_patch_ledger_20260406.md' scripts/paper_aligned_repro/README.md reports/chrombpnet_official_patch_ledger_20260406.md`
 
 Expected: FAIL because `reports/chrombpnet_official_patch_ledger_20260406.md` does not exist yet and the README still points operators at the local repo.
 
@@ -387,7 +389,7 @@ Expected: FAIL because `reports/chrombpnet_official_patch_ledger_20260406.md` do
 # reports/chrombpnet_official_patch_ledger_20260406.md
 ## Canonical official root
 
-- 6000 official repo: `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`
+- 6000 official repo: `/data1/zhoujiazhen/bylw_atac/chromBPNet`
 - This main repo no longer vendors official ChromBPNet source files.
 
 ## Active official files we still rely on
@@ -405,7 +407,7 @@ Expected: FAIL because `reports/chrombpnet_official_patch_ledger_20260406.md` do
 
 ```bash
 export CHROMBPNET_ENV=/data1/zhoujiazhen/bylw_atac/.mamba/envs/chrombpnet
-export CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chrombpnet_official
+export CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chromBPNet
 export PATH="$CHROMBPNET_ENV/bin:$PATH"
 export LD_LIBRARY_PATH="$CHROMBPNET_ENV/lib:$LD_LIBRARY_PATH"
 export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/TransChromBP/vendor/transchrombp:$PYTHONPATH
@@ -417,7 +419,7 @@ export PYTHONPATH=/data1/zhoujiazhen/bylw_atac/TransChromBP/vendor/transchrombp:
 
 - [ ] **Step 4: Run the doc checks and placeholder scan**
 
-Run: `rg -n 'CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chrombpnet_official|chrombpnet_official_patch_ledger_20260406.md' scripts/paper_aligned_repro/README.md reports/chrombpnet_official_patch_ledger_20260406.md`
+Run: `rg -n 'CHROMBPNET_OFFICIAL_ROOT=/data1/zhoujiazhen/bylw_atac/chromBPNet|chrombpnet_official_patch_ledger_20260406.md' scripts/paper_aligned_repro/README.md reports/chrombpnet_official_patch_ledger_20260406.md`
 
 Expected: PASS with matching lines in both files
 
@@ -465,7 +467,7 @@ Expected: FAIL with hits from all three files.
 - `docs/`、`reports/`、`TRACKING.md`：项目文档、论文与证据链
 - `scripts/`、`workflows/`：自研 launcher 与官方 bridge scripts
 
-官方 `ChromBPNet` 源码不再保存在本仓。查阅官方实现、跑官方复现、或执行 official compare 时，请使用 6000 上的 `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`。
+官方 `ChromBPNet` 源码不再保存在本仓。查阅官方实现、跑官方复现、或执行 official compare 时，请使用 6000 上的 `/data1/zhoujiazhen/bylw_atac/chromBPNet`。
 ```
 
 ```markdown
@@ -473,7 +475,7 @@ Expected: FAIL with hits from all three files.
 ## Project Structure & Module Organization
 - `vendor/transchrombp/` is the versioned local snapshot of the TransChromBP codebase and helper scripts.
 - `scripts/` holds project launchers, bridge scripts, benchmarking helpers, and maintenance utilities.
-- 官方 `ChromBPNet` 不再常驻本仓；源码查阅与官方复现默认在 6000 `/data1/zhoujiazhen/bylw_atac/chrombpnet_official` 完成。
+- 官方 `ChromBPNet` 不再常驻本仓；源码查阅与官方复现默认在 6000 `/data1/zhoujiazhen/bylw_atac/chromBPNet` 完成。
 
 ## Build, Test, and Development Commands
 - `pip install -r requirements.txt` installs Python deps used by local docs/utility workflows.
@@ -493,7 +495,7 @@ Expected: FAIL with hits from all three files.
 
 - 官方 `chrombpnet/` 源码树
 - `setup.py`、`MANIFEST.in`、`chrombpnet.egg-info/` 这类官方 packaging 入口
-- 官方复现与官方源码查阅；它们默认转到 6000 `/data1/zhoujiazhen/bylw_atac/chrombpnet_official`
+- 官方复现与官方源码查阅；它们默认转到 6000 `/data1/zhoujiazhen/bylw_atac/chromBPNet`
 ```
 
 - [ ] **Step 4: Re-run the stale-doc grep and confirm wrapper docs remain thin**

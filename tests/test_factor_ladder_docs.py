@@ -96,12 +96,12 @@ def test_registry_registers_loss_balance_family_row() -> None:
         row for row in rows if row["family_id"] == "`loss_balance_curriculum`"
     )
 
-    assert loss_row["status"] == "`running`"
+    assert loss_row["status"] == "`idle`"
     assert (
         loss_row["latest_terminal_run"]
         == "`teacher_v2_center_pool_lossbal_e2_dynamic_count_s42_6000_20260417_r1`"
     )
-    assert "当前没有 active run" in loss_row["next_allowed_action"]
+    assert "当前 family 处于 idle" in loss_row["next_allowed_action"]
     assert "静态 safe-envelope" in loss_row["next_allowed_action"]
     assert "不要重开 selector-only `s1234`" in loss_row["next_allowed_action"]
     assert "不要直接扩 dynamic-count sweep" in loss_row["next_allowed_action"]

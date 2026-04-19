@@ -60,7 +60,7 @@
   - `docs/plan/*.md`
   - `reports/*.md`
   - `reports/*.tex`
-  - `docs/superpowers/` 下的设计 / 执行文档
+  - `docs/superpowers/` 下的历史 agent 设计 / 执行归档（当前 live 计划以 `docs/plan/` 为准）
 
 ### 2.2 `dual-track-20260409` 的历史 pivot 代码入口
 
