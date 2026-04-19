@@ -42,6 +42,35 @@ def test_governance_doc_declares_single_source_of_truth() -> None:
     assert "单向发布" in text
 
 
+def test_governance_doc_uses_transchrombp_local_root() -> None:
+    text = read_text("docs/env/repository_governance.md")
+    assert "/home/zhengwei/project/python/TransChromBP" in text
+    assert "| `/home/zhengwei/project/python/chromBPNet` |" not in text
+
+
+def test_no_fake_transchrombp_worktree_paths_exist() -> None:
+    tree = subprocess.run(
+        [
+            "rg",
+            "-n",
+            "/home/zhengwei/\\.config/superpowers/worktrees/TransChromBP",
+            "AGENTS.md",
+            "README.md",
+            "TRACKING.md",
+            "docs",
+            "reports",
+            "scripts",
+            "tests",
+            "workflows",
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert tree.stdout.strip() == ""
+
+
 def test_core_docs_reference_governance_doc_and_explicit_publish_commands() -> None:
     for path in ("README.md", "DEVELOPMENT.md", "AGENTS.md"):
         text = read_text(path)
