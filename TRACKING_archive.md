@@ -2,7 +2,15 @@
 
 > 从 `TRACKING.md` 第一节"在做事情清单"中迁出的 `已完成` / `已合并` 条目。
 > 首次归档时间：2026-03-18
-> 最近一次追加归档：2026-04-10
+> 最近一次追加归档：2026-04-19
+
+---
+
+## 2026-04-19 第十一轮归档（本地仓 physical rename 收口）
+
+| 事项 | 关键结论 | 关键路径 |
+|---|---|---|
+| 本地仓 physical rename（`chromBPNet -> TransChromBP`） | 本地 canonical root 的文本切换、历史绝对路径批量改写与真实物理 rename 已在同一轮完成；当前物理根为 `/home/zhengwei/project/python/TransChromBP`，旧路径 `/home/zhengwei/project/python/chromBPNet` 只保留为 compatibility symlink / rollback path。剩余动作只是在兼容期结束时决定何时退役该 symlink。 | `reports/local_repo_rename_closeout_20260419.md` |
 
 ---
 
