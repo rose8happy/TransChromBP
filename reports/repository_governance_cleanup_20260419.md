@@ -39,10 +39,10 @@
 
 ## 当前结论
 
-- 本地 `/home/zhengwei/project/python/TransChromBP` 继续作为唯一 canonical trunk。
+- 本地 canonical naming / entrypoint 已统一收口为 `TransChromBP`；当前应把 `/home/zhengwei/project/python/TransChromBP` 视为规范化本地入口。
 - 6000 `/data1/zhoujiazhen/bylw_atac/chromBPNet` 只承担官方 ChromBPNet 查阅 / 复现。
 - 6000 与 6002 的 `TransChromBP` 目录默认都只是 runtime/mirror，远端热修必须先回收进本地仓。
-- 目录物理改名值得做，但不应和本轮同步接口重写绑在一起。
+- 本地目录的物理 rename / symlink 过渡由独立的 `local-repo-rename` workstream 处理，不应和本轮同步接口重写绑在一起。
 - 保护分支 `master-wip-20260419-pre-governance-merge` 只剩“把治理主线打回去”的旧内容；在完成上述 selective curation 之后，已于 `2026-04-19` 删除。
 
 ## 后续最值得做的事

@@ -1,4 +1,5 @@
 Intentional residual hits after Task 3 rewrite
+This is a manually curated residual snapshot; line numbers may drift after later edits.
 Verification scan command (excluding this inventory file itself):
 rg -n '/home/zhengwei/project/python/chromBPNet' AGENTS.md README.md TRACKING.md docs reports scripts tests workflows --glob '!reports/assets/local_repo_rename_20260419/local_repo_path_residuals_after_rewrite.txt'
 
