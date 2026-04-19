@@ -10,6 +10,7 @@
 - Remove stale guidance when it becomes misleading instead of endlessly appending new caveats below it.
 
 ## Project Structure & Module Organization
+- Active local canonical trunk is `/home/zhengwei/project/python/TransChromBP`. If the old `/home/zhengwei/project/python/chromBPNet` path still exists, treat it only as a compatibility symlink / rollback path, not as the canonical root.
 - This repo is the TransChromBP main repository and project archive; official ChromBPNet source lookup and reproduction currently use the 6000 external repo at `/data1/zhoujiazhen/bylw_atac/chromBPNet`.
 - Local official ChromBPNet payload is retired; official ChromBPNet source lookup and reproduction live only in the 6000 external repo at `/data1/zhoujiazhen/bylw_atac/chromBPNet`. Do not assume a `/data1/zhoujiazhen/bylw_atac/chrombpnet_official` alias exists unless `TRACKING.md` explicitly says it has been validated.
 - The repository topology is fixed as: local canonical trunk, 6000 official lookup root, 6000 runtime workspace, and 6002 runtime mirror. Do not describe this as three-way peer sync; it is a single-source-of-truth plus one-way publish model.

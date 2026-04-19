@@ -6,7 +6,7 @@
 
 | Root | Role | Can become source of truth? | Notes |
 |---|---|---:|---|
-| `/home/zhengwei/project/python/chromBPNet` | 本地 canonical trunk | `yes` | 唯一有完整 git / branch / worktree 历史的 TransChromBP 主仓。当前物理目录名暂不改，后续若要 rename，单开任务做。 |
+| `/home/zhengwei/project/python/TransChromBP` | 本地 canonical trunk | `yes` | 唯一有完整 git / branch / worktree 历史的 TransChromBP 主仓。旧 `/home/zhengwei/project/python/chromBPNet` 若仍存在，只作为兼容 symlink / rollback path。 |
 | `/data1/zhoujiazhen/bylw_atac/chromBPNet` | 6000 official lookup / reproduction root | `yes`（仅官方源码） | 只用于官方 ChromBPNet 查阅、复现与对照；不是 TransChromBP runtime。 |
 | `/data1/zhoujiazhen/bylw_atac/TransChromBP` | 6000 runtime workspace | `no` | 允许临时热修和运行期文件，但不能直接成为事实真源。 |
 | `/home/zhengwei/bylw_atac/TransChromBP` | 6002 runtime mirror | `no` | 无 `.git`，只作为运行/部署镜像。 |

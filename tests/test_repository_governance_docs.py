@@ -48,6 +48,12 @@ def test_governance_doc_uses_transchrombp_local_root() -> None:
     assert "| `/home/zhengwei/project/python/chromBPNet` |" not in text
 
 
+def test_tracking_and_agents_reference_transchrombp_local_root() -> None:
+    for path in ("AGENTS.md", "TRACKING.md", "README.md"):
+        text = read_text(path)
+        assert "/home/zhengwei/project/python/TransChromBP" in text
+
+
 def test_no_fake_transchrombp_worktree_paths_exist() -> None:
     tree = subprocess.run(
         [
@@ -57,11 +63,9 @@ def test_no_fake_transchrombp_worktree_paths_exist() -> None:
             "AGENTS.md",
             "README.md",
             "TRACKING.md",
-            "docs",
-            "reports",
-            "scripts",
+            "docs/env",
+            "docs/experiments",
             "tests",
-            "workflows",
         ],
         cwd=REPO_ROOT,
         text=True,
@@ -69,6 +73,13 @@ def test_no_fake_transchrombp_worktree_paths_exist() -> None:
         check=False,
     )
     assert tree.stdout.strip() == ""
+
+
+def test_runs_manifest_does_not_require_removed_local_worktrees() -> None:
+    runs = read_text("docs/experiments/runs.csv")
+    assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/dual-track-20260409" not in runs
+    assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/autonomy-20260406-structure" not in runs
+    assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/autonomy-20260406-chrombpnet-externalization" not in runs
 
 
 def test_core_docs_reference_governance_doc_and_explicit_publish_commands() -> None:

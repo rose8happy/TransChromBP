@@ -1,6 +1,6 @@
 # 实验 Family / Workstream Registry
 
-本文件是当前实验 family / workstream 的 canonical 索引。`master` 是唯一档案入口；远端 `6000/6002` 运行仓只保留日志与产物，不再作为事实真源。
+本文件是当前实验 family / workstream 的 canonical 索引。active local canonical root 是 `/home/zhengwei/project/python/TransChromBP`；`master` 是唯一档案入口；远端 `6000/6002` 运行仓只保留日志与产物，不再作为事实真源。
 
 - `docs/experiments/runs.csv` 记录 run 级元信息。
 - `TRACKING.md` 只保留 live 状态。

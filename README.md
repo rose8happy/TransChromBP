@@ -4,6 +4,8 @@ This repository is the main TransChromBP repository plus the project archive. It
 
 Canonical repository topology, single-source-of-truth rules, and sync commands live in `docs/env/repository_governance.md`.
 
+The active local canonical root is `/home/zhengwei/project/python/TransChromBP`. If `/home/zhengwei/project/python/chromBPNet` still exists locally, treat it only as a compatibility symlink / rollback path.
+
 ## What lives here
 
 - `vendor/transchrombp/`: versioned local snapshot of TransChromBP used by this repo's launchers and experiments.
