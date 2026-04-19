@@ -115,7 +115,7 @@ Expected: the orphan bundle mount disappears without losing unique content.
 Run:
 
 ```bash
-/home/zhengwei/project/python/chromBPNet/.venv/bin/python -m pytest -q tests/test_repository_governance_docs.py tests/test_factor_ladder_docs.py
+/home/zhengwei/project/python/TransChromBP/.venv/bin/python -m pytest -q tests/test_repository_governance_docs.py tests/test_factor_ladder_docs.py
 ```
 
 Expected: PASS.

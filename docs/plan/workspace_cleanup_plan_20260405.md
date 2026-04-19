@@ -65,7 +65,7 @@
 
 | 位置 | 主要现状 | 判断 |
 |---|---|---|
-| 本机 `/home/zhengwei/project/python/chromBPNet` | 仓库约 `2.7G`，大头是 `.venv 2.2G`、`.venv-report 490M`、`.git 412M`；根目录当前剩余的是被 ignore 的参考 PDF/安装包；`tmp_remote_edit/` 约 `900K`，其中 `transchrombp/` 已与 `vendor/` 对齐，但 `TransChromBP/scripts/` 仍保留 11 个未迁移的历史 helper script。 | 不是容量问题；真正待收口的是 staging 边界和“哪些历史脚本要迁回正式命名空间”。 |
+| 本机 `/home/zhengwei/project/python/TransChromBP` | 仓库约 `2.7G`，大头是 `.venv 2.2G`、`.venv-report 490M`、`.git 412M`；根目录当前剩余的是被 ignore 的参考 PDF/安装包；`tmp_remote_edit/` 约 `900K`，其中 `transchrombp/` 已与 `vendor/` 对齐，但 `TransChromBP/scripts/` 仍保留 11 个未迁移的历史 helper script。 | 不是容量问题；真正待收口的是 staging 边界和“哪些历史脚本要迁回正式命名空间”。 |
 | 6000 `/data1/zhoujiazhen/bylw_atac` | 大目录主要是 `foundation_models 312G`、`ATACseq 156G`、`chrombpnet_datasets 76G`；根目录 `TRACKING.md` 已改成只读入口说明。 | 容量不紧；状态入口已收口，但后续必须继续避免双写。 |
 | 6000 `/data1/zhoujiazhen/bylw_atac/TransChromBP` | 工作树约 `88G`，几乎都在 `outputs/`：其中 `checkpoints 72G`、`foundation_cache 9.8G`、`genos_cache 4.3G`、`preprocessing 1.4G`；目录内是 git repo，但当前状态不是“少量未提交修改”，而是“初始 scaffold 被 staged，实际实验文件大批量 untracked”。目前 foundation side quest 归档层已落地。 | 仍是最需要继续整理的点，但已经从“完全混放”推进到“已有 archive 根，可继续做 active/archive 分层”。 |
 | 6002 `/home/zhengwei/bylw_atac` | `TransChromBP 30G`、`chrombpnet_datasets 60G`、`logs 166M`；临时目录都不大。 | 容量不紧。 |
@@ -83,7 +83,7 @@
 ### P0：已完成的前置收口
 
 1. `ntv2_residual_short10_testfull_sidecar_20260405_170520` 已完成判读与文档回写，归类为 `fail-or-unsafe`。
-2. 当前默认真源已收口为本机 `/home/zhengwei/project/python/chromBPNet`；远端 `TransChromBP` 按 runtime / output workdir 使用。
+2. 当前默认真源已收口为本机 `/home/zhengwei/project/python/TransChromBP`；远端 `TransChromBP` 按 runtime / output workdir 使用。
 3. 6000 的 live `TRACKING.md` 已统一到 `/data1/zhoujiazhen/bylw_atac/chromBPNet/TRACKING.md`；根目录和 `TransChromBP` 内的 `TRACKING.md` 均已改成指路说明。
 
 ### P1：本周内完成的结构整理

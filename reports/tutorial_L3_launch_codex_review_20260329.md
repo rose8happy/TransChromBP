@@ -4,7 +4,7 @@
 
 ### P1: 当前已启动的任务不是完整的 L3 shared-region compare，只是 TransChromBP 单侧 shared-region 重训
 
-按执行稿定义，L3 需要在 **官方 controlled** 和 **TransChromBP controlled** 两侧同时锁死同一份 `shared_filtered_peaks.bed` / `shared_filtered_nonpeaks.bed` / `shared_unstranded.bw`。[strict_chrombpnet_official_comparison_execution_20260327.md](/home/zhengwei/project/python/chromBPNet/docs/plan/strict_chrombpnet_official_comparison_execution_20260327.md#L103)
+按执行稿定义，L3 需要在 **官方 controlled** 和 **TransChromBP controlled** 两侧同时锁死同一份 `shared_filtered_peaks.bed` / `shared_filtered_nonpeaks.bed` / `shared_unstranded.bw`。[strict_chrombpnet_official_comparison_execution_20260327.md](/home/zhengwei/project/python/TransChromBP/docs/plan/strict_chrombpnet_official_comparison_execution_20260327.md#L103)
 
 但当前仓库里的官方 tutorial wrapper 仍然只接受：
 
@@ -22,11 +22,11 @@
 - `--shared-nonpeaks`
 - `--run-suffix`
 
-见 [run_tutorial_strict_compare_official.sh](/home/zhengwei/project/python/chromBPNet/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh#L36) 和执行稿的 [L3 启动命令](/home/zhengwei/project/python/chromBPNet/docs/plan/strict_chrombpnet_official_comparison_execution_20260327.md#L380)。
+见 [run_tutorial_strict_compare_official.sh](/home/zhengwei/project/python/TransChromBP/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh#L36) 和执行稿的 [L3 启动命令](/home/zhengwei/project/python/TransChromBP/docs/plan/strict_chrombpnet_official_comparison_execution_20260327.md#L380)。
 
 进一步检查 `scripts/paper_aligned_repro/` 当前代码也没有任何 `shared-peaks` / `shared-nonpeaks` / `run-suffix` 接口痕迹；这说明问题不只是 wrapper 没转发，而是官方 L3 启动链路本身还未实现。
 
-更关键的是，当前底层脚本 [run_paper_aligned_fast_1seed.sh](/home/zhengwei/project/python/chromBPNet/scripts/paper_aligned_repro/run_paper_aligned_fast_1seed.sh#L195) 会在每个 fold 内固定执行 `chrombpnet prep nonpeaks`，然后把新生成的 `nonpeaks_negatives.bed` 继续传给后续 bias/chrombpnet train 与 predict。[run_paper_aligned_fast_1seed.sh](/home/zhengwei/project/python/chromBPNet/scripts/paper_aligned_repro/run_paper_aligned_fast_1seed.sh#L205) [run_paper_aligned_fast_1seed.sh](/home/zhengwei/project/python/chromBPNet/scripts/paper_aligned_repro/run_paper_aligned_fast_1seed.sh#L233) [run_paper_aligned_fast_1seed.sh](/home/zhengwei/project/python/chromBPNet/scripts/paper_aligned_repro/run_paper_aligned_fast_1seed.sh#L279)
+更关键的是，当前底层脚本 [run_paper_aligned_fast_1seed.sh](/home/zhengwei/project/python/TransChromBP/scripts/paper_aligned_repro/run_paper_aligned_fast_1seed.sh#L195) 会在每个 fold 内固定执行 `chrombpnet prep nonpeaks`，然后把新生成的 `nonpeaks_negatives.bed` 继续传给后续 bias/chrombpnet train 与 predict。[run_paper_aligned_fast_1seed.sh](/home/zhengwei/project/python/TransChromBP/scripts/paper_aligned_repro/run_paper_aligned_fast_1seed.sh#L205) [run_paper_aligned_fast_1seed.sh](/home/zhengwei/project/python/TransChromBP/scripts/paper_aligned_repro/run_paper_aligned_fast_1seed.sh#L233) [run_paper_aligned_fast_1seed.sh](/home/zhengwei/project/python/TransChromBP/scripts/paper_aligned_repro/run_paper_aligned_fast_1seed.sh#L279)
 
 这意味着就算现在给 wrapper 补了参数，官方臂也仍然不能真正“直接吃外部 frozen shared nonpeaks”；要把 L3 做成定义中的 shared-region compare，至少还需要改到底层训练脚本，让它支持跳过 `prep nonpeaks` 并显式使用外部给定的 shared peaks/nonpeaks。
 
@@ -49,14 +49,14 @@
 - `filtered.peaks.bed`
 - `filtered.nonpeaks.bed`
 
-见 [strict_chrombpnet_official_comparison_execution_20260327.md](/home/zhengwei/project/python/chromBPNet/docs/plan/strict_chrombpnet_official_comparison_execution_20260327.md#L116) 与 [strict_chrombpnet_official_comparison_execution_20260327.md](/home/zhengwei/project/python/chromBPNet/docs/plan/strict_chrombpnet_official_comparison_execution_20260327.md#L361)。
+见 [strict_chrombpnet_official_comparison_execution_20260327.md](/home/zhengwei/project/python/TransChromBP/docs/plan/strict_chrombpnet_official_comparison_execution_20260327.md#L116) 与 [strict_chrombpnet_official_comparison_execution_20260327.md](/home/zhengwei/project/python/TransChromBP/docs/plan/strict_chrombpnet_official_comparison_execution_20260327.md#L361)。
 
 而前面的 follow-up 审计又明确记录过：
 
 - 官方 `candidate nonpeaks = 508,429`
 - 自研 `filtered.nonpeaks = 267,175`
 
-见 [strict_compare_followup_assessment_20260327.md](/home/zhengwei/project/python/chromBPNet/reports/strict_compare_followup_assessment_20260327.md#L36)。
+见 [strict_compare_followup_assessment_20260327.md](/home/zhengwei/project/python/TransChromBP/reports/strict_compare_followup_assessment_20260327.md#L36)。
 
 但本轮进一步到 6000 实地核查后，当前 shared-region 文件已经可以确认：
 
@@ -82,7 +82,7 @@
 
 - `configs/data/data_tutorial_shared_region_L3.yaml`
 
-训练 config 也确实指向了它。[train_tutorial_corrected_b_strict_compare_L3_6000.yaml](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/configs/train/train_tutorial_corrected_b_strict_compare_L3_6000.yaml#L40) [data_tutorial_shared_region_L3.yaml](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/configs/data/data_tutorial_shared_region_L3.yaml#L1)
+训练 config 也确实指向了它。[train_tutorial_corrected_b_strict_compare_L3_6000.yaml](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/configs/train/train_tutorial_corrected_b_strict_compare_L3_6000.yaml#L40) [data_tutorial_shared_region_L3.yaml](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/configs/data/data_tutorial_shared_region_L3.yaml#L1)
 
 此外，这份训练 config 里的默认 `run_name` 实际是 `tutorial_corrected_b_strict_compare_L3`，并不带 Claude 汇报里的 `_s42` 后缀；`train_ddp.py` 只有在命令行显式传 `--run-name` 时才会覆盖这个值。不过本轮到 6000 核查进程后，已确认实际 launcher 的确显式传了 `--run-name tutorial_corrected_b_strict_compare_L3_s42`，因此当前正在运行的目录和日志口径是一致的。日志路径实际为 `/data1/zhoujiazhen/bylw_atac/logs/tutorial_corrected_b_strict_compare_L3_s42.log`。
 

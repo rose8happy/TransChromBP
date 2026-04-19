@@ -142,7 +142,7 @@
 
 正式训练 gate 的基座固定为：
 
-- [transchrombp_teacher_v2_center_pool.yaml](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/configs/model/transchrombp_teacher_v2_center_pool.yaml)
+- [transchrombp_teacher_v2_center_pool.yaml](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/configs/model/transchrombp_teacher_v2_center_pool.yaml)
 
 这就是当前 `corrected B` 基座，必须保留：
 

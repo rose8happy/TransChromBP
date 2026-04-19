@@ -11,27 +11,27 @@
 
 ## 已落地代码
 
-1. 新增 [profile_decoder.py](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/models/profile_decoder.py)
+1. 新增 [profile_decoder.py](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/models/profile_decoder.py)
    - `MultiScaleProfileDecoder`
    - `LocalSkipProfileProbe`
 
-2. 扩展 [transchrombp.py](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/models/transchrombp.py)
+2. 扩展 [transchrombp.py](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/models/transchrombp.py)
    - `profile_readout_mode` 现支持：
      - `linear`
      - `multiscale_decoder_v1`
      - `skip_probe_v1`
 
 3. 新增模型配置
-   - [transchrombp_teacher_v2_center_pool_msdec_v1.yaml](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/configs/model/transchrombp_teacher_v2_center_pool_msdec_v1.yaml)
-   - [transchrombp_teacher_v2_center_pool_msdec_v1_s2.yaml](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/configs/model/transchrombp_teacher_v2_center_pool_msdec_v1_s2.yaml)
-   - [transchrombp_teacher_v2_center_pool_msdec_v1_narrow.yaml](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/configs/model/transchrombp_teacher_v2_center_pool_msdec_v1_narrow.yaml)
-   - [transchrombp_teacher_v2_center_pool_skipprobe_v1.yaml](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/configs/model/transchrombp_teacher_v2_center_pool_skipprobe_v1.yaml)
+   - [transchrombp_teacher_v2_center_pool_msdec_v1.yaml](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/configs/model/transchrombp_teacher_v2_center_pool_msdec_v1.yaml)
+   - [transchrombp_teacher_v2_center_pool_msdec_v1_s2.yaml](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/configs/model/transchrombp_teacher_v2_center_pool_msdec_v1_s2.yaml)
+   - [transchrombp_teacher_v2_center_pool_msdec_v1_narrow.yaml](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/configs/model/transchrombp_teacher_v2_center_pool_msdec_v1_narrow.yaml)
+   - [transchrombp_teacher_v2_center_pool_skipprobe_v1.yaml](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/configs/model/transchrombp_teacher_v2_center_pool_skipprobe_v1.yaml)
 
-4. 复用 launcher [run_multiscale_decoder_probe.sh](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/scripts/run_multiscale_decoder_probe.sh)
+4. 复用 launcher [run_multiscale_decoder_probe.sh](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/scripts/run_multiscale_decoder_probe.sh)
    - `6000` 用它跑 full-budget 主线
    - `6002` 用它跑单卡 `short10` 结构筛选树
 
-5. 扩展测试 [test_multiscale_decoder_probe.py](/home/zhengwei/project/python/chromBPNet/tests/test_multiscale_decoder_probe.py)
+5. 扩展测试 [test_multiscale_decoder_probe.py](/home/zhengwei/project/python/TransChromBP/tests/test_multiscale_decoder_probe.py)
    - multiscale shape contract
    - `full/debiased` additive contract
    - `skip_probe_v1` shape contract

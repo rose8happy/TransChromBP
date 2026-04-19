@@ -19,14 +19,14 @@
 
 ### 2.1 机制断言过强，已经和 clean matrix 结果不匹配
 
-当前 [transchrombp_paper_cn_v1.tex](/home/zhengwei/project/python/chromBPNet/reports/transchrombp_paper_cn_v1.tex) 里仍有以下强断言：
+当前 [transchrombp_paper_cn_v1.tex](/home/zhengwei/project/python/TransChromBP/reports/transchrombp_paper_cn_v1.tex) 里仍有以下强断言：
 
 - “发现了此前未被报道的失效模式 Profile Shortcut”
 - “纯卷积架构中不会出现”
 - “这是 Transformer 特有现象”
 - “stop-gradient 单独修复了该问题”
 
-但 [profile_shortcut_revalidation_summary_20260326.md](/home/zhengwei/project/python/chromBPNet/reports/profile_shortcut_revalidation_summary_20260326.md) 的四条 test 主线不支持这些写法：
+但 [profile_shortcut_revalidation_summary_20260326.md](/home/zhengwei/project/python/TransChromBP/reports/profile_shortcut_revalidation_summary_20260326.md) 的四条 test 主线不支持这些写法：
 
 - `A = TF + sg=false + deb2`：`profile_full_debiased_jsd = 0.00147`
 - `C = TF + sg=true + deb0`：`0.00972 / 0.00997`（双 seed）

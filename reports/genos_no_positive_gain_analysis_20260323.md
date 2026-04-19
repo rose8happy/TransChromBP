@@ -25,8 +25,8 @@ OCR 旁线结果：
 
 证据：
 
-- OCR 摘要与定位：[genos复现ocr.md](/home/zhengwei/project/python/chromBPNet/docs/research/genos复现ocr.md)
-- OCR 执行计划：[genos_ocr_reproduction_plan_20260323.md](/home/zhengwei/project/python/chromBPNet/docs/plan/genos_ocr_reproduction_plan_20260323.md)
+- OCR 摘要与定位：[genos复现ocr.md](/home/zhengwei/project/python/TransChromBP/docs/research/genos复现ocr.md)
+- OCR 执行计划：[genos_ocr_reproduction_plan_20260323.md](/home/zhengwei/project/python/TransChromBP/docs/plan/genos_ocr_reproduction_plan_20260323.md)
 - full OCR 结果 TSV：`/data1/zhoujiazhen/bylw_atac/genos_ocr_sidecar/results/Genos-1.2B/human_ocr_ensembl.tsv`
 - mini OCR 结果 TSV：`/data1/zhoujiazhen/bylw_atac/genos_ocr_sidecar/results_mini/Genos-1.2B/human_ocr_ensembl.tsv`
 
@@ -51,8 +51,8 @@ cached-fusion：
 
 证据：
 
-- online Genos 汇总：[genos_and_6002_run_analysis_20260323.md](/home/zhengwei/project/python/chromBPNet/reports/genos_and_6002_run_analysis_20260323.md#L3)
-- cached-fusion 汇总：[genos_cached_fusion_status_20260323.md](/home/zhengwei/project/python/chromBPNet/reports/genos_cached_fusion_status_20260323.md#L20)
+- online Genos 汇总：[genos_and_6002_run_analysis_20260323.md](/home/zhengwei/project/python/TransChromBP/reports/genos_and_6002_run_analysis_20260323.md#L3)
+- cached-fusion 汇总：[genos_cached_fusion_status_20260323.md](/home/zhengwei/project/python/TransChromBP/reports/genos_cached_fusion_status_20260323.md#L20)
 
 这说明：
 
@@ -92,7 +92,7 @@ cached probe 结果：
 
 证据：
 
-- 设计决策：[genos_cached_fusion_final_execution_plan_20260323.md](/home/zhengwei/project/python/chromBPNet/docs/plan/genos_cached_fusion_final_execution_plan_20260323.md#L127)
+- 设计决策：[genos_cached_fusion_final_execution_plan_20260323.md](/home/zhengwei/project/python/TransChromBP/docs/plan/genos_cached_fusion_final_execution_plan_20260323.md#L127)
 
 这意味着当前 cached 线测试的其实不是“Genos 全部能力”，而是：
 
@@ -136,7 +136,7 @@ OCR benchmark 之所以能跑通，是因为它本来就是：
 
 证据：
 
-- 语义约束：[genos_cached_fusion_final_execution_plan_20260323.md](/home/zhengwei/project/python/chromBPNet/docs/plan/genos_cached_fusion_final_execution_plan_20260323.md#L118)
+- 语义约束：[genos_cached_fusion_final_execution_plan_20260323.md](/home/zhengwei/project/python/TransChromBP/docs/plan/genos_cached_fusion_final_execution_plan_20260323.md#L118)
 
 而当前训练语义同时还包含：
 
@@ -163,7 +163,7 @@ OCR benchmark 之所以能跑通，是因为它本来就是：
 
 证据：
 
-- 代码位置：[transchrombp.py](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/models/transchrombp.py#L370)
+- 代码位置：[transchrombp.py](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/models/transchrombp.py#L370)
 
 这带来的问题是：
 
@@ -196,7 +196,7 @@ OCR benchmark 之所以能跑通，是因为它本来就是：
 
 证据：
 
-- 汇总表：[genos_cached_fusion_status_20260323.md](/home/zhengwei/project/python/chromBPNet/reports/genos_cached_fusion_status_20260323.md#L20)
+- 汇总表：[genos_cached_fusion_status_20260323.md](/home/zhengwei/project/python/TransChromBP/reports/genos_cached_fusion_status_20260323.md#L20)
 
 这意味着当前 `TransChromBP` backbone + bias decomposition 已经吃掉了大部分容易拿到的信号。对于这样一个强 baseline，外部 foundation summary 如果不是强增益，就很容易只增加复杂度、不增加效果。
 
@@ -220,8 +220,8 @@ cached `P2` 的失败表现是：
 
 证据：
 
-- online 结果：[genos_and_6002_run_analysis_20260323.md](/home/zhengwei/project/python/chromBPNet/reports/genos_and_6002_run_analysis_20260323.md#L11)
-- cached 结果：[genos_cached_fusion_status_20260323.md](/home/zhengwei/project/python/chromBPNet/reports/genos_cached_fusion_status_20260323.md#L29)
+- online 结果：[genos_and_6002_run_analysis_20260323.md](/home/zhengwei/project/python/TransChromBP/reports/genos_and_6002_run_analysis_20260323.md#L11)
+- cached 结果：[genos_cached_fusion_status_20260323.md](/home/zhengwei/project/python/TransChromBP/reports/genos_cached_fusion_status_20260323.md#L29)
 
 这说明问题更像：
 

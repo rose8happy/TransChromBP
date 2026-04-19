@@ -1,0 +1,40 @@
+Intentional residual hits after Task 3 rewrite
+Verification scan command (excluding this inventory file itself):
+rg -n '/home/zhengwei/project/python/chromBPNet' AGENTS.md README.md TRACKING.md docs reports scripts tests workflows --glob '!reports/assets/local_repo_rename_20260419/local_repo_path_residuals_after_rewrite.txt'
+
+Compatibility / rollback wording in live canonical docs:
+TRACKING.md:7:> active local canonical root 已切换为 `/home/zhengwei/project/python/TransChromBP`；旧 `/home/zhengwei/project/python/chromBPNet` 若仍存在，只作为兼容 symlink / rollback path，不再作为 canonical entrypoint。
+TRACKING.md:34:| AI 指令体系 + Git 主档案清理 | 进行中 | 在先前 `master`/worktree 收口的基础上，本轮继续把剩余 archival branch 的入口压平：`reports/dual_track_pivot_snapshot_20260409.md` 与 `reports/foundation_cache_contract_closeout_20260419.md` 已把 `dual-track-20260409`、`autonomy/20260406-structure` 的 master-side closeout 补齐；`chrombpnet_externalization` 已补 `closeout/chrombpnet_externalization/20260408` tag 和最后一跳链接修正；三条 branch 现在都改成通过 branch + snapshot/closeout tag 恢复，不再依赖 live mounted worktree。active local canonical root 现统一表述为 `/home/zhengwei/project/python/TransChromBP`，旧 `/home/zhengwei/project/python/chromBPNet` 仅保留兼容/回滚语义。 | 剩余减噪主要是历史报告里的绝对路径批量改写；live/canonical 文档不再把旧本地路径当成当前入口。 | `docs/env/repository_governance.md`、`reports/repository_governance_cleanup_20260419.md`、`reports/worktree_registry_audit_20260419.md`、`reports/project_broad_audit_cleanup_20260419.md`、`reports/dual_track_pivot_snapshot_20260409.md`、`reports/foundation_cache_contract_closeout_20260419.md` |
+README.md:7:The active local canonical root is `/home/zhengwei/project/python/TransChromBP`. If `/home/zhengwei/project/python/chromBPNet` still exists locally, treat it only as a compatibility symlink / rollback path.
+AGENTS.md:13:- Active local canonical trunk is `/home/zhengwei/project/python/TransChromBP`. If the old `/home/zhengwei/project/python/chromBPNet` path still exists, treat it only as a compatibility symlink / rollback path, not as the canonical root.
+
+Tests that must keep the old path as an invariant/assertion target:
+tests/test_repository_governance_docs.py:37:    old_path = "/home/zhengwei/project/python/chromBPNet"
+tests/test_repository_governance_docs.py:72:    assert "| `/home/zhengwei/project/python/chromBPNet` |" not in text
+
+Rename design/spec narrative where the old path is the subject being renamed, symlinked, scanned, or rolled back:
+docs/superpowers/specs/2026-04-19-local-repo-rename-design.md:5:本轮目标是把本地 canonical 仓从 `/home/zhengwei/project/python/chromBPNet` 改名为 `/home/zhengwei/project/python/TransChromBP`，并同步收口仓内仍依赖旧本地绝对路径的文档、测试与说明。为降低切换风险，本轮同时保留一个兼容 symlink：`/home/zhengwei/project/python/chromBPNet -> /home/zhengwei/project/python/TransChromBP`。
+docs/superpowers/specs/2026-04-19-local-repo-rename-design.md:29:- `/home/zhengwei/project/python/chromBPNet`
+docs/superpowers/specs/2026-04-19-local-repo-rename-design.md:116:1. 把 `/home/zhengwei/project/python/chromBPNet` 改名为 `/home/zhengwei/project/python/TransChromBP`。
+docs/superpowers/specs/2026-04-19-local-repo-rename-design.md:118:   `/home/zhengwei/project/python/chromBPNet -> /home/zhengwei/project/python/TransChromBP`
+docs/superpowers/specs/2026-04-19-local-repo-rename-design.md:134:- `rg -n '/home/zhengwei/project/python/chromBPNet' AGENTS.md README.md TRACKING.md docs reports scripts tests workflows`
+docs/superpowers/specs/2026-04-19-local-repo-rename-design.md:145:- `test -L /home/zhengwei/project/python/chromBPNet`
+docs/superpowers/specs/2026-04-19-local-repo-rename-design.md:177:2. 把目录从 `/home/zhengwei/project/python/TransChromBP` 改回 `/home/zhengwei/project/python/chromBPNet`；
+
+Rename implementation plan narrative and verification commands that intentionally mention the pre-rename path:
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:5:**Goal:** Rename the local canonical repository root from `/home/zhengwei/project/python/chromBPNet` to `/home/zhengwei/project/python/TransChromBP`, rewrite repository-local absolute links to the new root, preserve historical worktree evidence correctly, and leave a compatibility symlink at the old path.
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:60:/home/zhengwei/project/python/chromBPNet/.venv/bin/python -m pytest -q tests/test_sync_project_contract.py tests/test_repository_governance_docs.py tests/test_factor_ladder_docs.py
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:90:    assert "| `/home/zhengwei/project/python/chromBPNet` |" not in text
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:109:/home/zhengwei/project/python/chromBPNet/.venv/bin/python -m pytest -q tests/test_repository_governance_docs.py -k 'transchrombp_local_root or fake_transchrombp_worktree'
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:112:Expected: FAIL, because the canonical docs still reference `/home/zhengwei/project/python/chromBPNet` as the active local root and the new assertions are not yet satisfied.
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:120:rg -l '/home/zhengwei/project/python/chromBPNet' \
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:202:/home/zhengwei/project/python/chromBPNet/.venv/bin/python -m pytest -q tests/test_repository_governance_docs.py -k 'transchrombp_local_root or fake_transchrombp_worktree or removed_local_worktrees'
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:230:rg -l -0 '/home/zhengwei/project/python/chromBPNet' \
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:232:| xargs -0 perl -0pi -e 's#/home/zhengwei/project/python/chromBPNet#/home/zhengwei/project/python/TransChromBP#g'
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:256:rg -n '/home/zhengwei/project/python/chromBPNet' \
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:289:/home/zhengwei/project/python/chromBPNet/.venv/bin/python -m pytest -q tests/test_sync_project_contract.py tests/test_repository_governance_docs.py tests/test_factor_ladder_docs.py
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:365:Expected: only `/home/zhengwei/project/python/chromBPNet` remains mounted before the physical rename.
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:372:  - `/home/zhengwei/project/python/chromBPNet`
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:395:Expected: `/home/zhengwei/project/python/chromBPNet` resolves to the new canonical root and external stale callers continue to work.
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:406:test -L /home/zhengwei/project/python/chromBPNet
+docs/superpowers/plans/2026-04-19-local-repo-rename.md:429:rg -n '/home/zhengwei/project/python/chromBPNet' AGENTS.md README.md TRACKING.md docs reports scripts tests workflows

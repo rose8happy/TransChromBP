@@ -28,7 +28,7 @@
 - 更准确地说，致命问题是：wrapper 当时向下游同时传了 `--multi-gpu-train` 和不兼容的 `--max-parallel=2`，而下游脚本本身明确禁止这个组合。
 - 与此不同，`--max-parallel` 的“重复传递”属于单独的代码卫生问题；它本身未必一定触发失败，但会让参数覆盖关系变脆弱、难以推断。
 - 2026-03-27 后续 code review 已确认：Claude 的修复把下游从 `hard error` 改成了 `warn + auto-coerce to 1`，同时 tutorial wrapper 的调试输出补上了 `max_parallel`；两份脚本均已通过本地 `bash -n`。这属于合理的鲁棒性修复，没有引入新的明显行为风险。
-- 2026-03-27 15:53 CST 已完成更快的 synthetic runtime smoke：新增 [debug_mirrored_sequence_batch.py](/home/zhengwei/project/python/chromBPNet/scripts/paper_aligned_repro/debug_mirrored_sequence_batch.py)，在 6000 的 `CUDA_VISIBLE_DEVICES=0,1` 下直接验证 `Keras Sequence + MirroredStrategy`。输出显示：
+- 2026-03-27 15:53 CST 已完成更快的 synthetic runtime smoke：新增 [debug_mirrored_sequence_batch.py](/home/zhengwei/project/python/TransChromBP/scripts/paper_aligned_repro/debug_mirrored_sequence_batch.py)，在 6000 的 `CUDA_VISIBLE_DEVICES=0,1` 下直接验证 `Keras Sequence + MirroredStrategy`。输出显示：
   - `Using MirroredStrategy with 2 replicas`
   - `[batch-debug] replica 0 input_shape [16 2114 4]`
   - `[batch-debug] replica 1 input_shape [16 2114 4]`
@@ -42,8 +42,8 @@
 
 证据：
 
-- 官方 selector 只把 `fold_json` 传给 `predict.py`，没有任何 `split` 参数：[select_best_epoch.py](/home/zhengwei/project/python/chromBPNet/scripts/paper_aligned_repro/select_best_epoch.py#L66)
-- `predict.py` 在入口里把评估 split 硬编码为 `mode="test"`：[predict.py](/home/zhengwei/project/python/chromBPNet/chrombpnet/training/predict.py#L106)
+- 官方 selector 只把 `fold_json` 传给 `predict.py`，没有任何 `split` 参数：[select_best_epoch.py](/home/zhengwei/project/python/TransChromBP/scripts/paper_aligned_repro/select_best_epoch.py#L66)
+- `predict.py` 在入口里把评估 split 硬编码为 `mode="test"`：[predict.py](/home/zhengwei/project/python/TransChromBP/chrombpnet/training/predict.py#L106)
 
 因此当前 official selector 的行为是：
 
@@ -59,8 +59,8 @@
 
 证据：
 
-- `CMD` 初始数组已经写入 `--max-parallel "${MAX_PARALLEL}"`：[run_tutorial_strict_compare_official.sh](/home/zhengwei/project/python/chromBPNet/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh#L90)
-- 当 `MULTI_GPU_TRAIN=1` 时又追加一次 `--max-parallel 1`：[run_tutorial_strict_compare_official.sh](/home/zhengwei/project/python/chromBPNet/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh#L113)
+- `CMD` 初始数组已经写入 `--max-parallel "${MAX_PARALLEL}"`：[run_tutorial_strict_compare_official.sh](/home/zhengwei/project/python/TransChromBP/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh#L90)
+- 当 `MULTI_GPU_TRAIN=1` 时又追加一次 `--max-parallel 1`：[run_tutorial_strict_compare_official.sh](/home/zhengwei/project/python/TransChromBP/scripts/paper_aligned_repro/run_tutorial_strict_compare_official.sh#L113)
 
 当前行为依赖“后面的值覆盖前面的值”，能跑通，但确实脆弱。
 
@@ -70,7 +70,7 @@
 ERROR: --multi-gpu-train requires --max-parallel=1
 ```
 
-而下游约束就在 [run_paper_aligned_fast_1seed.sh](/home/zhengwei/project/python/chromBPNet/scripts/paper_aligned_repro/run_paper_aligned_fast_1seed.sh#L143)。
+而下游约束就在 [run_paper_aligned_fast_1seed.sh](/home/zhengwei/project/python/TransChromBP/scripts/paper_aligned_repro/run_paper_aligned_fast_1seed.sh#L143)。
 
 ### 3. MirroredStrategy 下 global batch 需要实证验证
 
@@ -80,9 +80,9 @@ ERROR: --multi-gpu-train requires --max-parallel=1
 
 现有代码证据：
 
-- ChromBPNet generator 直接用 `args.batch_size` 构造 batch：[initializers.py](/home/zhengwei/project/python/chromBPNet/chrombpnet/training/data_generators/initializers.py#L80)
-- `Sequence.__len__` 和 `__getitem__` 都按这个 batch size 切数据：[batchgen_generator.py](/home/zhengwei/project/python/chromBPNet/chrombpnet/training/data_generators/batchgen_generator.py#L53), [batchgen_generator.py](/home/zhengwei/project/python/chromBPNet/chrombpnet/training/data_generators/batchgen_generator.py#L99)
-- 多卡训练仅是在 `model.fit(...)` 外包了一层 `tf.distribute.MirroredStrategy()`：[train.py](/home/zhengwei/project/python/chromBPNet/chrombpnet/training/train.py#L95)
+- ChromBPNet generator 直接用 `args.batch_size` 构造 batch：[initializers.py](/home/zhengwei/project/python/TransChromBP/chrombpnet/training/data_generators/initializers.py#L80)
+- `Sequence.__len__` 和 `__getitem__` 都按这个 batch size 切数据：[batchgen_generator.py](/home/zhengwei/project/python/TransChromBP/chrombpnet/training/data_generators/batchgen_generator.py#L53), [batchgen_generator.py](/home/zhengwei/project/python/TransChromBP/chrombpnet/training/data_generators/batchgen_generator.py#L99)
+- 多卡训练仅是在 `model.fit(...)` 外包了一层 `tf.distribute.MirroredStrategy()`：[train.py](/home/zhengwei/project/python/TransChromBP/chrombpnet/training/train.py#L95)
 
 这说明 `32` 是 generator 产出的 batch 大小，但**还没有 runtime 证据**证明 TF 在当前环境下把它当作 global batch，而不是 per-replica batch。
 
@@ -114,7 +114,7 @@ ERROR: --multi-gpu-train requires --max-parallel=1
 - `valid 1 == 1`
 - `test 1 == 1`
 
-同时，自研 strict-compare config 明确指向 tutorial 的 `folds.json`：[data_tutorial_canonical_v1.yaml](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/configs/data/data_tutorial_canonical_v1.yaml#L1)
+同时，自研 strict-compare config 明确指向 tutorial 的 `folds.json`：[data_tutorial_canonical_v1.yaml](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/configs/data/data_tutorial_canonical_v1.yaml#L1)
 
 所以：
 
@@ -127,8 +127,8 @@ ERROR: --multi-gpu-train requires --max-parallel=1
 
 证据：
 
-- `predict.py` 在 `metrics_only=True` 时仍无条件调用 `counts_metrics()`：[predict.py](/home/zhengwei/project/python/chromBPNet/chrombpnet/training/predict.py#L119), [predict.py](/home/zhengwei/project/python/chromBPNet/chrombpnet/training/predict.py#L138), [predict.py](/home/zhengwei/project/python/chromBPNet/chrombpnet/training/predict.py#L156)
-- `counts_metrics()` 内部无条件 `plt.savefig(...)`：[metrics.py](/home/zhengwei/project/python/chromBPNet/chrombpnet/training/metrics.py#L19)
+- `predict.py` 在 `metrics_only=True` 时仍无条件调用 `counts_metrics()`：[predict.py](/home/zhengwei/project/python/TransChromBP/chrombpnet/training/predict.py#L119), [predict.py](/home/zhengwei/project/python/TransChromBP/chrombpnet/training/predict.py#L138), [predict.py](/home/zhengwei/project/python/TransChromBP/chrombpnet/training/predict.py#L156)
+- `counts_metrics()` 内部无条件 `plt.savefig(...)`：[metrics.py](/home/zhengwei/project/python/TransChromBP/chrombpnet/training/metrics.py#L19)
 
 这不会改变指标数值，但会在逐 epoch selector 里额外产出大量 PNG。
 
@@ -138,8 +138,8 @@ ERROR: --multi-gpu-train requires --max-parallel=1
 
 证据：
 
-- strict-compare config 把 `early_stop_patience` 设为 `0`：[train_tutorial_corrected_b_strict_compare_6000.yaml](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/configs/train/train_tutorial_corrected_b_strict_compare_6000.yaml#L19)
-- trainer 里只有当 `early_stop_patience > 0` 时才可能触发早停：[train_ddp.py](/home/zhengwei/project/python/chromBPNet/vendor/transchrombp/transchrombp/training/train_ddp.py#L1927)
+- strict-compare config 把 `early_stop_patience` 设为 `0`：[train_tutorial_corrected_b_strict_compare_6000.yaml](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/configs/train/train_tutorial_corrected_b_strict_compare_6000.yaml#L19)
+- trainer 里只有当 `early_stop_patience > 0` 时才可能触发早停：[train_ddp.py](/home/zhengwei/project/python/TransChromBP/vendor/transchrombp/transchrombp/training/train_ddp.py#L1927)
 
 因此这不是风险点。
 

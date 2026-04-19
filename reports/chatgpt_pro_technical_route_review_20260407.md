@@ -379,6 +379,6 @@ ChatGPT Pro 还特别强调了用户回传文本中的一个现实点：
 
 这份报告当前不应直接写成“论文已成立结论”。更合理的下一步是：
 
-1. 把它与 [gemini_deep_think_technical_route_review_20260407.md](/home/zhengwei/project/python/chromBPNet/reports/gemini_deep_think_technical_route_review_20260407.md) 做统一汇总；
+1. 把它与 [gemini_deep_think_technical_route_review_20260407.md](/home/zhengwei/project/python/TransChromBP/reports/gemini_deep_think_technical_route_review_20260407.md) 做统一汇总；
 2. 产出一份“共识项 / 分歧项 / 可执行 shortlist”的总报告；
 3. 再决定是否立刻进入 `multiscale decoder probe`、指标补齐、或 AlphaGenome 小样本对照。

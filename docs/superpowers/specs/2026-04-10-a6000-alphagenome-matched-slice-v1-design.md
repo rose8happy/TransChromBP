@@ -13,8 +13,8 @@
 - tutorial `teacher-distill` 线已经正式停表；
 - `6002` 仍在跑 `teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4`；
 - 现有仓库已经具备 AlphaGenome pilot 脚手架：
-  - [run_alphagenome_pilot.py](/home/zhengwei/project/python/chromBPNet/scripts/alphagenome_pilot/run_alphagenome_pilot.py)
-  - [regions_k562_tutorial_selected_loci.csv](/home/zhengwei/project/python/chromBPNet/scripts/alphagenome_pilot/regions_k562_tutorial_selected_loci.csv)
+  - [run_alphagenome_pilot.py](/home/zhengwei/project/python/TransChromBP/scripts/alphagenome_pilot/run_alphagenome_pilot.py)
+  - [regions_k562_tutorial_selected_loci.csv](/home/zhengwei/project/python/TransChromBP/scripts/alphagenome_pilot/regions_k562_tutorial_selected_loci.csv)
 - `6000` 上的 AlphaGenome SDK、认证 smoke、metadata 查询都已经通过，当前 blocker 不再是环境安装，而是把第一轮 matched slice 定义清楚。
 
 因此，本设计要解决的问题不是“要不要继续写论文”，也不是“要不要立刻上新的训练 family”，而是：
@@ -133,9 +133,9 @@
 
 `v1` 默认复用：
 
-1. [run_alphagenome_pilot.py](/home/zhengwei/project/python/chromBPNet/scripts/alphagenome_pilot/run_alphagenome_pilot.py)
-2. [merge_locus_totals.py](/home/zhengwei/project/python/chromBPNet/scripts/alphagenome_pilot/merge_locus_totals.py)
-3. [regions_k562_tutorial_selected_loci.csv](/home/zhengwei/project/python/chromBPNet/scripts/alphagenome_pilot/regions_k562_tutorial_selected_loci.csv)
+1. [run_alphagenome_pilot.py](/home/zhengwei/project/python/TransChromBP/scripts/alphagenome_pilot/run_alphagenome_pilot.py)
+2. [merge_locus_totals.py](/home/zhengwei/project/python/TransChromBP/scripts/alphagenome_pilot/merge_locus_totals.py)
+3. [regions_k562_tutorial_selected_loci.csv](/home/zhengwei/project/python/TransChromBP/scripts/alphagenome_pilot/regions_k562_tutorial_selected_loci.csv)
 4. `6000` 上现有 `alphagenome` 环境与 API key 读取方式
 
 ---
@@ -289,8 +289,8 @@ closeout 至少要明确写出：
 
 `v1` 一旦发车或收口，必须同轮更新：
 
-1. [TRACKING.md](/home/zhengwei/project/python/chromBPNet/TRACKING.md)
-2. [2026-04-09_dual_machine_experiment_charter.md](/home/zhengwei/project/python/chromBPNet/docs/plan/2026-04-09_dual_machine_experiment_charter.md)
+1. [TRACKING.md](/home/zhengwei/project/python/TransChromBP/TRACKING.md)
+2. [2026-04-09_dual_machine_experiment_charter.md](/home/zhengwei/project/python/TransChromBP/docs/plan/2026-04-09_dual_machine_experiment_charter.md)
 3. 一份新的 `reports/` closeout
 
 ### 9.2 启动前失败

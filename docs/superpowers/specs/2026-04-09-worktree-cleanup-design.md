@@ -2,7 +2,7 @@
 
 ## Goal
 
-整理 `/home/zhengwei/project/python/chromBPNet` 当前混杂在 `master` 与多个 worktree 里的改动，把它们重新归位到各自负责的分支，并为尚未 ready 的实验线留下本地 `wip` 提交，避免主档案仓继续承担实验 WIP 的混合状态。
+整理 `/home/zhengwei/project/python/TransChromBP` 当前混杂在 `master` 与多个 worktree 里的改动，把它们重新归位到各自负责的分支，并为尚未 ready 的实验线留下本地 `wip` 提交，避免主档案仓继续承担实验 WIP 的混合状态。
 
 ## Scope
 

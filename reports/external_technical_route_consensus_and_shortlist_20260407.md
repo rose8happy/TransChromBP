@@ -19,8 +19,8 @@
 
 本报告只整合两份已经入档的外部路线咨询：
 
-1. [gemini_deep_think_technical_route_review_20260407.md](/home/zhengwei/project/python/chromBPNet/reports/gemini_deep_think_technical_route_review_20260407.md)
-2. [chatgpt_pro_technical_route_review_20260407.md](/home/zhengwei/project/python/chromBPNet/reports/chatgpt_pro_technical_route_review_20260407.md)
+1. [gemini_deep_think_technical_route_review_20260407.md](/home/zhengwei/project/python/TransChromBP/reports/gemini_deep_think_technical_route_review_20260407.md)
+2. [chatgpt_pro_technical_route_review_20260407.md](/home/zhengwei/project/python/TransChromBP/reports/chatgpt_pro_technical_route_review_20260407.md)
 
 这两份报告都已经按仓库语境做过一次整理，因此本报告不再重复原文，只做二次归纳与行动化。
 

@@ -2,7 +2,7 @@
 
 ## Goal
 
-把当前双机实验决策从“实验与论文并行、容易临时切回写作”改成“实验队列强约束优先”，使 `/home/zhengwei/project/python/chromBPNet` 后续在 `6000` 与 `6002` 上的执行默认遵循同一套白名单、黑名单、stop-rule 与插队规则。
+把当前双机实验决策从“实验与论文并行、容易临时切回写作”改成“实验队列强约束优先”，使 `/home/zhengwei/project/python/TransChromBP` 后续在 `6000` 与 `6002` 上的执行默认遵循同一套白名单、黑名单、stop-rule 与插队规则。
 
 ## Why This Exists
 

@@ -39,7 +39,7 @@
 
 ## 当前结论
 
-- 本地 `/home/zhengwei/project/python/chromBPNet` 继续作为唯一 canonical trunk。
+- 本地 `/home/zhengwei/project/python/TransChromBP` 继续作为唯一 canonical trunk。
 - 6000 `/data1/zhoujiazhen/bylw_atac/chromBPNet` 只承担官方 ChromBPNet 查阅 / 复现。
 - 6000 与 6002 的 `TransChromBP` 目录默认都只是 runtime/mirror，远端热修必须先回收进本地仓。
 - 目录物理改名值得做，但不应和本轮同步接口重写绑在一起。

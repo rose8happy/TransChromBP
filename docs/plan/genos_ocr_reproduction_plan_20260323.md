@@ -119,7 +119,7 @@ PY
 用法：
 
 ```bash
-cd /home/zhengwei/project/python/chromBPNet
+cd /home/zhengwei/project/python/TransChromBP
 
 python scripts/prepare_genos_ocr_jsonl.py \
   --source-dir /data1/zhoujiazhen/bylw_atac/genos_ocr_sidecar/datasets/fullseq/human_ocr_ensembl \

@@ -15,7 +15,7 @@
 依据：
 
 - tutorial 数据在现有脚本里被当作 `K562_ATAC`：
-  [scripts/paper_aligned_repro/launch_k562_tutorial_baseline.sh](/home/zhengwei/project/python/chromBPNet/scripts/paper_aligned_repro/launch_k562_tutorial_baseline.sh)
+  [scripts/paper_aligned_repro/launch_k562_tutorial_baseline.sh](/home/zhengwei/project/python/TransChromBP/scripts/paper_aligned_repro/launch_k562_tutorial_baseline.sh)
 - AlphaGenome 官方 notebook 中示例给出了 `K562 -> EFO:0002067`。
 
 ## 文件说明

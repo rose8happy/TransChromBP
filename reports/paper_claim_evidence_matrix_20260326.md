@@ -1,6 +1,6 @@
 # TransChromBP 论文 Claim-Evidence Matrix（2026-03-26）
 
-配套数字总表见 [paper_metric_source_table_20260326.csv](/home/zhengwei/project/python/chromBPNet/reports/assets/paper_metric_source_table_20260326.csv)。
+配套数字总表见 [paper_metric_source_table_20260326.csv](/home/zhengwei/project/python/TransChromBP/reports/assets/paper_metric_source_table_20260326.csv)。
 
 ## 1. 可写入主文的核心结论
 
