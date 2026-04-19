@@ -28,13 +28,13 @@
 ## 3. Canonical 档案边界
 
 - implementation plan 继续保留“怎么做”的细节。
-- [reports/chrombpnet_official_patch_ledger_20260406.md](reports/chrombpnet_official_patch_ledger_20260406.md) 负责记录仍依赖的官方侧 patch/bridge 点。
+- [chrombpnet_official_patch_ledger_20260406.md](chrombpnet_official_patch_ledger_20260406.md) 负责记录仍依赖的官方侧 patch/bridge 点。
 - 本文负责“是否已经收口、真实官方根是什么、当前还能不能继续把 implementation plan 当结果报告”的问题。
 
 ## 4. 当前状态与下一步
 
-- `chrombpnet_externalization` 仍是一条保留中的 infra branch，因为它还有独有提交和冻结 worktree。
-- 但这条线的核心结论已经确定：后续再清理，只剩历史文档里的旧 alias 口径，不再是重新验证 bridge 是否能跑通。
+- `chrombpnet_externalization` branch 仍保留，因为它还有独有提交和 snapshot tag。
+- 但这条线的核心结论已经确定，mounted worktree 已经不再是必要入口；后续若继续清理，只剩历史文档里的旧 alias 口径，不再是重新验证 bridge 是否能跑通。
 - 若下一轮继续收口，优先做两件事：
   1. 清掉少数历史文档里残留的 `chrombpnet_official` 旧写法。
-  2. 评估 `autonomy/20260406-chrombpnet-externalization` 是否已满足卸载 mounted worktree 的条件。
+  2. 如需重新查看 branch 现场，优先从 `closeout/chrombpnet_externalization/20260408`、`snapshot/autonomy-20260406-chrombpnet-externalization/20260406` 或 branch `autonomy/20260406-chrombpnet-externalization` 恢复。

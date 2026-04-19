@@ -11,6 +11,22 @@ def read_text(path: str) -> str:
     return (REPO_ROOT / path).read_text(encoding="utf-8")
 
 
+def parse_markdown_table(path: str) -> list[dict[str, str]]:
+    text = read_text(path)
+    rows = [line.strip() for line in text.splitlines() if line.strip().startswith("|")]
+    header = [cell.strip() for cell in rows[0].strip("|").split("|")]
+    data_rows = rows[2:]
+
+    parsed_rows = []
+    for row in data_rows:
+        cells = [cell.strip() for cell in row.strip("|").split("|")]
+        if len(cells) != len(header):
+            continue
+        parsed_rows.append(dict(zip(header, cells)))
+
+    return parsed_rows
+
+
 def test_governance_doc_declares_single_source_of_truth() -> None:
     governance_path = REPO_ROOT / "docs/env/repository_governance.md"
     genos_env_path = REPO_ROOT / "docs/env/transchrombp_genos_env.md"
@@ -114,7 +130,42 @@ def test_curated_artifacts_and_ignore_rules_exist() -> None:
     assert (REPO_ROOT / "reports/chrombpnet_official_externalization_closeout_20260408.md").exists()
     assert (REPO_ROOT / "reports/chrombpnet_official_patch_ledger_20260406.md").exists()
     assert (REPO_ROOT / "reports/foundation_cache_contract_snapshot_20260406.md").exists()
+    assert (REPO_ROOT / "reports/dual_track_pivot_snapshot_20260409.md").exists()
+    assert (REPO_ROOT / "reports/foundation_cache_contract_closeout_20260419.md").exists()
     assert not (REPO_ROOT / "scripts/deploy_strict_compare_staging_to_6000.sh").exists()
+
+
+def test_registry_allows_archive_branches_without_mounted_worktrees() -> None:
+    rows = parse_markdown_table("docs/experiments/registry.md")
+    indexed = {row["family_id"]: row for row in rows}
+
+    assert indexed["`unet_lite_v1`"]["mounted_worktree"] == "`n/a`"
+    assert indexed["`ntv2_teacher_distill_tutorial`"]["mounted_worktree"] == "`n/a`"
+    assert indexed["`foundation_cache_contract`"]["mounted_worktree"] == "`n/a`"
+    assert indexed["`chrombpnet_externalization`"]["mounted_worktree"] == "`n/a`"
+
+    assert "dual_track_pivot_snapshot_20260409.md" in indexed["`unet_lite_v1`"]["notes"]
+    assert "closeout/foundation_cache_contract/20260419" in indexed["`foundation_cache_contract`"]["closeout_tags"]
+    assert "closeout/chrombpnet_externalization/20260408" in indexed["`chrombpnet_externalization`"]["closeout_tags"]
+
+
+def test_archive_closeout_tags_exist() -> None:
+    tag_list = subprocess.run(
+        [
+            "git",
+            "tag",
+            "--list",
+            "closeout/chrombpnet_externalization/20260408",
+            "closeout/foundation_cache_contract/20260419",
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout
+
+    assert "closeout/chrombpnet_externalization/20260408" in tag_list
+    assert "closeout/foundation_cache_contract/20260419" in tag_list
 
 
 def test_docs_env_is_not_masked_by_root_env_ignore_rule() -> None:

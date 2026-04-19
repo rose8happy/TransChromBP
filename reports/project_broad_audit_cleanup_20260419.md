@@ -11,9 +11,9 @@
    - `docs/superpowers/` 补了 `README`，明确定义为历史 agent 规划档案，不再充当第二套 live planning root。
 
 2. 补 canonical 档案
-   - 新增 [reports/chrombpnet_official_externalization_closeout_20260408.md](reports/chrombpnet_official_externalization_closeout_20260408.md)。
-   - 新增 [reports/chrombpnet_official_patch_ledger_20260406.md](reports/chrombpnet_official_patch_ledger_20260406.md)。
-   - 新增 [reports/foundation_cache_contract_snapshot_20260406.md](reports/foundation_cache_contract_snapshot_20260406.md)。
+   - 新增 [chrombpnet_official_externalization_closeout_20260408.md](chrombpnet_official_externalization_closeout_20260408.md)。
+   - 新增 [chrombpnet_official_patch_ledger_20260406.md](chrombpnet_official_patch_ledger_20260406.md)。
+   - 新增 [foundation_cache_contract_snapshot_20260406.md](foundation_cache_contract_snapshot_20260406.md)。
    - `docs/experiments/registry.md` / `docs/experiments/runs.csv` 已改成引用这些更合适的 canonical 报告路径。
 
 3. 下线明显过时入口
@@ -24,17 +24,16 @@
 4. 收挂已闭环的 clean snapshot
    - `a6000-dual-track-20260410`
    - `multiscale-decoder-probe-20260407`
+   - `dual-track-20260409`
+   - `autonomy/20260406-structure`
+   - `autonomy/20260406-chrombpnet-externalization`
 
-这两条 mounted worktree 已卸载；registry 改为通过对应 `snapshot/...` tags 恢复，而不是继续依赖本地 live path。
+这些 mounted worktree 已卸载；registry 改为通过对应 `branch + snapshot/closeout tag` 恢复，而不是继续依赖本地 live path。
 
 ## 当前仍保留的挂载
 
-- `dual-track-20260409`
-- `autonomy/20260406-structure`
-- `autonomy/20260406-chrombpnet-externalization`
-
-它们不是“忘了清”，而是仍有证据链或 branch 独有提交需要先补 canonical 说明。
+- 只剩 `master`
 
 ## 下一步建议
 
-下一轮最值得做的是继续补 `dual-track-20260409` 与两条 `autonomy/*` 的 closeout/manifest，然后再决定是否继续收挂。目录 rename 仍应单开一轮，和绝对路径修复一起处理。
+下一轮最值得做的是目录 rename，把 `chromBPNet` 物理改名和绝对路径修复一起做；如果还要继续减噪，再看历史报告里的绝对路径是否值得统一批量改写。

@@ -84,3 +84,13 @@
 - 这轮没有盲目删 dirty worktree；真正需要保留的 dynamic-count 本地实现，已经转成显式 snapshot commit + tag。
 - 当前剩余挂载都能从 registry row 和现有 annotated tag 反查职责。
 - 如果下一轮还要继续收挂，优先讨论的是那 5 条 clean frozen / infra snapshot 是否还需要保留本地可浏览路径，而不是再处理 `loss-balance`。
+
+## 2026-04-19 Follow-up
+
+同日后续的 archive closeout 又继续收了一轮：
+
+- `dual-track-20260409`
+- `autonomy/20260406-structure`
+- `autonomy/20260406-chrombpnet-externalization`
+
+这三条 branch 现已分别补上 master-side snapshot / closeout 说明，并通过 branch + snapshot/closeout tag 保留恢复入口，不再依赖 live mounted worktree。当前本地挂载只剩 `master`。

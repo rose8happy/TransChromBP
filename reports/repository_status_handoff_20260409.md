@@ -40,9 +40,11 @@
 
 ---
 
-## 2. 本地分支与 worktree 盘点
+## 2. 本地分支与 archive snapshot 盘点
 
-| 分支 / worktree | 基线 | 当前状态 | 主要职责 |
+> 下表保留的是 `2026-04-10` 当天本地可恢复的 branch/snapshot 现场，不等于当前仍挂载的 live worktree 集合。当前 mounted worktree 以 `TRACKING.md` 与 `docs/experiments/registry.md` 为准。
+
+| 分支 / snapshot | 基线 | 当前状态 | 主要职责 |
 |---|---|---|---|
 | `master` | 本轮 docs closeout 后的最新状态 | clean | 主档案仓，承载 canonical docs / tracking / paper / reports |
 | `dual-track-20260409` | `4ffc6e7` | clean | 近期 dual-track pivot 快照：`teacher-distill + U-Net-lite` |
@@ -64,7 +66,7 @@
 
 ### 2.2 `dual-track-20260409` 的历史 pivot 代码入口
 
-这条 worktree 已在本轮整理后落成 clean 提交 `4ffc6e7 (wip: snapshot dual track pivot)`，是近期 dual-track pivot 的历史代码入口，核心内容包括：
+这条 snapshot branch 已固定在 clean 提交 `4ffc6e7 (wip: snapshot dual track pivot)`，是近期 dual-track pivot 的历史代码入口。当前 master-side 的 canonical 说明见 `reports/dual_track_pivot_snapshot_20260409.md`，核心内容包括：
 
 - `NT v2 teacher-distill`
   - `teacher_cache_export.py`
@@ -82,7 +84,7 @@
 
 ### 2.3 `autonomy/20260406-structure` 的定位
 
-这条 worktree 不是当前 live experiment 主线，而是基础设施整理线。本轮整理后，它已经形成两条本地提交：
+这条 branch 不是当前 live experiment 主线，而是基础设施整理线。本轮整理后，它已经形成两条本地提交：
 
 - `24649aa (wip: snapshot foundation cache contract)`
 - `764b8c0 (wip: add foundation cache alignment regression)`
@@ -162,7 +164,7 @@
   - `6000` 的 A6000 formal gate 已收口并判 `fail`
   - `6000` 的 AlphaGenome v2 sidecar 已收口并判 `pass`
   - `6002` 的 `U-Net-lite v1` 已收口并判 `no-go / stop`
-- `dual-track-20260409` 的计划与 pivot 记录已经以 `wip` 提交固定在对应 worktree，但尚未合回 `master`
+- `dual-track-20260409` 的 pivot 计划与切换记录现已在 `reports/dual_track_pivot_snapshot_20260409.md` 里给出 canonical 恢复入口；不再要求依赖 live mounted worktree
 
 ---
 
@@ -181,7 +183,5 @@
 3. 本文件：回答“现在真实在发生什么”
 4. `reports/project_plan_code_review_20260405.md`：回答“最近代码为什么会改成这样”
 5. `reports/session_handoff_multiscale_and_next_tasks_20260409.md`：保留为旧双机排程快照
-6. `dual-track-20260409` worktree 下两份文件：
-   - `docs/plan/dual_track_ntv2_distill_unet_lite_20260409.md`
-   - `reports/dual_track_experiment_pivot_20260409.md`
-   用来回答“为什么从 `msdec/skipprobe` 切到 `teacher-distill + U-Net-lite`”
+6. `reports/dual_track_pivot_snapshot_20260409.md`
+   用来回答“为什么从 `msdec/skipprobe` 切到 `teacher-distill + U-Net-lite`，以及现在如何从 snapshot 恢复那条 branch”

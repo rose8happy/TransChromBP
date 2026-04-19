@@ -1,8 +1,10 @@
 # Foundation Cache Contract Snapshot（2026-04-06）
 
+> 历史保留说明。当前这条 infra line 的正式 closeout 已转到 `reports/foundation_cache_contract_closeout_20260419.md`；本文只保留“为什么当时还不能直接卸载”的阶段性背景。
+
 ## 一句话结论
 
-`autonomy/20260406-structure` 不是 live experiment 线，而是一条仍保留独有提交的 infra snapshot branch；当前不适合直接删 branch 或卸载 worktree，因为它承载的 foundation contract / alignment regression 还没有别的 canonical 报告把这两条提交解释清楚。
+`autonomy/20260406-structure` 不是 live experiment 线，而是一条保留独有提交的 infra snapshot branch。本文记录的是“在 formal closeout 落地前，为什么还不能直接删 branch 或卸载 worktree”的阶段性判断。
 
 ## 1. 当前 branch 上固定了什么
 
@@ -36,4 +38,4 @@
 1. 把 `24649aa` / `764b8c0` 的关键实现或测试择净回流 `master`，再卸载 worktree。
 2. 或者补一份更完整的 infra closeout，明确哪些文件只需靠 snapshot 保留、哪些必须继续可浏览。
 
-在此之前，继续保留这条 mounted worktree 是合理的。
+这条阶段性判断现已被 `reports/foundation_cache_contract_closeout_20260419.md` 接管。

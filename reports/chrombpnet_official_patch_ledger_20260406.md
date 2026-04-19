@@ -31,5 +31,5 @@
 ## 解释边界
 
 - 本文不是完整 implementation plan。
-- 本文也不是结果 closeout；结果判断见 [reports/chrombpnet_official_externalization_closeout_20260408.md](reports/chrombpnet_official_externalization_closeout_20260408.md)。
+- 本文也不是结果 closeout；结果判断见 [chrombpnet_official_externalization_closeout_20260408.md](chrombpnet_official_externalization_closeout_20260408.md)。
 - 本文只回答“现在到底还依赖官方仓的哪些触点，以及操作时应该把官方根指向哪里”。
