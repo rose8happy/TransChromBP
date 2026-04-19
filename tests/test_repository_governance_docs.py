@@ -80,6 +80,8 @@ def test_runs_manifest_does_not_require_removed_local_worktrees() -> None:
     assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/dual-track-20260409" not in runs
     assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/autonomy-20260406-structure" not in runs
     assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/autonomy-20260406-chrombpnet-externalization" not in runs
+    assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/multiscale-decoder-probe-20260407" not in runs
+    assert "/home/zhengwei/.config/superpowers/worktrees/chromBPNet/a6000-dual-track-20260410" not in runs
 
 
 def test_core_docs_reference_governance_doc_and_explicit_publish_commands() -> None:
@@ -179,6 +181,7 @@ def test_registry_allows_archive_branches_without_mounted_worktrees() -> None:
     rows = parse_markdown_table("docs/experiments/registry.md")
     indexed = {row["family_id"]: row for row in rows}
 
+    assert indexed["`msdls_v2_formal_gate`"]["mounted_worktree"] == "`n/a`"
     assert indexed["`unet_lite_v1`"]["mounted_worktree"] == "`n/a`"
     assert indexed["`ntv2_teacher_distill_tutorial`"]["mounted_worktree"] == "`n/a`"
     assert indexed["`foundation_cache_contract`"]["mounted_worktree"] == "`n/a`"
