@@ -10,7 +10,7 @@
 
 | 事项 | 关键结论 | 关键路径 |
 |---|---|---|
-| 本地仓 physical rename（`chromBPNet -> TransChromBP`） | 本地 canonical root 的文本切换、历史绝对路径批量改写与真实物理 rename 已在同一轮完成；当前物理根为 `/home/zhengwei/project/python/TransChromBP`，旧路径 `/home/zhengwei/project/python/chromBPNet` 只保留为 compatibility symlink / rollback path。剩余动作只是在兼容期结束时决定何时退役该 symlink。 | `reports/local_repo_rename_closeout_20260419.md` |
+| 本地仓 physical rename（`chromBPNet -> TransChromBP`） | 本地 canonical root 的文本切换、历史绝对路径批量改写与真实物理 rename 已在同一轮完成；当前物理根为 `/home/zhengwei/project/python/TransChromBP`，旧路径 `/home/zhengwei/project/python/chromBPNet` 只保留为 compatibility symlink / rollback path。剩余动作只是在兼容期结束时决定何时退役该 symlink。 | `reports/closeout/local_repo_rename_closeout_20260419.md` |
 
 ---
 
@@ -18,10 +18,10 @@
 
 | 事项 | 关键结论 | 关键路径 |
 |---|---|---|
-| `6000 AlphaGenome matched raw-track slice` | `alphagenome_matched_raw_track_slice_v1_20260410` 已完成 closeout，并通过 technical/alignment gate `pass`；4 个固定 loci 全部成功，`summary / metadata / profiles / run_meta / merged` 产物齐全。原先允许的 `12-20 loci` 扩面已在 v2 里完成并收口，AlphaGenome 这条线现在只保留为已完成的 external coordinate，不再留 future-tense next step。 | `reports/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md`、`docs/superpowers/specs/2026-04-10-a6000-alphagenome-matched-slice-v1-design.md` |
-| `6000 A6000 formal gate` | `teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1` 已完成 formal gate closeout，并判定 `fail`；best epoch 为 `22`，但 peak `profile_target_jsd_full_mean=0.3337811803218466`、peak `count_pearson_full=0.7948227405497477` 仍明显落后于历史 `corrected B` two-seed mean，因此不做 promotion。 | `reports/multiscale_local_skip_v2_30ep_gate_closeout_20260410.md` |
-| `6000 AlphaGenome matched raw-track slice v2` | `alphagenome_matched_raw_track_slice_v2_20260410` 已完成 technical / external-coordinate sidecar closeout，并判定 `pass`；`16` 个 loci 全部成功落盘、每个 locus 都保留 `1` 条可用 `ATAC` track，且 `merged_locus_totals.csv` 已干净形成。该结果只作为 external coordinate 保留，不升级成 benchmark，也不改写 A6000 formal gate 语义。 | `reports/alphagenome_matched_raw_track_slice_v2_closeout_20260410.md` |
-| `6002 U-Net-lite v1` | `teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4` 已完成确认性复跑；`r1/r2` 仍是无效启动，`r3/r4` 是有效 run，但 `r4` 仍无法把这条 family 推上 shortlist，因此最终收成 `no-go / stop`。 | `reports/unet_lite_v1_rigor_review_20260409.md` |
+| `6000 AlphaGenome matched raw-track slice` | `alphagenome_matched_raw_track_slice_v1_20260410` 已完成 closeout，并通过 technical/alignment gate `pass`；4 个固定 loci 全部成功，`summary / metadata / profiles / run_meta / merged` 产物齐全。原先允许的 `12-20 loci` 扩面已在 v2 里完成并收口，AlphaGenome 这条线现在只保留为已完成的 external coordinate，不再留 future-tense next step。 | `reports/closeout/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md`、`docs/superpowers/specs/2026-04-10-a6000-alphagenome-matched-slice-v1-design.md` |
+| `6000 A6000 formal gate` | `teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1` 已完成 formal gate closeout，并判定 `fail`；best epoch 为 `22`，但 peak `profile_target_jsd_full_mean=0.3337811803218466`、peak `count_pearson_full=0.7948227405497477` 仍明显落后于历史 `corrected B` two-seed mean，因此不做 promotion。 | `reports/closeout/multiscale_local_skip_v2_30ep_gate_closeout_20260410.md` |
+| `6000 AlphaGenome matched raw-track slice v2` | `alphagenome_matched_raw_track_slice_v2_20260410` 已完成 technical / external-coordinate sidecar closeout，并判定 `pass`；`16` 个 loci 全部成功落盘、每个 locus 都保留 `1` 条可用 `ATAC` track，且 `merged_locus_totals.csv` 已干净形成。该结果只作为 external coordinate 保留，不升级成 benchmark，也不改写 A6000 formal gate 语义。 | `reports/closeout/alphagenome_matched_raw_track_slice_v2_closeout_20260410.md` |
+| `6002 U-Net-lite v1` | `teacher_v2_center_pool_unet_lite_v1_short10_s42_6002_20260409_r4` 已完成确认性复跑；`r1/r2` 仍是无效启动，`r3/r4` 是有效 run，但 `r4` 仍无法把这条 family 推上 shortlist，因此最终收成 `no-go / stop`。 | `reports/closeout/unet_lite_v1_rigor_review_20260409.md` |
 
 ---
 
@@ -29,21 +29,21 @@
 
 | 事项 | 关键结论 | 关键路径 |
 |---|---|---|
-| `NT v2 bins16 center-aligned residual gate`（6000 / A6000×2） | 显式授权的新 hypothesis 重入已完整执行并判负；相对 `short10_nofoundation_control` 没有 clean gain，当前 `summary / token-fusion / coarse residual / bins16 residual` family 默认停表 | `docs/plan/nt_v2_bins16_center_aligned_gate_20260405.md`、`reports/foundation_model_restart_v3_implementation_20260405.md` |
-| `NT v2 gate smoke after idle`（6000 / A6000×2） | `record_sha1 mismatch` 根因已修复并经真实 smoke 复验；结论固定为“链路已修，但当前 `bins4 / coarse residual` family 判负” | `reports/project_plan_code_review_20260405.md`、`docs/plan/a6000_foundation_reentry_candidates_20260405.md` |
-| 当前项目审查（计划 + 代码，2026-04-05） | launcher / cache contract 闭环缺口已定位、修复并完成 stop/go 收口；后续不再作为独立 live 条目维护 | `reports/project_plan_code_review_20260405.md`、`tests/test_foundation_cache_alignment.py` |
-| A6000 利用率 + foundation-model 停表规则 | A6000 空闲与 foundation stop-rule 的证据链已稳定，当前 NT v2 residual short10 family 默认停表 | `docs/plan/post_chatgpt_pro_priority_execution_20260405.md`、`reports/foundation_model_restart_v3_implementation_20260405.md` |
-| `short10 matched no-foundation control`（6000 / A6000×2） | full held-out 已完成并固定为健康 baseline；后续作为 gate 校准底座，不再作为独立实验跟踪 | `docs/plan/a6000_foundation_reentry_candidates_20260405.md` |
-| ChatGPT Pro 外部分析回流与行动化 | 外发包与技术路线咨询入口已固定；后续不再把“外发包准备”本身当作 live 主任务 | `reports/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md`、`reports/chatgpt_bundle_project_handoff_20260405/10_ready_to_send_chatgpt_pro_prompt.md` |
-| Gemini deep think 外部技术路线回流 | 已完成“输入 unified shortlist”的职责，转为稳定参考报告 | `reports/gemini_deep_think_technical_route_review_20260407.md` |
-| ChatGPT Pro 技术路线回流（2026-04-07） | 已完成“输入 unified shortlist”的职责，转为稳定参考报告 | `reports/chatgpt_pro_technical_route_review_20260407.md` |
-| 外部技术路线双报告汇总 | 统一 shortlist 已形成并写死；当前执行入口已经转移到 `corrected B + multiscale decoder probe` | `reports/external_technical_route_consensus_and_shortlist_20260407.md` |
-| 6000/6002 前置资源盘点（2026-04-07） | 资源盘点结论已稳定；剩余运行约束现并入当前双机 active 实验条目维护 | `reports/remote_prereq_audit_6000_6002_20260407.md` |
-| 当前工作接续说明（2026-04-07） | 双机执行入口已统一收口到 handoff 报告本身，不再作为 `TRACKING.md` 第一节的单独事项重复维护 | `reports/session_handoff_multiscale_and_next_tasks_20260407.md` |
-| foundation model gate 总结（tutorial canonical） | foundation 线的高层结论已固定为 appendix / side quest 负结果；若再重开，必须是显式授权的新 hypothesis | `reports/nt_v2_probe_20260404.md`、`docs/plan/a6000_foundation_reentry_candidates_20260405.md` |
-| ChromBPNet 官方锚点 + shared-region L3 收口 | 证据本身已稳定；剩余写回工作并入论文主稿与附表条目 | `reports/tutorial_L3_shared_region_closure_20260330.md` |
-| ATAC 分类指标扩展（AUROC/AUPRC/F1） | supplementary 指标定位已稳定；剩余写回工作并入论文主稿与附表条目 | `docs/plan/chrombpnet_official_externalization_implementation_plan_20260406.md`、`reports/chrombpnet_official_patch_ledger_20260406.md` |
-| clean matrix / profile shortcut 叙事收口 | clean matrix 与 shortcut 叙事的稳定结论已写实；剩余写回工作并入论文主稿与 supporting writeup | `reports/profile_shortcut_revalidation_summary_20260326.md`、`reports/paper_claim_evidence_matrix_20260326.md` |
+| `NT v2 bins16 center-aligned residual gate`（6000 / A6000×2） | 显式授权的新 hypothesis 重入已完整执行并判负；相对 `short10_nofoundation_control` 没有 clean gain，当前 `summary / token-fusion / coarse residual / bins16 residual` family 默认停表 | `docs/plan/archive/foundation/nt_v2_bins16_center_aligned_gate_20260405.md`、`reports/analysis/foundation_model_restart_v3_implementation_20260405.md` |
+| `NT v2 gate smoke after idle`（6000 / A6000×2） | `record_sha1 mismatch` 根因已修复并经真实 smoke 复验；结论固定为“链路已修，但当前 `bins4 / coarse residual` family 判负” | `reports/governance/project_plan_code_review_20260405.md`、`docs/plan/archive/foundation/a6000_foundation_reentry_candidates_20260405.md` |
+| 当前项目审查（计划 + 代码，2026-04-05） | launcher / cache contract 闭环缺口已定位、修复并完成 stop/go 收口；后续不再作为独立 live 条目维护 | `reports/governance/project_plan_code_review_20260405.md`、`tests/test_foundation_cache_alignment.py` |
+| A6000 利用率 + foundation-model 停表规则 | A6000 空闲与 foundation stop-rule 的证据链已稳定，当前 NT v2 residual short10 family 默认停表 | `docs/plan/archive/foundation/post_chatgpt_pro_priority_execution_20260405.md`、`reports/analysis/foundation_model_restart_v3_implementation_20260405.md` |
+| `short10 matched no-foundation control`（6000 / A6000×2） | full held-out 已完成并固定为健康 baseline；后续作为 gate 校准底座，不再作为独立实验跟踪 | `docs/plan/archive/foundation/a6000_foundation_reentry_candidates_20260405.md` |
+| ChatGPT Pro 外部分析回流与行动化 | 外发包与技术路线咨询入口已固定；后续不再把“外发包准备”本身当作 live 主任务 | `reports/external/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md`、`reports/external/chatgpt_bundle_project_handoff_20260405/10_ready_to_send_chatgpt_pro_prompt.md` |
+| Gemini deep think 外部技术路线回流 | 已完成“输入 unified shortlist”的职责，转为稳定参考报告 | `reports/external/gemini_deep_think_technical_route_review_20260407.md` |
+| ChatGPT Pro 技术路线回流（2026-04-07） | 已完成“输入 unified shortlist”的职责，转为稳定参考报告 | `reports/external/chatgpt_pro_technical_route_review_20260407.md` |
+| 外部技术路线双报告汇总 | 统一 shortlist 已形成并写死；当前执行入口已经转移到 `corrected B + multiscale decoder probe` | `reports/external/external_technical_route_consensus_and_shortlist_20260407.md` |
+| 6000/6002 前置资源盘点（2026-04-07） | 资源盘点结论已稳定；剩余运行约束现并入当前双机 active 实验条目维护 | `reports/governance/remote_prereq_audit_6000_6002_20260407.md` |
+| 当前工作接续说明（2026-04-07） | 双机执行入口已统一收口到 handoff 报告本身，不再作为 `TRACKING.md` 第一节的单独事项重复维护 | `reports/handoff/session_handoff_multiscale_and_next_tasks_20260407.md` |
+| foundation model gate 总结（tutorial canonical） | foundation 线的高层结论已固定为 appendix / side quest 负结果；若再重开，必须是显式授权的新 hypothesis | `reports/analysis/nt_v2_probe_20260404.md`、`docs/plan/archive/foundation/a6000_foundation_reentry_candidates_20260405.md` |
+| ChromBPNet 官方锚点 + shared-region L3 收口 | 证据本身已稳定；剩余写回工作并入论文主稿与附表条目 | `reports/analysis/tutorial_L3_shared_region_closure_20260330.md` |
+| ATAC 分类指标扩展（AUROC/AUPRC/F1） | supplementary 指标定位已稳定；剩余写回工作并入论文主稿与附表条目 | `docs/plan/archive/governance/chrombpnet_official_externalization_implementation_plan_20260406.md`、`reports/governance/chrombpnet_official_patch_ledger_20260406.md` |
+| clean matrix / profile shortcut 叙事收口 | clean matrix 与 shortcut 叙事的稳定结论已写实；剩余写回工作并入论文主稿与 supporting writeup | `reports/analysis/profile_shortcut_revalidation_summary_20260326.md`、`reports/paper/paper_claim_evidence_matrix_20260326.md` |
 | `chrombpnet-remote` 自定义 skill | 已在真实 6002 任务中完成 launch / monitor / 文档回写前向试用，不再需要单独 live 跟踪 | `~/.codex/skills/chrombpnet-remote/SKILL.md`、`AGENTS.md` |
 
 ---
@@ -52,8 +52,8 @@
 
 | 事项 | 关键结论 | 关键路径 |
 |---|---|---|
-| foundation-model restart v3：NT v2 cached residual short10（6000） | 正式 rerun 与 sidecar held-out 已全部完成；最终 held-out 为 overall `count_r=0.6800`、`jsd=0.4612`，peak `count_r=0.7729`、`jsd=0.3560`，直接触发 `fail-or-unsafe`。结论固定为“训练链路已跑通，但当前 `FoundationResidualHead + NT v2 cached short10` 方案在 tutorial canonical 上判负，不再进入 matched control / `cross_attention` / 多 seed 扩线” | `reports/foundation_model_restart_v3_implementation_20260405.md`、`docs/plan/post_chatgpt_pro_priority_execution_20260405.md` |
-| 本机 WSL + 6000/6002 工作目录整理（两轮执行） | 已完成本地临时噪音清理、6000 `TRACKING.md` 单入口收口，以及远端结果归档层落地。6000 foundation side quest 结果已迁入 `outputs/archive/foundation_sidequest/` 并保留兼容软链接；6002 历史 checkpoint 已迁入 `outputs/archive/historical_6002/checkpoints/`，只为两条文档显式引用路径保留软链接 | `docs/plan/workspace_cleanup_plan_20260405.md`、`TRACKING.md` |
+| foundation-model restart v3：NT v2 cached residual short10（6000） | 正式 rerun 与 sidecar held-out 已全部完成；最终 held-out 为 overall `count_r=0.6800`、`jsd=0.4612`，peak `count_r=0.7729`、`jsd=0.3560`，直接触发 `fail-or-unsafe`。结论固定为“训练链路已跑通，但当前 `FoundationResidualHead + NT v2 cached short10` 方案在 tutorial canonical 上判负，不再进入 matched control / `cross_attention` / 多 seed 扩线” | `reports/analysis/foundation_model_restart_v3_implementation_20260405.md`、`docs/plan/archive/foundation/post_chatgpt_pro_priority_execution_20260405.md` |
+| 本机 WSL + 6000/6002 工作目录整理（两轮执行） | 已完成本地临时噪音清理、6000 `TRACKING.md` 单入口收口，以及远端结果归档层落地。6000 foundation side quest 结果已迁入 `outputs/archive/foundation_sidequest/` 并保留兼容软链接；6002 历史 checkpoint 已迁入 `outputs/archive/historical_6002/checkpoints/`，只为两条文档显式引用路径保留软链接 | `docs/plan/archive/scheduling/workspace_cleanup_plan_20260405.md`、`TRACKING.md` |
 
 ---
 
@@ -61,7 +61,7 @@
 
 | 事项 | 关键结论 | 关键路径 |
 |---|---|---|
-| ChatGPT Pro 全局接盘外发总档案 | 面向“全局接盘”的外发主包已固定为 `8` 个文件，覆盖项目状态、关键证据、开放问题与两份源码快照；随后已成功获得一轮高质量外部回流意见，后续不再把“生成外发包”本身当作 live 主任务，而改由“外部意见回流与行动化”承接 | `reports/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md`、`reports/chatgpt_pro_external_review_20260405.md` |
+| ChatGPT Pro 全局接盘外发总档案 | 面向“全局接盘”的外发主包已固定为 `8` 个文件，覆盖项目状态、关键证据、开放问题与两份源码快照；随后已成功获得一轮高质量外部回流意见，后续不再把“生成外发包”本身当作 live 主任务，而改由“外部意见回流与行动化”承接 | `reports/external/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md`、`reports/external/chatgpt_pro_external_review_20260405.md` |
 
 ---
 
@@ -69,8 +69,8 @@
 
 | 事项 | 关键结论 | 关键路径 |
 |---|---|---|
-| `GM12878_6000 pilot20` held-out `test-full` sidecar | `2026-04-03 18:38-18:40 CST` 已完成；overall=`0.5517/0.7746`、peak=`0.4231/0.8179`、nonpeak=`0.6802/0.0762`。结果与历史 6000 记录实质一致，说明 `GM12878_6000` 的 held-out 偏弱不是瞬时波动，而是可复现现象 | `reports/v2fix_and_6000_realdata_followup_20260325.md` |
-| `K562_6000 epoch_019` held-out `test-full` sidecar | `2026-04-03 20:38-20:40 CST` 已完成；peak 从历史 `best.pt` 的 `0.6186/0.8287` 变为 `0.6213/0.8414`，count 提升约 `+0.0127`，但 profile JSD 变差约 `+0.0027`。结论是后期 checkpoint 延续了 profile/count tradeoff，但不足以推翻当前 `best.pt` 的 profile-first 选择 | `reports/v2fix_and_6000_realdata_followup_20260325.md` |
+| `GM12878_6000 pilot20` held-out `test-full` sidecar | `2026-04-03 18:38-18:40 CST` 已完成；overall=`0.5517/0.7746`、peak=`0.4231/0.8179`、nonpeak=`0.6802/0.0762`。结果与历史 6000 记录实质一致，说明 `GM12878_6000` 的 held-out 偏弱不是瞬时波动，而是可复现现象 | `reports/analysis/v2fix_and_6000_realdata_followup_20260325.md` |
+| `K562_6000 epoch_019` held-out `test-full` sidecar | `2026-04-03 20:38-20:40 CST` 已完成；peak 从历史 `best.pt` 的 `0.6186/0.8287` 变为 `0.6213/0.8414`，count 提升约 `+0.0127`，但 profile JSD 变差约 `+0.0027`。结论是后期 checkpoint 延续了 profile/count tradeoff，但不足以推翻当前 `best.pt` 的 profile-first 选择 | `reports/analysis/v2fix_and_6000_realdata_followup_20260325.md` |
 
 ---
 
@@ -78,13 +78,13 @@
 
 | 事项 | 关键结论 | 关键路径 |
 |---|---|---|
-| `notf_sg1_deb0_s1234` test 补评（6002/3080） | `split=test` 已补齐；peak=`0.43731/0.43841`、gap=`0.01679`、count_r=`0.82869/0.82669`。与 `s42=0.02682` 合并后，conv-only unsafe 双 seed 形成 `0.02682 / 0.01679`，说明它仍是 clean matrix 最高风险格，但幅度存在 seed 波动，不支持“稳定复现强 shortcut”的更强表述 | `reports/profile_shortcut_revalidation_summary_20260326.md` |
+| `notf_sg1_deb0_s1234` test 补评（6002/3080） | `split=test` 已补齐；peak=`0.43731/0.43841`、gap=`0.01679`、count_r=`0.82869/0.82669`。与 `s42=0.02682` 合并后，conv-only unsafe 双 seed 形成 `0.02682 / 0.01679`，说明它仍是 clean matrix 最高风险格，但幅度存在 seed 波动，不支持“稳定复现强 shortcut”的更强表述 | `reports/analysis/profile_shortcut_revalidation_summary_20260326.md` |
 
 ## 2026-03-25 第四轮归档（foundation model 缓存验证）
 
 | 事项 | 关键结论 | 关键路径 |
 |---|---|---|
-| Nucleotide Transformer v2-500M 本地缓存 | 6000 直连 `huggingface.co` 不通，改用“本机解析直链 + 远端下载大文件、小文件本机抓取后写回”；`model.safetensors` 已落盘，并在现有 `genos-1.2b` 环境下跑通本地 `transformers` CPU smoke test | `docs/research/nucleotide-transformer_download_turol.md`, `/data1/zhoujiazhen/bylw_atac/foundation_models/nucleotide_transformer/nt-v2-500m-multi-species/` |
+| Nucleotide Transformer v2-500M 本地缓存 | 6000 直连 `huggingface.co` 不通，改用“本机解析直链 + 远端下载大文件、小文件本机抓取后写回”；`model.safetensors` 已落盘，并在现有 `genos-1.2b` 环境下跑通本地 `transformers` CPU smoke test | `docs/archive/ops/nucleotide-transformer_download_turol.md`, `/data1/zhoujiazhen/bylw_atac/foundation_models/nucleotide_transformer/nt-v2-500m-multi-species/` |
 
 ## 2026-03-24 第三轮归档（实验收口与基础设施验证）
 
@@ -94,10 +94,10 @@
 | 6002 上历史数据集缓存补齐 | GM12878/K562 已落盘并通过 loader smoke 验证；HeLa-S3/ATAC fastq 暂不推进 | `scripts/start_6002_dataset_cache_downloads.sh` |
 | 6000/6002 ChromBPNet 数据集 CPU 预处理（GM12878/K562） | 两边后台作业均已结束，产物已生成；6002 侧已补 loader smoke 验证 | `scripts/run_remote_chrombpnet_dataset_prep.sh` |
 | 6000 A6000 vs 6002 RTX3080 训练速度对比 | 历史分析已收口：V2-full 相比 V2-noTF 在 held-out peak 上稳定更优 | `reports/assets/ablation_tf_20260318/summary_table.csv` |
-| 40 epoch 尾部收益复盘 | A/F best epoch=40，B=34，G=15；30→40 对 A/F 有收益但不支持统一补到 50 | `reports/v2fix_readout_head_status_20260323.md` |
+| 40 epoch 尾部收益复盘 | A/F best epoch=40，B=34，G=15；30→40 对 A/F 有收益但不支持统一补到 50 | `reports/analysis/v2fix_readout_head_status_20260323.md` |
 | TransChromBP tutorial 真实数据基线重训（bs16 + peak-best） | 已被 bias_pretrain → main 主线替代 | — |
 | GM12878 自定义 ChromBPNet 复现（全流程） | 该数据集仅作 TransChromBP 输入，不再单独扩 ChromBPNet 复现 | — |
-| Genos 融合实验 Phase 0/P2 | P0=0.3179/0.8384 未超 G0；P2 count-only 不通过（count 断崖下滑）；不推进 P1 | `reports/genos_cached_fusion_status_20260323.md`、`reports/genos_no_positive_gain_analysis_20260323.md` |
+| Genos 融合实验 Phase 0/P2 | P0=0.3179/0.8384 未超 G0；P2 count-only 不通过（count 断崖下滑）；不推进 P1 | `reports/analysis/genos_cached_fusion_status_20260323.md`、`reports/analysis/genos_no_positive_gain_analysis_20260323.md` |
 | Genos OCR 官方基准复现 | layer 12 roc_auc=0.7535 接近官方 0.7569，仅作 sanity check | `docs/research/genos复现ocr.md` |
 | nanochat / modded-nanogpt 学习环境 | 仓库已克隆，低优先级暂缓 | — |
 
@@ -108,10 +108,10 @@
 | 6000 A6000x2 本地项目工作区整理 | 本地专用工作区 `/home/zhengwei/project/python/server6000_a6000x2` 已按远端一级目录语义整理完成，可作为后续 6000 项目的统一落点 | `/home/zhengwei/project/python/server6000_a6000x2/README.md` |
 | 6002 上 TransChromBP 官方输入直连缓存 | tutorial 核心输入、folds 与 bias 模型缓存均已就位，后续新实验可直接复用 | `scripts/start_6002_transchrombp_official_downloads.sh`, `/home/zhengwei/bylw_atac/logs/tutorial_raw_prep_20260318_174729.log` |
 | 6002 承担 TransChromBP 实验的单卡准备 | 6002 单卡训练链路、依赖工具和 smoke test 已跑通，3080 可承接短训练、小消融与 smoke run | `scripts/prepare_6002_transchrombp_single_gpu.sh`, `/home/zhengwei/bylw_atac/logs/teacher_v2_6002_bias_smoke_retry_20260318_211241.log` |
-| 6002 Bias-Safe 机制消融（2×2 析因：pool\_factor × stop\_gradient） | 4 组实验与分析已收口；`stop_gradient=true` 是关键，`pool_factor` 无显著主效应 | `reports/transchrombp_bias_safe_ablation_20260320.tex` |
-| TransChromBP 训练性能诊断（2×A6000 benchmark） | clean run `1GPU bs16 -> 2GPU bs16` 吞吐 `191.0 -> 361.0 samples/s`，scaling efficiency `94.5%`，训练明确 compute-bound | `reports/transchrombp_training_perf_benchmark_20260320.tex`, `/data1/zhoujiazhen/bylw_atac/TransChromBP/outputs/logs/benchmark/benchmark_summary_20260320_004701.txt` |
+| 6002 Bias-Safe 机制消融（2×2 析因：pool\_factor × stop\_gradient） | 4 组实验与分析已收口；`stop_gradient=true` 是关键，`pool_factor` 无显著主效应 | `reports/paper/transchrombp_bias_safe_ablation_20260320.tex` |
+| TransChromBP 训练性能诊断（2×A6000 benchmark） | clean run `1GPU bs16 -> 2GPU bs16` 吞吐 `191.0 -> 361.0 samples/s`，scaling efficiency `94.5%`，训练明确 compute-bound | `reports/paper/transchrombp_training_perf_benchmark_20260320.tex`, `/data1/zhoujiazhen/bylw_atac/TransChromBP/outputs/logs/benchmark/benchmark_summary_20260320_004701.txt` |
 | 本地报告/画图独立环境（`.venv-report`） | 独立报告环境已建立并完成核心依赖验证，避免分析依赖污染主训练环境 | `scripts/setup_report_env.sh`, `DEVELOPMENT.md` |
-| Ablation 训练轮数复试（30→40 epoch） | 已并入 `V2 代码改进消融实验（修订版）`；第一批实验统一按 40 epoch 执行，不再单列跟踪 | `docs/plan/v2_code_improvement_ablations.md` |
+| Ablation 训练轮数复试（30→40 epoch） | 已并入 `V2 代码改进消融实验（修订版）`；第一批实验统一按 40 epoch 执行，不再单列跟踪 | `docs/plan/archive/v2/v2_code_improvement_ablations.md` |
 
 ## ChromBPNet 官方复现线
 
@@ -158,7 +158,7 @@
 | tutorial 真实数据基线训练（双卡 20 epoch） | `train_loss=5.80`, `val loss_total=5.83` | `TransChromBP/outputs/checkpoints/tutorial_real_baseline_20260313_1740/` |
 | tutorial bias→main 正式流水线 | bias 10 epoch + main 20 epoch 完成 | `TransChromBP/outputs/checkpoints/tutorial_bias2main_20260315_023539_main_learnable/` |
 | tutorial 独立 test 评估与基线对照 | bias→main 明显优于 baseline：peak count_r 0.8207 vs 0.8048 | `TransChromBP/outputs/metrics/tutorial_test_comparison_20260315.csv` |
-| tutorial 深化对照分析（bias-only + locus 图） | bias 在 nonpeak 有信号(count_r=0.4633)，peak 几乎失效(-0.0089) | `reports/transchrombp_tutorial_consolidated_cn.tex` |
+| tutorial 深化对照分析（bias-only + locus 图） | bias 在 nonpeak 有信号(count_r=0.4633)，peak 几乎失效(-0.0089) | `reports/paper/transchrombp_tutorial_consolidated_cn.tex` |
 | tutorial hybrid_data 两阶段对齐实验 | 流水线完成但定位为"语义绑包+optimization confound 负对照" | `logs/tutorial_bias2main_hybrid_20260315_1032.pipeline.log` |
 | tutorial hybrid_data 公平 held-out 评估 | hybrid 落后原主线（count_r 0.8000 vs 0.8347），含 count_weight 混杂 | `TransChromBP/outputs/metrics/tutorial_hybrid_*_test_full.json` |
 | canonical teacher 自动首跑 | 高价值失败样本：count_weight×learnable_scales 触发 bias shortcut | `logs/transchrombp_tutorial_teacher_canonical_v1_auto_postfix_20260316_165421.pipeline.log` |
@@ -178,15 +178,15 @@
 
 | 事项 | 关键结论 | 关键路径 |
 |---|---|---|
-| Teacher v2 深层机制分析报告 | 10 页 LaTeX：通道非对称性、为何同时改善 count、设计变更分解 | `reports/transchrombp_teacher_v2_deep_analysis_20260318.tex` |
-| Teacher v2 代码逐段 LaTeX 讲解 | 面向小白的 LaTeX 讲解稿 | `reports/transchrombp_teacher_v2_code_walkthrough_20260317.tex` |
-| fixcw 跨模型综合分析报告 | 9 页 LaTeX：含 AlphaGenome、发现 profile bias shortcut | `reports/fixcw_crossmodel_analysis_20260317.tex` |
-| 阶段报告与论文主线重构 | 7 页 LaTeX 源稿，研究主线切换为 Transformer+distillation+bias 关系 | `reports/transchrombp_tutorial_consolidated_cn.tex` |
+| Teacher v2 深层机制分析报告 | 10 页 LaTeX：通道非对称性、为何同时改善 count、设计变更分解 | `reports/paper/transchrombp_teacher_v2_deep_analysis_20260318.tex` |
+| Teacher v2 代码逐段 LaTeX 讲解 | 面向小白的 LaTeX 讲解稿 | `reports/paper/transchrombp_teacher_v2_code_walkthrough_20260317.tex` |
+| fixcw 跨模型综合分析报告 | 9 页 LaTeX：含 AlphaGenome、发现 profile bias shortcut | `reports/paper/fixcw_crossmodel_analysis_20260317.tex` |
+| 阶段报告与论文主线重构 | 7 页 LaTeX 源稿，研究主线切换为 Transformer+distillation+bias 关系 | `reports/paper/transchrombp_tutorial_consolidated_cn.tex` |
 | 报告冻结快照（远端保护副本） | 快照已保存，硬链接保护 | `TransChromBP/outputs/snapshots/tutorial_report_20260315_frozen/` |
 | 数据语义审计文档与冻结归档 | 9 个 checkpoint 快照+18 份评估 JSON | `TransChromBP/outputs/snapshots/data_semantics_audit_20260315_frozen/` |
-| 推荐数据处理流程定稿 | count_weight 不再作为 canonical 默认项 | `reports/transchrombp_tutorial_consolidated_cn.tex` |
-| 论文 LaTeX 骨架（英文+中文） | 围绕"Transformer×distillation×bias factorization" | `reports/transchrombp_paper_outline.tex`, `reports/transchrombp_paper_outline_cn.tex` |
-| 中文项目思路稿 | 收束为长程建模+蒸馏+偏差分解 | `reports/transchrombp_project_note_cn.tex` |
+| 推荐数据处理流程定稿 | count_weight 不再作为 canonical 默认项 | `reports/paper/transchrombp_tutorial_consolidated_cn.tex` |
+| 论文 LaTeX 骨架（英文+中文） | 围绕"Transformer×distillation×bias factorization" | `reports/paper/transchrombp_paper_outline.tex`, `reports/paper/transchrombp_paper_outline_cn.tex` |
+| 中文项目思路稿 | 收束为长程建模+蒸馏+偏差分解 | `reports/paper/transchrombp_project_note_cn.tex` |
 | 本地 WSL LaTeX 环境 | pdflatex/xelatex/latexmk 可用 | — |
 
 ## 其他
@@ -194,3 +194,11 @@
 | 事项 | 关键结论 | 关键路径 |
 |---|---|---|
 | 6000 远端 CLI 工具补装 | rg/fd/jq/bat/fzf 已装到 ~/.local/bin | `/home/zhoujiazhen/.local/bin/` |
+
+## 2026-03-17 第一轮归档（开发环境与版本管理配置）
+
+| 事项 | 关键结论 | 关键路径 |
+|---|---|---|
+| Git 仓库初始化与身份统一 | 本地与 6000 均已关联 GitHub 仓库 `rose8happy/TransChromBP`；`.gitignore` 已排除 `*.h5, *.pt`；Git 用户身份统一为 `yangmeisuan <345687960@qq.com>`。 | `AGENTS.md`、`DEVELOPMENT.md` |
+| 自动化同步脚本初版与命令收敛 | 历史同步脚本已收敛为 `publish-runtime-{6000,6002}`、`pull-results-{6000,6002}` 与 `status-all`；旧 `deploy` / `download_results` 只保留为 deprecated 迁移提示。 | `scripts/sync_project.sh` |
+| 开发工作流文档 | `DEVELOPMENT.md` 已建立，作为当时的开发工作流说明。 | `DEVELOPMENT.md` |

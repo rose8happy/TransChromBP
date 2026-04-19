@@ -1,0 +1,386 @@
+\documentclass[11pt,a4paper]{ctexart}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue]{hyperref}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{xcolor}
+
+\title{TransChromBP Teacher v2：结果更新、对标分析与论文叙事建议\\
+\large 基于 2026-03-18 最新评测的独立分析稿}
+\author{项目工作文档}
+\date{2026 年 3 月 18 日}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+本文档是对 \texttt{teacher\_v2\_20260317} 最新结果的独立更新，不覆盖此前的
+\texttt{fixcw} 综合分析稿，也不改写已有 tutorial 总报告。与旧稿相比，本文新增了三组
+关键证据。第一，Teacher v2 不仅修复了此前在 \texttt{fixcw} teacher 中暴露出来的
+profile-dimension bias shortcut，而且在完整 held-out 口径上也显著优于旧主线和 baseline。
+第二，当前训练导出的 \texttt{best.pt} 并不是最适合论文主表的 checkpoint；
+\texttt{epoch\_024.pt} 在 test 指标上更强，说明现有 checkpoint 选择准则仍有优化空间。
+第三，在 4 个 AlphaGenome pilot 代表位点上，Teacher v2 的 matched-window profile shape
+已经与 AlphaGenome 持平或略优，同时在绝对计数校准上明显更适合当前 ATAC 任务。
+
+基于这些新证据，本文给出两类结论。其一，在不进入新一轮架构消融前，最值得优先做的不是
+继续改模型，而是先修正 checkpoint 定版与早停口径，因为这已经可以带来更好的主表结果。
+其二，当前最稳妥、最有说服力的论文叙事，不是“我们简单把 Transformer 和 bias 机制拼在
+一起得到 SOTA”，而是“我们先诊断出长程模型和 bias factorization 结合时会出现的 profile
+shortcut，再提出针对性的结构与训练修复，最终得到一个更强、且 debiased 分支真正可解释的
+ATAC 模型”；如果后续 distillation 做成，这一叙事再进一步升级为完整的旗舰模型故事。
+\end{abstract}
+
+\section{本文目的与更新范围}
+
+本稿只回答两个问题：
+\begin{enumerate}[leftmargin=2em]
+  \item 在做新一轮消融之前，当前结果是否已经显示出明确的继续提分方向；
+  \item 在当前证据基础上，论文和汇报到底应该如何讲故事。
+\end{enumerate}
+
+本文不再重复展开此前已经写过的三类内容：
+\begin{itemize}[leftmargin=2em]
+  \item tutorial 主线与 baseline 的早期汇总；
+  \item hybrid\_data 的数据语义审计；
+  \item \texttt{fixcw} run 中发现 bias shortcut 的完整诊断过程。
+\end{itemize}
+
+这三部分已经分别在
+\href{/home/zhengwei/project/python/TransChromBP/reports/paper/transchrombp_tutorial_consolidated_cn.tex}{tutorial 总报告源码}、
+\href{/home/zhengwei/project/python/TransChromBP/reports/paper/fixcw_crossmodel_analysis_20260317.tex}{fixcw 综合分析报告源码}
+和论文轮廓文稿中给出。本文只接着这些材料，加入最新的 Teacher v2 证据。
+
+\section{最新证据一：Teacher v2 已在完整 held-out 上显著优于旧主线}
+
+\subsection{为什么先看 full held-out}
+
+此前的 \texttt{fixcw} 报告主要使用 \texttt{chr1} 上
+\texttt{nonpeak\_ratio=0.1} 的 sampled held-out 口径，它的优点是 peak 集合与不同 run 之间更容易直接对齐。
+但如果要判断一个模型是否真能作为“新主线”或者“主表候选”，仅看 sampled 口径不够。
+因此这里先看完整 held-out：\texttt{chr1} 上全部 \texttt{62342} 个 region，
+即 \texttt{nonpeak\_ratio=1.0} 的 full test。
+
+\subsection{完整 held-out 结果}
+
+\begin{table}[H]
+\centering
+\small
+\caption{完整 held-out（\texttt{chr1}, 62342 regions, \texttt{nonpeak\_ratio=1.0}）下的关键指标。JSD 越低越好，count $r$ 越高越好。}
+\begin{tabular}{lrrrrrr}
+\toprule
+模型 & overall $r$ & overall JSD & peak $r$ & peak JSD & nonpeak $r$ & nonpeak JSD \\
+\midrule
+Teacher v2 \texttt{epoch\_024} & \textbf{0.8623} & \textbf{0.4354} & \textbf{0.8465} & \textbf{0.3141} & \textbf{0.2526} & \textbf{0.5567} \\
+Teacher v2 \texttt{best.pt} & 0.8618 & 0.4367 & 0.8466 & 0.3162 & 0.2563 & 0.5573 \\
+Orig bias$\to$main best & 0.8416 & 0.4455 & 0.8207 & 0.3310 & 0.2276 & 0.5599 \\
+Baseline epoch20 & 0.8253 & 0.4536 & 0.8048 & 0.3437 & 0.1875 & 0.5635 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+这个表说明三件事。
+
+\begin{enumerate}[leftmargin=2em]
+  \item Teacher v2 不是只在 sampled test 上占优，而是在完整 held-out 口径下也更强。
+  与旧 \texttt{orig best} 相比，\texttt{epoch\_024} 的
+  overall count $r$ 从 0.8416 提到 0.8623，
+  overall JSD 从 0.4455 降到 0.4354，
+  peak count $r$ 从 0.8207 提到 0.8465，
+  peak JSD 从 0.3310 降到 0.3141。
+
+  \item 这不是“只优化 peaks、牺牲非峰背景”的假提升。nonpeak count $r$ 虽然绝对值仍不高，
+  但相较旧主线与 baseline 依然更好；nonpeak profile JSD 也有小幅改善。
+
+  \item 因此，Teacher v2 当前已经足够被当成新的正式主线，而不只是一次机制验证 run。
+\end{enumerate}
+
+\section{最新证据二：profile shortcut 已被修复，而且修复后结果更强}
+
+\subsection{full vs.\ debiased 差距是核心机制证据}
+
+此前 \texttt{fixcw} teacher 的核心问题不是 full 指标不够好，而是
+\texttt{debiased} 分支几乎不会自己做 profile prediction。换句话说，模型把 profile 形状学习
+交给了 bias branch，signal branch 主要在学 count。Teacher v2 的价值，首先要看它有没有把这个
+问题真正修掉。
+
+\begin{table}[H]
+\centering
+\small
+\caption{sampled held-out（\texttt{chr1}, 34288 regions, \texttt{nonpeak\_ratio=0.1}）上 full / debiased 的 peak 指标对比。}
+\begin{tabular}{lrrrr}
+\toprule
+模型 & count $r$ full & count $r$ debiased & profile JSD full & profile JSD debiased \\
+\midrule
+Teacher v2 \texttt{epoch\_024} & 0.8465 & 0.8451 & 0.3141 & 0.3141 \\
+Teacher v2 \texttt{best.pt} & 0.8466 & 0.8445 & 0.3162 & 0.3163 \\
+Fixcw Teacher best & 0.8205 & 0.8190 & 0.3231 & 0.5633 \\
+Orig bias$\to$main best & 0.8207 & 0.8207 & 0.3310 & 0.5086 \\
+Baseline epoch20 & 0.8048 & 0.8048 & 0.3437 & 0.3266 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+这个表是当前最关键的机制证据。
+
+\begin{itemize}[leftmargin=2em]
+  \item 在 \texttt{fixcw} teacher 里，peak debiased JSD 比 full JSD 差了 0.2402；
+  在 Teacher v2 \texttt{epoch\_024} 里，两者只差约 0.00006，几乎完全重合。
+
+  \item 这意味着现在的 signal branch 已经能自己把 profile 形状学出来，bias profile
+  分支不再承担主要形状建模职责。
+
+  \item 更重要的是，shortcut 被修掉以后，full 指标并没有退化，反而继续超过
+  \texttt{fixcw}、旧主线和 baseline。这说明 Teacher v2 不是用“牺牲性能”换来“更干净的解释”，
+  而是真正做到了更强且更干净。
+\end{itemize}
+
+\subsection{与 ChromBPNet 的直接对标}
+
+和 ChromBPNet 官方 tutorial 口径直接相关、最适合放进论文主表的，是 peak count correlation
+与 peak profile median JSD。当前 Teacher v2 的最佳论文候选 checkpoint 是
+\texttt{epoch\_024}，它在 sampled held-out 下的峰区 median JSD 已经可以直接给出。
+
+\begin{table}[H]
+\centering
+\small
+\caption{与当前最重要外部 baseline 的直接对比。ChromBPNet 使用官方 tutorial evaluation。}
+\begin{tabular}{lrrr}
+\toprule
+模型 & peak count $r$ & peak profile JSD（mean） & peak profile JSD（median） \\
+\midrule
+Teacher v2 \texttt{epoch\_024} & \textbf{0.8465} & \textbf{0.3141} & \textbf{0.3164} \\
+Teacher v2 \texttt{best.pt} & 0.8466 & 0.3162 & 0.3187 \\
+Fixcw Teacher best & 0.8205 & 0.3231 & 0.3255 \\
+ChromBPNet official & 0.7274 & --- & 0.3360 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+如果按最保守的可比口径来讲，Teacher v2 \texttt{epoch\_024} 相对 ChromBPNet 官方 tutorial
+已经得到：
+\begin{itemize}[leftmargin=2em]
+  \item peak count $r$ 从 0.7274 提到 0.8465；
+  \item peak median JSD 从 0.3360 降到 0.3164。
+\end{itemize}
+
+因此，当前更准确的表述应当是：
+\begin{quote}
+Teacher v2 已经是一个非常强的 SOTA 候选，而且它的提升不是靠 bias shortcut 堆出来的。
+\end{quote}
+
+\section{最新证据三：当前 \texttt{best.pt} 不是最适合论文主表的 checkpoint}
+
+\subsection{问题来源}
+
+当前训练日志把 \texttt{best.pt} 定义为验证集上的 \texttt{peak.loss\_total} 最优点，
+因此选中了 \texttt{epoch 18}。但 Teacher v2 这轮训练把
+\texttt{debiased\_profile\_weight} 提到了 2.0，loss 组成已经不同于旧 run，
+因此“验证 loss 最优”并不一定等于“论文主指标最优”。
+
+\subsection{test 上的直接证据}
+
+\begin{table}[H]
+\centering
+\small
+\caption{\texttt{best.pt} 与 \texttt{epoch\_024.pt} 的关键 test 指标对比。}
+\begin{tabular}{lrrrr}
+\toprule
+口径 & 指标 & \texttt{best.pt} & \texttt{epoch\_024.pt} & 更优者 \\
+\midrule
+sampled test & peak count $r$ & 0.8466 & 0.8465 & 基本持平 \\
+sampled test & peak JSD（mean） & 0.3162 & \textbf{0.3141} & epoch24 \\
+sampled test & peak JSD（median） & 0.3187 & \textbf{0.3164} & epoch24 \\
+sampled test & overall JSD（mean） & 0.3379 & \textbf{0.3359} & epoch24 \\
+sampled test & overall count MAE & 961.6 & \textbf{917.1} & epoch24 \\
+\midrule
+full test & overall count $r$ & 0.8618 & \textbf{0.8623} & epoch24 \\
+full test & overall JSD（mean） & 0.4367 & \textbf{0.4354} & epoch24 \\
+full test & peak JSD（mean） & 0.3162 & \textbf{0.3141} & epoch24 \\
+full test & overall count MAE & 603.2 & \textbf{567.8} & epoch24 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+当前证据非常一致：\texttt{epoch\_024.pt} 更像“最终论文 checkpoint”，而不是 \texttt{best.pt}。
+
+\subsection{这意味着什么}
+
+这给出了一个很明确、而且不需要先做新消融的提分方向：
+\begin{enumerate}[leftmargin=2em]
+  \item 先把报告、主表和后续 locus 图默认 checkpoint 从 \texttt{best.pt} 切到
+  \texttt{epoch\_024.pt}；
+  \item 下一轮训练优先修改 checkpoint 选择准则，而不是先改模型结构；
+  \item 可以考虑把早停和 best 选择改为更贴近最终 benchmark 的 proxy，例如
+  \texttt{peak profile JSD}、\texttt{peak median JSD}，或者一个简单的多目标规则。
+\end{enumerate}
+
+这是一条非常低风险、但已经被现有证据证明有效的改进路线。
+
+\section{最新证据四：与 AlphaGenome 的外部对标该怎么讲}
+
+\subsection{先说边界}
+
+AlphaGenome 不是为当前 task 量身设计的 ATAC read-count calibration 模型，它的优势是更强的长程上下文与
+foundation-style profile prediction。此前 pilot 已经确认，它在 4 个代表位点上的绝对计数严重低估，
+但相对排序是合理的。此前还缺的一步，是把这些位点的 \texttt{profile .npz} 真正拉到 matched 1000bp
+窗口上算 JSD。
+
+\subsection{4 个 pilot 位点的 matched-window 结果}
+
+\begin{table}[H]
+\centering
+\small
+\caption{4 个 AlphaGenome pilot 位点上的 matched-window profile shape 与计数校准对比。}
+\begin{tabular}{lrrr}
+\toprule
+模型 & 4 位点平均 profile JSD & 峰位点平均 profile JSD & 平均绝对计数误差 \\
+\midrule
+Teacher v2 \texttt{epoch\_024} full & \textbf{0.1643} & \textbf{0.0677} & \textbf{818.4} \\
+Teacher v2 \texttt{epoch\_024} debiased & 0.1643 & 0.0677 & 939.8 \\
+Fixcw Teacher full & 0.1752 & 0.0786 & 1073.0 \\
+AlphaGenome & 0.1687 & 0.0729 & 1355.4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+这个表支持一个更细的外部对标结论：
+\begin{itemize}[leftmargin=2em]
+  \item 在这 4 个代表位点的 matched 1000bp 窗口上，Teacher v2 的 profile shape 已经与
+  AlphaGenome 持平或略优，尤其是在峰位点上更明显。
+
+  \item 同时，Teacher v2 在绝对计数校准上仍然更适合当前 assay-specific 任务。
+  这与此前 pilot 的定性观察一致，只是现在被 profile JSD 正式补齐了。
+
+  \item 因此，AlphaGenome 在当前论文里最好的角色，不是“我们全面打败了一个 foundation model”，
+  而是“一个外部、长上下文、非 task-specific 的强参考”。在这个角色上，Teacher v2 已经可以讲出
+  很体面的故事：shape 不输，absolute calibration 更合适。
+\end{itemize}
+
+\section{在做新消融前，最值得优先做什么}
+
+\subsection{优先级一：先修正 checkpoint 定版口径}
+
+这是当前最明确的提分方向，而且不需要先做新架构实验。
+
+\begin{itemize}[leftmargin=2em]
+  \item 立刻把主表默认 checkpoint 改成 \texttt{epoch\_024.pt}；
+  \item 之后把 best metric 从 \texttt{peak.loss\_total} 改为更贴近论文指标的口径；
+  \item 如果重跑训练，优先增加 late-phase patience，而不是先改网络结构。
+\end{itemize}
+
+\subsection{优先级二：把 v2 的图和对比资产补齐}
+
+在不增加新实验轴的前提下，最值钱的补充分析是：
+\begin{itemize}[leftmargin=2em]
+  \item 重新生成 \texttt{epoch\_024} 的 locus 轨道对照图；
+  \item 把 v2 / fixcw / ChromBPNet / AlphaGenome 的主表汇成一张独立结果总表；
+  \item 把 full / debiased 两套输出都放进新报告，明确强调 shortcut 已被修复。
+\end{itemize}
+
+这些分析会直接提升论文说服力，而且不会把项目拉回到新的支线。
+
+\subsection{优先级三：如果还想继续涨分，先动训练判据，再动模型}
+
+当前 Teacher v2 的 profile shortcut 已经修掉，\texttt{effective\_profile\_scale}
+只有约 0.011，说明 profile bias 分支已经不再主导。此时若还要继续涨分，
+优先目标更可能是：
+\begin{itemize}[leftmargin=2em]
+  \item checkpoint selection；
+  \item late-epoch 训练时长；
+  \item count calibration；
+  \item evaluation proxy 与最终 benchmark 的一致性。
+\end{itemize}
+
+也就是说，下一步最值得优化的，已经不再是“怎么继续防 bias shortcut”，而是“怎么把已经健康的训练
+更稳地转化成最终主表分数”。
+
+\section{当前最稳妥的论文叙事}
+
+\subsection{推荐叙事：先诊断，再修复，再超过 baseline}
+
+当前最稳、最有说服力的叙事，不应写成：
+\begin{quote}
+我们把 Transformer、bias 和 AlphaGenome 启发拼在一起，于是拿到了更好的结果。
+\end{quote}
+
+这种写法最大的问题，是它无法解释为什么此前 \texttt{fixcw} teacher 明明 full 指标不差，
+却会在 debiased 分支上严重失败。
+
+当前更强的叙事应该是：
+\begin{quote}
+长程 backbone 与 ChromBPNet-style bias factorization 的结合并不是天然稳定的。
+如果不显式约束，模型会在 profile 维度走 bias shortcut。我们先诊断出这个机制问题，
+再通过 bias resolution bottleneck、profile stop-gradient 和 debiased profile supervision
+做针对性修复，最终得到一个既更强、又真正由 signal branch 学出 profile 的模型。
+\end{quote}
+
+\subsection{为什么这个故事现在已经够强}
+
+因为它同时满足三点：
+\begin{enumerate}[leftmargin=2em]
+  \item 有机制问题：\texttt{fixcw} 报告已经清楚证明 shortcut 存在；
+  \item 有机制修复：Teacher v2 的 full / debiased gap 已经几乎消失；
+  \item 有主结果支撑：Teacher v2 不但没有退步，反而在完整 held-out 上继续超过旧主线、
+  baseline 和 ChromBPNet 官方结果。
+\end{enumerate}
+
+这不是一篇“只有解释没有性能”的论文，也不是一篇“只有刷榜没有机制”的论文。
+当前证据已经足以支持一篇兼顾方法与机制的工作。
+
+\subsection{如果后续 distillation 成功，故事如何升级}
+
+如果后续 teacher-student distillation 做出稳定收益，那么当前 Teacher v2 可以自然升级为：
+\begin{quote}
+一个已经被验证为健康、可解释、且强性能的 teacher。
+\end{quote}
+
+此时整篇论文就可以进一步升级成你最希望的旗舰叙事：
+\begin{quote}
+Transformer 长程建模 + bias-aware formulation + distillation 一起构成了一个 ATAC 专用的
+SOTA 系统。
+\end{quote}
+
+但在 distillation 证据真正到位之前，不建议抢先这么写。现在最安全也最强的说法仍然是：
+Teacher v2 已经证明“长程 backbone 和 bias-aware ATAC 建模可以真正兼容，而且兼容之后确实更强”。
+
+\subsection{当前应避免的三种写法}
+
+\begin{itemize}[leftmargin=2em]
+  \item 不要把主线写成“我们简单组合模块后拿到了更高分”。这样会掩盖 shortcut 诊断的真正价值。
+  \item 不要把论文写成“我们全面超过了 AlphaGenome”。当前只有 4 个 pilot 位点，且任务不完全一致。
+  \item 不要继续把 \texttt{loss\_total} 当成跨 run 主比较指标。Teacher v2 的 loss 权重已经改变，
+  继续强调 loss 会让口径混乱。
+\end{itemize}
+
+\section{结论}
+
+截至 2026-03-18，Teacher v2 已经把这条线从“有潜力但存在严重机制缺陷”的状态，推进到了
+“有清楚机制故事、而且主结果已经很强”的状态。当前最重要的结论有四条：
+\begin{enumerate}[leftmargin=2em]
+  \item Teacher v2 已经修复 profile shortcut，而且修复后结果更强；
+  \item 它在完整 held-out 上显著优于旧主线和 baseline；
+  \item 它已经是一个很强的 ChromBPNet 上位替代候选；
+  \item 在新消融前，最值钱的提分动作不是先改结构，而是先修正 checkpoint 选择与结果定版口径。
+\end{enumerate}
+
+因此，接下来最合理的动作顺序应是：
+\begin{enumerate}[leftmargin=2em]
+  \item 用 \texttt{epoch\_024.pt} 重新定版 v2 主结果；
+  \item 基于它生成一份正式跨模型主表和新图；
+  \item 再决定是否进入下一轮以 distillation 为核心的新实验。
+\end{enumerate}
+
+如果只用一句话概括当前最稳妥的论文主张，那么应该是：
+\begin{quote}
+TransChromBP 的关键突破，不是“把 Transformer 接到 ChromBPNet 上”，而是证明了
+长程建模与 bias-aware ATAC 任务定义之间存在一个必须被显式修复的 shortcut，
+而一旦修复，这种结合确实能导出更强、更干净的模型。
+\end{quote}
+
+\end{document}

@@ -1,29 +1,36 @@
-# TransChromBP main repository and archive
+# TransChromBP Main Repository And Archive
 
-This repository is the main TransChromBP repository plus the project archive. It is not the home of the official ChromBPNet source anymore.
+This repository is the local canonical trunk for TransChromBP plus the project archive. Official ChromBPNet source lookup, reproduction, and compare runs no longer live here.
 
-Canonical repository topology, single-source-of-truth rules, and sync commands live in `docs/env/repository_governance.md`.
+Canonical topology, source-of-truth rules, and sync commands live in `docs/env/repository_governance.md`.
 
 The active local canonical root is `/home/zhengwei/project/python/TransChromBP`. If `/home/zhengwei/project/python/chromBPNet` still exists locally, treat it only as a compatibility symlink / rollback path.
 
-## What lives here
+## Canonical Entrypoints
 
-- `vendor/transchrombp/`: versioned local snapshot of TransChromBP used by this repo's launchers and experiments.
-- `docs/`, `reports/`, `TRACKING.md`: documentation, evidence, and live-status archive.
-- `scripts/`, `workflows/`: project launchers and explicit publish/pull helpers.
-- `tests/`: shell checks for workflow and data-path regressions.
-- `images/`: documentation assets.
-- `references/`: local-only reference indices; heavy materials live under `references/local-only/`.
-- `tmp_remote_edit/`: remote-write staging only, not a final archive.
+- Live status: [TRACKING.md](TRACKING.md)
+- Experiment family / run index: [docs/experiments/registry.md](docs/experiments/registry.md), [docs/experiments/runs.csv](docs/experiments/runs.csv)
+- Learning / onboarding navigation: [docs/learning/学习材料索引.md](docs/learning/学习材料索引.md)
+- Reusable reports and closeouts: [reports/README.md](reports/README.md)
 
-## Where to use the official ChromBPNet source
+## What Lives Here
+
+- `vendor/transchrombp/`: versioned local snapshot used by this repo's launchers and experiments
+- `docs/`: governance, plans, research notes, learning materials, and archived runbooks
+- `reports/`: reusable analysis, closeout, governance, handoff, external, and paper materials
+- `scripts/`, `workflows/`: project launchers and publish / pull helpers
+- `tests/`: shell and doc-contract checks
+- `references/`: local-only reference indices; heavy materials live under `references/local-only/`
+- `tmp_remote_edit/`: remote-write staging only, not a final archive
+
+## Official ChromBPNet Source
 
 - Official ChromBPNet source lookup, reproduction, and compare runs use the 6000 external repo:
   `/data1/zhoujiazhen/bylw_atac/chromBPNet`
 - The canonical official source is not kept in this repository.
 - If you need upstream package layout or packaging files, inspect the 6000 external repo first.
 
-## Practical entry points
+## Practical Commands
 
 - `bash workflows/tutorial/step1_download_bams_and_peaks.sh /path/to/data`
 - `bash tests/full_workflow.sh 0`

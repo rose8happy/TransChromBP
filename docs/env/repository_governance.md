@@ -40,7 +40,9 @@
 
 ## Directory Hygiene
 
-- `reports/` 只保留可复用 `md/tex/assets` 源文件。
+- `docs/plan/` 根目录只保留 live canonical 计划；历史计划统一归到 `docs/plan/archive/<topic>/`。
+- `docs/research/` 只保留稳定研究摘要；执行日志、下载 runbook、操作记录迁到 `docs/archive/ops/`。
+- `reports/` 根目录默认只保留 `README.md`；可复用报告按 `analysis/`、`closeout/`、`governance/`、`handoff/`、`external/`、`paper/` 分类管理，`assets/` 只放轻量结果摘要。
 - `references/` 只保留轻量级索引；大文件本体默认进 `references/local-only/`。
 - `tmp_remote_edit/` 只做 staging，不做长期归档。
 - 根目录只保留稳定入口文件；专题报告、研究笔记、学习材料和脚本都应落回各自命名空间。

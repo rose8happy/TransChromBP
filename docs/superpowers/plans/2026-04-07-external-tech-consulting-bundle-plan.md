@@ -13,8 +13,8 @@
 ### Task 1: Rewrite The Bundle Entrypoint
 
 **Files:**
-- Modify: `reports/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md`
-- Verify: `reports/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md`
+- Modify: `reports/external/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md`
+- Verify: `reports/external/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md`
 
 - [ ] **Step 1: Replace the old reviewer-first framing with a technical-consulting-first framing**
 
@@ -58,7 +58,7 @@ Also add a hard constraint that the old `Transformer/bias` mismatch suspicion is
 
 - [ ] **Step 4: Verify the entrypoint text**
 
-Run: `sed -n '1,260p' reports/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md`
+Run: `sed -n '1,260p' reports/external/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md`
 
 Expected:
 - first-round upload list includes `08` and `09`
@@ -70,8 +70,8 @@ Expected:
 ### Task 2: Add A Focused Technical-Questions File
 
 **Files:**
-- Create: `reports/chatgpt_bundle_project_handoff_20260405/09_technical_questions_for_external_models.md`
-- Verify: `reports/chatgpt_bundle_project_handoff_20260405/09_technical_questions_for_external_models.md`
+- Create: `reports/external/chatgpt_bundle_project_handoff_20260405/09_technical_questions_for_external_models.md`
+- Verify: `reports/external/chatgpt_bundle_project_handoff_20260405/09_technical_questions_for_external_models.md`
 
 - [ ] **Step 1: Create the technical-questions document**
 
@@ -110,7 +110,7 @@ Add a short section saying the old `Transformer/bias` mismatch suspicion was an 
 
 - [ ] **Step 4: Verify the new file**
 
-Run: `sed -n '1,260p' reports/chatgpt_bundle_project_handoff_20260405/09_technical_questions_for_external_models.md`
+Run: `sed -n '1,260p' reports/external/chatgpt_bundle_project_handoff_20260405/09_technical_questions_for_external_models.md`
 
 Expected:
 - the file clearly asks for route consultation
@@ -122,10 +122,10 @@ Expected:
 ### Task 3: Retune The State And Delta Files
 
 **Files:**
-- Modify: `reports/chatgpt_bundle_project_handoff_20260405/01_project_state_claims_and_open_questions.md`
-- Modify: `reports/chatgpt_bundle_project_handoff_20260405/08_post_20260406_delta.md`
-- Verify: `reports/chatgpt_bundle_project_handoff_20260405/01_project_state_claims_and_open_questions.md`
-- Verify: `reports/chatgpt_bundle_project_handoff_20260405/08_post_20260406_delta.md`
+- Modify: `reports/external/chatgpt_bundle_project_handoff_20260405/01_project_state_claims_and_open_questions.md`
+- Modify: `reports/external/chatgpt_bundle_project_handoff_20260405/08_post_20260406_delta.md`
+- Verify: `reports/external/chatgpt_bundle_project_handoff_20260405/01_project_state_claims_and_open_questions.md`
+- Verify: `reports/external/chatgpt_bundle_project_handoff_20260405/08_post_20260406_delta.md`
 
 - [ ] **Step 1: Update the “open questions” section in `01`**
 
@@ -158,8 +158,8 @@ Keep the current bins16 negative result and stop-rule, but rewrite the landing p
 Run:
 
 ```bash
-sed -n '1,240p' reports/chatgpt_bundle_project_handoff_20260405/01_project_state_claims_and_open_questions.md
-sed -n '1,240p' reports/chatgpt_bundle_project_handoff_20260405/08_post_20260406_delta.md
+sed -n '1,240p' reports/external/chatgpt_bundle_project_handoff_20260405/01_project_state_claims_and_open_questions.md
+sed -n '1,240p' reports/external/chatgpt_bundle_project_handoff_20260405/08_post_20260406_delta.md
 ```
 
 Expected:
@@ -172,9 +172,9 @@ Expected:
 ### Task 4: Audit For Leftover Narrative Drift And Sync Tracking
 
 **Files:**
-- Inspect: `reports/chatgpt_bundle_project_handoff_20260405/02_architecture_code_map_and_best_model.md`
-- Inspect: `reports/chatgpt_bundle_project_handoff_20260405/03_experiment_history_and_evidence.md`
-- Inspect: `reports/chatgpt_bundle_project_handoff_20260405/04_foundation_attempts_and_current_restart.md`
+- Inspect: `reports/external/chatgpt_bundle_project_handoff_20260405/02_architecture_code_map_and_best_model.md`
+- Inspect: `reports/external/chatgpt_bundle_project_handoff_20260405/03_experiment_history_and_evidence.md`
+- Inspect: `reports/external/chatgpt_bundle_project_handoff_20260405/04_foundation_attempts_and_current_restart.md`
 - Modify if needed: the specific file(s) above that still over-foreground the old narrative
 - Modify: `TRACKING.md`
 
@@ -213,9 +213,9 @@ Run:
 
 ```bash
 sed -n '24,28p' TRACKING.md
-sed -n '1,260p' reports/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md
-sed -n '1,260p' reports/chatgpt_bundle_project_handoff_20260405/09_technical_questions_for_external_models.md
-git diff -- AGENTS.md TRACKING.md reports/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md reports/chatgpt_bundle_project_handoff_20260405/01_project_state_claims_and_open_questions.md reports/chatgpt_bundle_project_handoff_20260405/08_post_20260406_delta.md reports/chatgpt_bundle_project_handoff_20260405/09_technical_questions_for_external_models.md
+sed -n '1,260p' reports/external/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md
+sed -n '1,260p' reports/external/chatgpt_bundle_project_handoff_20260405/09_technical_questions_for_external_models.md
+git diff -- AGENTS.md TRACKING.md reports/external/chatgpt_bundle_project_handoff_20260405/00_readme_upload_order_and_prompt.md reports/external/chatgpt_bundle_project_handoff_20260405/01_project_state_claims_and_open_questions.md reports/external/chatgpt_bundle_project_handoff_20260405/08_post_20260406_delta.md reports/external/chatgpt_bundle_project_handoff_20260405/09_technical_questions_for_external_models.md
 ```
 
 Expected:

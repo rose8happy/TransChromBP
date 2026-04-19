@@ -14,8 +14,8 @@
 
 **Files:**
 - Modify: `TRACKING.md`
-- Modify: `docs/plan/2026-04-09_dual_machine_experiment_charter.md`
-- Modify: `reports/repository_status_handoff_20260409.md`
+- Modify: `docs/plan/dual_machine_experiment_charter_20260409.md`
+- Modify: `reports/handoff/repository_status_handoff_20260409.md`
 
 - [ ] **Step 1: Re-check `6000` GPU/process state**
 
@@ -58,8 +58,8 @@ Run:
 ```bash
 rg -n "等 `6002|等 6002|先把 `6002|先等 `6002|6002.*晋级候选|6000.*不再.*6000 run|继续等 `6002|唯一下一步" \
   TRACKING.md \
-  docs/plan/2026-04-09_dual_machine_experiment_charter.md \
-  reports/repository_status_handoff_20260409.md
+  docs/plan/dual_machine_experiment_charter_20260409.md \
+  reports/handoff/repository_status_handoff_20260409.md
 ```
 
 Expected:
@@ -85,7 +85,7 @@ Expected:
 ### Task 2: Rewrite the charter as a decoupled rules source
 
 **Files:**
-- Modify: `docs/plan/2026-04-09_dual_machine_experiment_charter.md`
+- Modify: `docs/plan/dual_machine_experiment_charter_20260409.md`
 
 - [ ] **Step 1: Replace the machine-role section with throughput-first responsibilities**
 
@@ -152,7 +152,7 @@ Run:
 
 ```bash
 rg -n "等 `6002|等 6002|先把 `6002|先等 `6002|晋级候选，不能自动|继续等 `6002" \
-  docs/plan/2026-04-09_dual_machine_experiment_charter.md
+  docs/plan/dual_machine_experiment_charter_20260409.md
 ```
 
 Expected:
@@ -215,7 +215,7 @@ Expected:
 ### Task 4: Trim the handoff report so it remains a snapshot, not a scheduler
 
 **Files:**
-- Modify: `reports/repository_status_handoff_20260409.md`
+- Modify: `reports/handoff/repository_status_handoff_20260409.md`
 
 - [ ] **Step 1: Rewrite the summary paragraph to say the machines are now decoupled**
 
@@ -255,7 +255,7 @@ Run:
 
 ```bash
 rg -n "本报告只负责快照|不负责裁决默认下一步|独立维护自己的 backlog|不再承担排程裁决" \
-  reports/repository_status_handoff_20260409.md
+  reports/handoff/repository_status_handoff_20260409.md
 ```
 
 Expected:
@@ -265,9 +265,9 @@ Expected:
 ### Task 5: Final verification and commit
 
 **Files:**
-- Modify: `docs/plan/2026-04-09_dual_machine_experiment_charter.md`
+- Modify: `docs/plan/dual_machine_experiment_charter_20260409.md`
 - Modify: `TRACKING.md`
-- Modify: `reports/repository_status_handoff_20260409.md`
+- Modify: `reports/handoff/repository_status_handoff_20260409.md`
 
 - [ ] **Step 1: Run coupling-regression searches across all three docs**
 
@@ -276,8 +276,8 @@ Run:
 ```bash
 rg -n "等 `6002|等 6002|先把 `6002|继续等 `6002|唯一下一步|自动触发 `6000|自动改写另一台机器" \
   TRACKING.md \
-  docs/plan/2026-04-09_dual_machine_experiment_charter.md \
-  reports/repository_status_handoff_20260409.md
+  docs/plan/dual_machine_experiment_charter_20260409.md \
+  reports/handoff/repository_status_handoff_20260409.md
 ```
 
 Expected:
@@ -291,8 +291,8 @@ Run:
 ```bash
 git diff --check -- \
   TRACKING.md \
-  docs/plan/2026-04-09_dual_machine_experiment_charter.md \
-  reports/repository_status_handoff_20260409.md
+  docs/plan/dual_machine_experiment_charter_20260409.md \
+  reports/handoff/repository_status_handoff_20260409.md
 ```
 
 Expected:
@@ -306,8 +306,8 @@ Run:
 ```bash
 git diff -- \
   TRACKING.md \
-  docs/plan/2026-04-09_dual_machine_experiment_charter.md \
-  reports/repository_status_handoff_20260409.md
+  docs/plan/dual_machine_experiment_charter_20260409.md \
+  reports/handoff/repository_status_handoff_20260409.md
 ```
 
 Expected:
@@ -322,8 +322,8 @@ Run:
 ```bash
 git add \
   TRACKING.md \
-  docs/plan/2026-04-09_dual_machine_experiment_charter.md \
-  reports/repository_status_handoff_20260409.md
+  docs/plan/dual_machine_experiment_charter_20260409.md \
+  reports/handoff/repository_status_handoff_20260409.md
 git commit -m "docs: decouple dual machine experiment scheduling"
 ```
 

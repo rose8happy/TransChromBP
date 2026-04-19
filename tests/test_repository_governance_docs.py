@@ -151,8 +151,8 @@ def test_legacy_root_files_are_rehomed() -> None:
     assert not (REPO_ROOT / "bpnet_model_annotated.py").exists()
     assert not (REPO_ROOT / "visualize_bpnet.py").exists()
 
-    assert (REPO_ROOT / "reports/chrombpnet_tutorial_bias_training_analysis_20260123.md").exists()
-    assert (REPO_ROOT / "docs/research/chrombpnet_reproduction_notes.md").exists()
+    assert (REPO_ROOT / "reports/analysis/chrombpnet_tutorial_bias_training_analysis_20260123.md").exists()
+    assert (REPO_ROOT / "docs/archive/ops/chrombpnet_reproduction_notes.md").exists()
     assert (REPO_ROOT / "docs/learning/assets/bpnet_model_annotated.py").exists()
     assert (REPO_ROOT / "scripts/visualize_bpnet.py").exists()
 
@@ -173,6 +173,8 @@ def test_supporting_readmes_exist_for_reports_references_and_staging() -> None:
     assert "md/tex/assets" in reports_readme.read_text(encoding="utf-8")
     assert "避免和 LaTeX build 日志混淆" in reports_readme.read_text(encoding="utf-8")
     assert "冻结代码/配置快照" in reports_readme.read_text(encoding="utf-8")
+    assert "analysis/" in reports_readme.read_text(encoding="utf-8")
+    assert "closeout/" in reports_readme.read_text(encoding="utf-8")
     assert "local-only" in references_readme.read_text(encoding="utf-8")
     assert "staging" in staging_readme.read_text(encoding="utf-8")
     assert "archive namespace" in superpowers_readme.read_text(encoding="utf-8")
@@ -195,21 +197,35 @@ def test_curated_artifacts_and_ignore_rules_exist() -> None:
     assert (asset_dir / "bias_training_log.csv").exists()
 
     asset_readme = (asset_dir / "README.md").read_text(encoding="utf-8")
-    assert "reports/chrombpnet_tutorial_bias_training_analysis_20260123.md" in asset_readme
+    assert "reports/analysis/chrombpnet_tutorial_bias_training_analysis_20260123.md" in asset_readme
 
-    bundle_dir = REPO_ROOT / "reports/chatgpt_bundle_loss_balance_20260416"
+    bundle_dir = REPO_ROOT / "reports/external/chatgpt_bundle_loss_balance_20260416"
     assert (bundle_dir / "00_readme_upload_order_and_prompt.md").exists()
     assert (bundle_dir / "03_questions_for_external_models_dynamic_loss.md").exists()
     assert (bundle_dir / "10_ready_to_send_chatgpt_pro_prompt.md").exists()
 
-    assert (REPO_ROOT / "reports/repository_hygiene_cleanup_20260417.md").exists()
+    assert (REPO_ROOT / "reports/governance/repository_hygiene_cleanup_20260417.md").exists()
     assert (REPO_ROOT / "vendor/transchrombp/scripts/summarize_loss_balance_selectors.py").exists()
-    assert (REPO_ROOT / "reports/chrombpnet_official_externalization_closeout_20260408.md").exists()
-    assert (REPO_ROOT / "reports/chrombpnet_official_patch_ledger_20260406.md").exists()
-    assert (REPO_ROOT / "reports/foundation_cache_contract_snapshot_20260406.md").exists()
-    assert (REPO_ROOT / "reports/dual_track_pivot_snapshot_20260409.md").exists()
-    assert (REPO_ROOT / "reports/foundation_cache_contract_closeout_20260419.md").exists()
+    assert (REPO_ROOT / "reports/closeout/chrombpnet_official_externalization_closeout_20260408.md").exists()
+    assert (REPO_ROOT / "reports/governance/chrombpnet_official_patch_ledger_20260406.md").exists()
+    assert (REPO_ROOT / "reports/governance/foundation_cache_contract_snapshot_20260406.md").exists()
+    assert (REPO_ROOT / "reports/handoff/dual_track_pivot_snapshot_20260409.md").exists()
+    assert (REPO_ROOT / "reports/closeout/foundation_cache_contract_closeout_20260419.md").exists()
     assert not (REPO_ROOT / "scripts/deploy_strict_compare_staging_to_6000.sh").exists()
+
+
+def test_reports_root_and_docs_plan_root_are_curated() -> None:
+    report_files = sorted(path.name for path in (REPO_ROOT / "reports").glob("*") if path.is_file())
+    plan_files = sorted(path.name for path in (REPO_ROOT / "docs/plan").glob("*.md"))
+
+    assert report_files == ["README.md"]
+    assert plan_files == [
+        "alphagenome_like_factor_ladder_design_20260411.md",
+        "alphagenome_like_factor_ladder_implementation_20260411.md",
+        "dual_machine_experiment_charter_20260409.md",
+    ]
+    assert (REPO_ROOT / "docs/plan/archive/README.md").exists()
+    assert (REPO_ROOT / "docs/archive/ops/README.md").exists()
 
 
 def test_registry_allows_archive_branches_without_mounted_worktrees() -> None:

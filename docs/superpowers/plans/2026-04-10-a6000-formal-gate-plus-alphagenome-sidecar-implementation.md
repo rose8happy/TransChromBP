@@ -34,11 +34,11 @@
   Purpose: sync the exact local code/config/panel files into the 6000 runtime repo’s `src/transchrombp`, `configs`, and `scripts` paths.
 - Modify: `TRACKING.md`
   Purpose: record live launch state, then final closeout state.
-- Modify: `docs/plan/2026-04-09_dual_machine_experiment_charter.md`
+- Modify: `docs/plan/dual_machine_experiment_charter_20260409.md`
   Purpose: record both active tracks and their post-closeout next-step boundaries.
-- Create: `reports/multiscale_local_skip_v2_30ep_gate_closeout_20260410.md`
+- Create: `reports/closeout/multiscale_local_skip_v2_30ep_gate_closeout_20260410.md`
   Purpose: hard verdict for the A6000 30-epoch formal gate.
-- Create: `reports/alphagenome_matched_raw_track_slice_v2_closeout_20260410.md`
+- Create: `reports/closeout/alphagenome_matched_raw_track_slice_v2_closeout_20260410.md`
   Purpose: hard verdict for the `12-20 loci` AlphaGenome sidecar.
 - Modify: `TRACKING_archive.md`
   Purpose: archive whichever track reaches terminal state first after closeout.
@@ -682,7 +682,7 @@ git commit -m "feat: add alphagenome matched panel v2"
 **Files:**
 - Create: `scripts/deploy_a6000_dual_track_to_6000.sh`
 - Modify: `TRACKING.md`
-- Modify: `docs/plan/2026-04-09_dual_machine_experiment_charter.md`
+- Modify: `docs/plan/dual_machine_experiment_charter_20260409.md`
 
 - [ ] **Step 1: Add the deployment helper**
 
@@ -798,7 +798,7 @@ Expected:
 
 - [ ] **Step 5: Update the live docs immediately after both launches are verified**
 
-Edit `TRACKING.md` and `docs/plan/2026-04-09_dual_machine_experiment_charter.md` so they record:
+Edit `TRACKING.md` and `docs/plan/dual_machine_experiment_charter_20260409.md` so they record:
 
 ```md
 - `6000` active GPU run: `teacher_v2_center_pool_msdls_v2_30ep_s42_6000_20260410_r1`
@@ -825,18 +825,18 @@ Run:
 git add \
   scripts/deploy_a6000_dual_track_to_6000.sh \
   TRACKING.md \
-  docs/plan/2026-04-09_dual_machine_experiment_charter.md
+  docs/plan/dual_machine_experiment_charter_20260409.md
 git commit -m "docs: track dual a6000 launch state"
 ```
 
 ### Task 5: Close out both tracks and archive terminal items
 
 **Files:**
-- Create: `reports/multiscale_local_skip_v2_30ep_gate_closeout_20260410.md`
-- Create: `reports/alphagenome_matched_raw_track_slice_v2_closeout_20260410.md`
+- Create: `reports/closeout/multiscale_local_skip_v2_30ep_gate_closeout_20260410.md`
+- Create: `reports/closeout/alphagenome_matched_raw_track_slice_v2_closeout_20260410.md`
 - Modify: `TRACKING.md`
 - Modify: `TRACKING_archive.md`
-- Modify: `docs/plan/2026-04-09_dual_machine_experiment_charter.md`
+- Modify: `docs/plan/dual_machine_experiment_charter_20260409.md`
 
 - [ ] **Step 1: Re-check the finished A6000 run and classify the gate**
 
@@ -856,7 +856,7 @@ Expected:
 
 - [ ] **Step 2: Write the A6000 closeout report**
 
-Create `reports/multiscale_local_skip_v2_30ep_gate_closeout_20260410.md` with this skeleton:
+Create `reports/closeout/multiscale_local_skip_v2_30ep_gate_closeout_20260410.md` with this skeleton:
 
 ```md
 # Multiscale Local-Skip Decoder v2 30-Epoch Gate Closeout (2026-04-10)
@@ -903,7 +903,7 @@ Expected:
 
 - [ ] **Step 4: Write the AlphaGenome v2 closeout report**
 
-Create `reports/alphagenome_matched_raw_track_slice_v2_closeout_20260410.md` with this skeleton:
+Create `reports/closeout/alphagenome_matched_raw_track_slice_v2_closeout_20260410.md` with this skeleton:
 
 ```md
 # AlphaGenome Matched Raw-Track Slice v2 Closeout (2026-04-10)
@@ -943,10 +943,10 @@ Run:
 
 ```bash
 git add \
-  reports/multiscale_local_skip_v2_30ep_gate_closeout_20260410.md \
-  reports/alphagenome_matched_raw_track_slice_v2_closeout_20260410.md \
+  reports/closeout/multiscale_local_skip_v2_30ep_gate_closeout_20260410.md \
+  reports/closeout/alphagenome_matched_raw_track_slice_v2_closeout_20260410.md \
   TRACKING.md \
   TRACKING_archive.md \
-  docs/plan/2026-04-09_dual_machine_experiment_charter.md
+  docs/plan/dual_machine_experiment_charter_20260409.md
 git commit -m "docs: close out dual a6000 experiment tracks"
 ```

@@ -290,7 +290,7 @@ closeout 至少要明确写出：
 `v1` 一旦发车或收口，必须同轮更新：
 
 1. [TRACKING.md](/home/zhengwei/project/python/TransChromBP/TRACKING.md)
-2. [2026-04-09_dual_machine_experiment_charter.md](/home/zhengwei/project/python/TransChromBP/docs/plan/2026-04-09_dual_machine_experiment_charter.md)
+2. [2026-04-09_dual_machine_experiment_charter.md](/home/zhengwei/project/python/TransChromBP/docs/plan/dual_machine_experiment_charter_20260409.md)
 3. 一份新的 `reports/` closeout
 
 ### 9.2 启动前失败

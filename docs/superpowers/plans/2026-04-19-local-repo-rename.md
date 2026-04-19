@@ -30,7 +30,7 @@
   - historical and operator docs containing repository-local absolute links that must be rewritten to the new local root when they refer to the canonical repo, but must not fabricate renamed historical worktree paths.
 - `reports/assets/local_repo_rename_20260419/local_repo_path_candidates.txt`
   - generated inventory of files that still mention the old local canonical root and therefore need review/rewrite.
-- `reports/local_repo_rename_closeout_20260419.md`
+- `reports/closeout/local_repo_rename_closeout_20260419.md`
   - reusable closeout describing the rename, symlink, verification, and any intentionally preserved historical exceptions.
 
 ### Task 0: Create The Implementation Worktree And Freeze The Baseline
@@ -276,7 +276,7 @@ Expected: a single audit-friendly commit containing the bulk path rewrite and it
 ### Task 4: Verify Textual Invariants And Write Closeout Before Physical Rename
 
 **Files:**
-- Create: `reports/local_repo_rename_closeout_20260419.md`
+- Create: `reports/closeout/local_repo_rename_closeout_20260419.md`
 - Modify: `TRACKING.md`
 - Modify: `tests/test_repository_governance_docs.py`
 
@@ -297,7 +297,7 @@ Expected:
 
 - [ ] **Step 2: Write the pre-rename closeout report**
 
-Create `reports/local_repo_rename_closeout_20260419.md` with all of the following:
+Create `reports/closeout/local_repo_rename_closeout_20260419.md` with all of the following:
 
 ```text
 - old local canonical root
@@ -313,14 +313,14 @@ Create `reports/local_repo_rename_closeout_20260419.md` with all of the followin
 Add a concise line in `TRACKING.md` stating that:
 - repository-local absolute links have been rewritten
 - physical rename is next
-- `reports/local_repo_rename_closeout_20260419.md` is the canonical audit trail
+- `reports/closeout/local_repo_rename_closeout_20260419.md` is the canonical audit trail
 
 - [ ] **Step 4: Commit the verified pre-rename closeout state**
 
 Run:
 
 ```bash
-git add TRACKING.md reports/local_repo_rename_closeout_20260419.md tests/test_repository_governance_docs.py
+git add TRACKING.md reports/closeout/local_repo_rename_closeout_20260419.md tests/test_repository_governance_docs.py
 git commit -m "docs: record local repo rename closeout"
 ```
 
@@ -415,7 +415,7 @@ Expected:
 ### Task 7: Re-Verify From The New Root And Finalize The Rename
 
 **Files:**
-- Modify: `reports/local_repo_rename_closeout_20260419.md`
+- Modify: `reports/closeout/local_repo_rename_closeout_20260419.md`
 - Modify: `TRACKING.md`
 
 - [ ] **Step 1: Re-run the full verification suite from the new root**
@@ -436,7 +436,7 @@ Expected:
 
 - [ ] **Step 2: Update the closeout with post-rename evidence**
 
-Append to `reports/local_repo_rename_closeout_20260419.md`:
+Append to `reports/closeout/local_repo_rename_closeout_20260419.md`:
 
 ```text
 - final `pwd`
@@ -458,7 +458,7 @@ Update `TRACKING.md` so the repository-governance cleanup row now states:
 Run:
 
 ```bash
-git add TRACKING.md reports/local_repo_rename_closeout_20260419.md
+git add TRACKING.md reports/closeout/local_repo_rename_closeout_20260419.md
 git commit -m "chore: finalize local repo rename"
 ```
 

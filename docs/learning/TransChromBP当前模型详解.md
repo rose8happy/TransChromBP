@@ -8,7 +8,7 @@
 如果你还没看过总览或内部时间线，建议先看：
 
 - [TransChromBP当前模型学习总览.md](TransChromBP当前模型学习总览.md)
-- [reports/transchrombp_internal_design_and_experiment_history_20260331.md](../../reports/transchrombp_internal_design_and_experiment_history_20260331.md)
+- [reports/analysis/transchrombp_internal_design_and_experiment_history_20260331.md](../../reports/analysis/transchrombp_internal_design_and_experiment_history_20260331.md)
 
 如果你当前的目标更偏向某个专题，建议先分流：
 

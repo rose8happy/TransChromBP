@@ -14,7 +14,7 @@
 
 **Files:**
 - Modify: `TRACKING.md`
-- Create: `reports/repository_status_handoff_20260409.md`
+- Create: `reports/handoff/repository_status_handoff_20260409.md`
 - Create: `docs/superpowers/specs/2026-04-09-worktree-cleanup-design.md`
 - Create: `docs/superpowers/plans/2026-04-09-worktree-cleanup.md`
 
@@ -54,7 +54,7 @@ autonomy/20260406-chrombpnet-externalization -> official chrombpnet externalizat
 Run:
 ```bash
 sed -n '1,80p' TRACKING.md
-sed -n '1,220p' reports/repository_status_handoff_20260409.md
+sed -n '1,220p' reports/handoff/repository_status_handoff_20260409.md
 ```
 Expected: `master` 顶部状态与实际现场一致。
 

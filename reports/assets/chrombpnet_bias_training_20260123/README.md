@@ -1,6 +1,6 @@
 # chrombpnet_bias_training_20260123
 
-这些文件是 `reports/chrombpnet_tutorial_bias_training_analysis_20260123.md` 引用的本地小型分析资产，用于说明 ChromBPNet tutorial bias model 的训练过程。
+这些文件是 `reports/analysis/chrombpnet_tutorial_bias_training_analysis_20260123.md` 引用的本地小型分析资产，用于说明 ChromBPNet tutorial bias model 的训练过程。
 
 - `bias_training_log.csv`: 从远端训练日志整理出的逐 epoch 指标副本
 - `bias_training_curve.svg`: 总 loss 简图

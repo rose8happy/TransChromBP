@@ -14,8 +14,8 @@
 
 **Files:**
 - Modify: `TRACKING.md`
-- Modify: `docs/plan/2026-04-09_dual_machine_experiment_charter.md`
-- Create: `reports/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md`
+- Modify: `docs/plan/dual_machine_experiment_charter_20260409.md`
+- Create: `reports/closeout/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md`
 - Remote inspect only: `/data1/zhoujiazhen/bylw_atac/TransChromBP`
 
 - [ ] **Step 1: Re-check `6000` host state and confirm the machine is available**
@@ -242,7 +242,7 @@ Expected:
 
 **Files:**
 - Modify: `TRACKING.md`
-- Modify: `docs/plan/2026-04-09_dual_machine_experiment_charter.md`
+- Modify: `docs/plan/dual_machine_experiment_charter_20260409.md`
 
 - [ ] **Step 1: Update the top live row and `6000` row in `TRACKING.md`**
 
@@ -275,7 +275,7 @@ Edit Section 5.1 / Section 10 so they state:
 Run:
 
 ```bash
-git add TRACKING.md docs/plan/2026-04-09_dual_machine_experiment_charter.md
+git add TRACKING.md docs/plan/dual_machine_experiment_charter_20260409.md
 git commit -m "docs: track alphagenome pilot launch"
 ```
 
@@ -287,8 +287,8 @@ Expected:
 
 **Files:**
 - Modify: `TRACKING.md`
-- Modify: `docs/plan/2026-04-09_dual_machine_experiment_charter.md`
-- Create: `reports/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md`
+- Modify: `docs/plan/dual_machine_experiment_charter_20260409.md`
+- Create: `reports/closeout/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md`
 
 - [ ] **Step 1: Re-check the finished log and the expected output files**
 
@@ -341,7 +341,7 @@ Expected:
 
 - [ ] **Step 3: Write the closeout report with a hard verdict**
 
-Create `reports/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md` with these sections:
+Create `reports/closeout/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md` with these sections:
 
 ```md
 # AlphaGenome Matched Raw-Track Slice v1 Closeout (2026-04-10)
@@ -385,7 +385,7 @@ Do not leave the run in `进行中` after the log and artifacts already show a t
 Run:
 
 ```bash
-git add TRACKING.md docs/plan/2026-04-09_dual_machine_experiment_charter.md reports/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md
+git add TRACKING.md docs/plan/dual_machine_experiment_charter_20260409.md reports/closeout/alphagenome_matched_raw_track_slice_v1_closeout_20260410.md
 git commit -m "docs: close out alphagenome pilot v1"
 ```
 

@@ -176,4 +176,4 @@ ModuleNotFoundError: No module named 'torch'
 - `TRACKING.md`: 当前状态、日志路径、未收口项
 - `AGENTS.md`: 6000 上 `chrombpnet` 环境激活约定
 - `scripts/genos_feasibility.py`: Genos 可执行验证脚本
-- `reports/transchrombp_genos_experiment_plan_20260320.tex`: Genos 融合实验计划
+- `reports/paper/transchrombp_genos_experiment_plan_20260320.tex`: Genos 融合实验计划

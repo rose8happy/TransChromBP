@@ -197,5 +197,5 @@ Genos 论文 Table 2 里，`human_ocr_ensembl` 的 AUC 是：
 ## 9. 本仓库内相关文件
 
 - 当前 Genos 主线状态：`TRACKING.md`
-- 当前 online / cached-fusion 判断：`reports/genos_and_6002_run_analysis_20260323.md`
-- 当前 cached-fusion 主方案：`docs/plan/genos_cached_fusion_final_execution_plan_20260323.md`
+- 当前 online / cached-fusion 判断：`reports/analysis/genos_and_6002_run_analysis_20260323.md`
+- 当前 cached-fusion 主方案：`docs/plan/archive/genos/genos_cached_fusion_final_execution_plan_20260323.md`

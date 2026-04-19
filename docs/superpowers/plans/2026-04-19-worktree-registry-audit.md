@@ -15,7 +15,7 @@
 **Files:**
 - Modify: `docs/experiments/registry.md`
 - Modify: `TRACKING.md`
-- Create: `reports/worktree_registry_audit_20260419.md`
+- Create: `reports/governance/worktree_registry_audit_20260419.md`
 - Test: `tests/test_factor_ladder_docs.py`
 
 - [ ] **Step 1: Write failing test for the desired post-audit loss-balance registry state**
@@ -29,7 +29,7 @@ Expected: FAIL because the registry row does not yet mention the preserved snaps
 
 - [ ] **Step 3: Record the audit result in a reusable report**
 
-Create `reports/worktree_registry_audit_20260419.md` summarizing:
+Create `reports/governance/worktree_registry_audit_20260419.md` summarizing:
 - mounted worktrees that are already clean and properly tagged
 - redundant worktrees that can be removed immediately
 - dirty worktrees that must be snapshotted before removal
@@ -43,7 +43,7 @@ Keep `master` as canonical branch where appropriate, but add snapshot / closeout
 **Files:**
 - Preserve snapshot on branch: `loss-balance-20260417`
 - Modify: `docs/experiments/registry.md`
-- Modify: `reports/worktree_registry_audit_20260419.md`
+- Modify: `reports/governance/worktree_registry_audit_20260419.md`
 
 - [ ] **Step 1: Snapshot the dirty `loss-balance-20260417` worktree**
 
@@ -80,7 +80,7 @@ Expected: no mounted dirty worktree remains for that family.
 ### Task 3: Remove Redundant Bundle Worktree
 
 **Files:**
-- Modify: `reports/worktree_registry_audit_20260419.md`
+- Modify: `reports/governance/worktree_registry_audit_20260419.md`
 
 - [ ] **Step 1: Verify the bundle files already exist on `master`**
 

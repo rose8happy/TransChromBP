@@ -35,7 +35,7 @@
 
 实施时只改两处：
 
-1. 新增 `docs/plan/2026-04-09_dual_machine_experiment_charter.md`
+1. 新增 `docs/plan/dual_machine_experiment_charter_20260409.md`
 2. 更新 `TRACKING.md` 顶部引用与 live 行，使其把“规则源”显式指向该 charter
 
 ## Authority Model
@@ -43,7 +43,7 @@
 新 charter 建成后，实验优先级判断遵循以下权威顺序：
 
 1. 最新实验事实与日志
-2. `docs/plan/2026-04-09_dual_machine_experiment_charter.md`
+2. `docs/plan/dual_machine_experiment_charter_20260409.md`
 3. `TRACKING.md` live 状态
 4. 其他 handoff / plan / report
 
@@ -185,6 +185,6 @@
 
 本设计的推荐实现是：
 
-1. 新建 `docs/plan/2026-04-09_dual_machine_experiment_charter.md` 作为单一权威规则源
+1. 新建 `docs/plan/dual_machine_experiment_charter_20260409.md` 作为单一权威规则源
 2. 在 `TRACKING.md` 顶部显式引用它
 3. 保持 `TRACKING.md` 只写 live 状态，不再承担路线裁决职责

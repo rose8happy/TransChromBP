@@ -263,7 +263,7 @@
 
 本 spec 被批准后，应实施到：
 
-1. `docs/plan/2026-04-09_dual_machine_experiment_charter.md`
+1. `docs/plan/dual_machine_experiment_charter_20260409.md`
 2. `TRACKING.md`
 3. 必要时补一份新的 handoff / report，说明为什么旧的互相等待口径被替换
 

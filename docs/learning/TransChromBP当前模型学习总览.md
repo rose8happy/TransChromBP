@@ -14,7 +14,7 @@
 
 如果你想知道“这个结论是怎么一步步变成今天这样的”，请直接接着看：
 
-- [reports/transchrombp_internal_design_and_experiment_history_20260331.md](../../reports/transchrombp_internal_design_and_experiment_history_20260331.md)
+- [reports/analysis/transchrombp_internal_design_and_experiment_history_20260331.md](../../reports/analysis/transchrombp_internal_design_and_experiment_history_20260331.md)
 
 如果你更关心下面这些问题，也建议直接并行看新专题：
 
@@ -199,15 +199,15 @@ held-out test 上：
 1. 本文件
 2. [无大模型基线到当前主线.md](无大模型基线到当前主线.md)
 3. [TransChromBP当前模型详解.md](TransChromBP当前模型详解.md)
-4. [reports/paper_claim_evidence_matrix_20260326.md](../../reports/paper_claim_evidence_matrix_20260326.md)
+4. [reports/paper/paper_claim_evidence_matrix_20260326.md](../../reports/paper/paper_claim_evidence_matrix_20260326.md)
 
 ### 路线 B：想把代码和论文一起重新串起来
 
-1. [reports/transchrombp_internal_design_and_experiment_history_20260331.md](../../reports/transchrombp_internal_design_and_experiment_history_20260331.md)
+1. [reports/analysis/transchrombp_internal_design_and_experiment_history_20260331.md](../../reports/analysis/transchrombp_internal_design_and_experiment_history_20260331.md)
 2. [TransChromBP当前模型详解.md](TransChromBP当前模型详解.md)
 3. [TransChromBP项目实验全景图.md](TransChromBP项目实验全景图.md)
-4. [reports/paper_writeup_flow_20260330.md](../../reports/paper_writeup_flow_20260330.md)
-5. [reports/transchrombp_paper_cn_v1.tex](../../reports/transchrombp_paper_cn_v1.tex)
+4. [reports/paper/paper_writeup_flow_20260330.md](../../reports/paper/paper_writeup_flow_20260330.md)
+5. [reports/paper/transchrombp_paper_cn_v1.tex](../../reports/paper/transchrombp_paper_cn_v1.tex)
 
 ### 路线 C：想从基础一路学到当前模型
 
